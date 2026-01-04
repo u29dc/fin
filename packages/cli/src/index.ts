@@ -3,6 +3,7 @@
  * CLI entry point and command router.
  */
 
+import { initConfig } from 'core/config';
 import { runAccounts } from './commands/accounts';
 import { runBalanceSheet } from './commands/balance-sheet';
 import { runCashflow } from './commands/cashflow';
@@ -108,6 +109,7 @@ Commands:
 `.trim();
 
 async function main() {
+	initConfig();
 	const args = Bun.argv.slice(2);
 
 	// Global help
