@@ -1,0 +1,43 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"lib": ["DOM", "DOM.Iterable", "ESNext"],
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"resolveJsonModule": true,
+		"types": ["bun-types"],
+
+		"strict": true,
+		"alwaysStrict": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitAny": true,
+		"noImplicitReturns": true,
+		"noImplicitThis": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"allowUnreachableCode": false,
+		"noFallthroughCasesInSwitch": true,
+		"exactOptionalPropertyTypes": true,
+		"noImplicitOverride": true,
+		"noPropertyAccessFromIndexSignature": true,
+
+		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+
+		"noEmit": true,
+		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
+
+		"baseUrl": ".",
+		"paths": {
+			"@core/*": ["packages/core/src/*"],
+			"@web/*": ["packages/web/src/*"],
+			"$lib": ["packages/web/src/lib"],
+			"$lib/*": ["packages/web/src/lib/*"]
+		}
+	},
+	"include": ["packages/**/*", "scripts/**/*"],
+	"exclude": ["node_modules", "build", "dist", ".svelte-kit", "tmp", ".tmp", "temp", ".temp", ".archive"]
+}
