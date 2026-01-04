@@ -1,0 +1,165 @@
+# Finance Tracker Configuration
+# Copy this file to data/fin.config.toml and customize for your setup
+
+# =============================================================================
+# SANITIZATION
+# Optional: path to rules file for transaction name mapping
+# =============================================================================
+# 
+[sanitization]
+rules = "data/fin.rules.ts"
+
+# =============================================================================
+# FINANCIAL PARAMETERS
+# =============================================================================
+# 
+[financial]
+corp_tax_rate = 0.25
+vat_rate = 0.2
+personal_income_tax_rate = 0.2
+joint_share_you = 0.5
+expense_reserve_months = 12
+trailing_expense_window_months = 12
+fixed_monthly_personal_outflow_minor = 0
+
+[financial.personal_dividend_tax]
+allowance_minor = 50000
+basic_rate = 0.0875
+higher_rate = 0.3375
+
+[financial.scenario]
+lookback_months = 12
+salary_dividend_split_minor = 0
+dividends_monthly_minor = 0
+salary_monthly_minor = 0
+joint_expenses_monthly_minor = 0
+
+[financial.scenario.toggles]
+include_dividends = true
+include_salary = true
+include_joint_expenses = true
+
+[financial.investment_projection_annual_returns]
+low = -0.1
+mid = 0.06
+high = 0.12
+
+# Runway chart thresholds (optional, in minor units e.g., pence)
+runway_threshold_minor = 4000000  # 40K - minimum acceptable runway
+runway_warning_minor = 5000000    # 50K - warning line on chart
+
+# =============================================================================
+# GROUPS
+# =============================================================================
+
+[[groups]]
+id = "business"
+label = "Business"
+icon = "briefcase"
+tax_type = "corp"
+expense_reserve_months = 1
+
+[[groups]]
+id = "personal"
+label = "Personal"
+icon = "user"               # Options: user, briefcase, heart, building, wallet, piggy-bank
+tax_type = "income"         # Options: corp, income, none - affects tax reserve calculations
+expense_reserve_months = 3  # Months of expenses to set aside as reserve
+
+[[groups]]
+id = "joint"
+label = "Joint"
+icon = "heart"
+tax_type = "none"
+expense_reserve_months = 3
+
+# =============================================================================
+# ACCOUNTS
+# Define your chart of accounts here
+# Each account needs: id, group, type, provider
+# Optional: label, subtype (checking/savings/investment), inbox_folder
+# =============================================================================
+
+# Business accounts
+[[accounts]]
+id = "Assets:Business:Wise"
+group = "business"
+type = "asset"
+provider = "wise"
+label = "Business Wise"
+inbox_folder = "business-wise"
+
+[[accounts]]
+id = "Assets:Business:Monzo"
+group = "business"
+type = "asset"
+provider = "monzo"
+label = "Business Monzo"
+inbox_folder = "business-monzo"
+
+# Personal accounts
+[[accounts]]
+id = "Assets:Personal:Monzo"
+group = "personal"
+type = "asset"
+provider = "monzo"
+label = "Personal Monzo"
+inbox_folder = "personal-monzo"
+
+[[accounts]]
+id = "Assets:Personal:Savings"
+group = "personal"
+type = "asset"
+provider = "monzo"
+label = "Personal Savings"
+inbox_folder = "personal-savings"
+
+[[accounts]]
+id = "Assets:Personal:Investments"
+group = "personal"
+type = "asset"
+provider = "vanguard"
+label = "Personal Investments"
+inbox_folder = "personal-investments"
+
+# Joint accounts
+[[accounts]]
+id = "Assets:Joint:Monzo"
+group = "joint"
+type = "asset"
+provider = "monzo"
+label = "Joint Monzo"
+inbox_folder = "joint-monzo"
+
+# =============================================================================
+# BANK PRESETS
+# Column mappings for CSV imports from different providers
+# =============================================================================
+
+[[banks]]
+name = "monzo"
+[banks.columns]
+date = "Date"
+time = "Time"
+description = "Description"
+amount = "Amount"
+balance = "Balance"
+transaction_id = "Transaction ID"
+name = "Name"
+category = "Category"
+
+[[banks]]
+name = "wise"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"
+balance = "Running Balance"
+transaction_id = "TransferWise ID"
+
+[[banks]]
+name = "vanguard"
+[banks.columns]
+date = "Trade Date"
+description = "Transaction Description"
+amount = "Net Amount"
