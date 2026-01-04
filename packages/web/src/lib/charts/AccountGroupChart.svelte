@@ -32,7 +32,7 @@
 		contributionSeries,
 		investmentReturns,
 		latestBalances,
-		height = 270,
+		height = 240,
 	}: Props = $props();
 
 	// Track selected account (default to first)
@@ -88,7 +88,20 @@
 
 <article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 	<header class="flex items-center justify-between gap-2.5">
-		<div class="font-normal text-sm uppercase tracking-widest">{label}</div>
+		<div class="flex gap-1.5">
+			{#each accounts as account (account.id)}
+				<button
+					type="button"
+					class="px-2 py-0.5 border text-xs uppercase tracking-widest cursor-pointer transition-colors duration-150
+						   {selectedAccountId === account.id
+						? 'border-text text-text'
+						: 'border-border text-muted hover:text-text hover:border-text/50'}"
+					onclick={() => (selectedAccountId = account.id)}
+				>
+					{account.label}
+				</button>
+			{/each}
+		</div>
 		<div class="text-lg font-normal">{formatMoney(currentBalance)}</div>
 	</header>
 
@@ -178,25 +191,4 @@
 			No balance data.
 		</div>
 	{/if}
-
-	<!-- Account selector -->
-	<div class="flex gap-2 pt-0.5">
-		{#each accounts as account (account.id)}
-			<button
-				type="button"
-				class="flex items-center gap-1.5 px-2 py-1 border text-xs cursor-pointer transition-colors duration-150
-					   {selectedAccountId === account.id
-					? 'border-text text-text'
-					: 'border-border text-muted hover:text-text hover:border-text/50'}"
-				onclick={() => (selectedAccountId = account.id)}
-			>
-				<span
-					class="w-1.5 h-1.5 rounded-full border border-current {selectedAccountId === account.id
-						? 'bg-current'
-						: ''}"
-				></span>
-				{account.label}
-			</button>
-		{/each}
-	</div>
 </article>

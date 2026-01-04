@@ -293,7 +293,7 @@
 	<title>Finances | Dashboard</title>
 </svelte:head>
 
-<main class="h-dvh overflow-auto box-border px-2.5 pb-2.5 flex flex-col gap-2">
+<main class="h-dvh overflow-auto box-border px-2.5 pb-2.5 flex flex-col gap-1.5">
 	<Header
 		activePage="dashboard"
 		activeGroup={group}
@@ -305,7 +305,7 @@
 		error={null}
 	/>
 
-	<section class="grid grid-cols-1 {gridColsClass} gap-2 fade-in" data-active-group={group}>
+	<section class="grid grid-cols-1 {gridColsClass} gap-1.5 fade-in" data-active-group={group}>
 		{#each GROUP_COLUMN_ORDER as groupId (groupId)}
 			<div class="flex gap-2 p-2.5 border border-border bg-panel" data-group={groupId}>
 				<div class="flex-1 flex flex-col gap-[2px] min-w-0">
@@ -343,11 +343,11 @@
 		{/each}
 	</section>
 
-	<section class="grid grid-cols-1 {gridColsClass} gap-2 items-start" data-active-group={group}>
+	<section class="grid grid-cols-1 {gridColsClass} gap-1.5 items-start" data-active-group={group}>
 		{#each GROUP_COLUMN_ORDER as groupId (groupId)}
 			<!-- Only render group sections if visible (large screen OR active tab) to avoid mounting hidden charts -->
 			{#if isLargeScreen || groupId === group}
-			<section class="min-w-0 flex flex-col gap-2 fade-in fade-in-delay-1" data-group={groupId} aria-label={GROUPS[groupId].label}>
+			<section class="min-w-0 flex flex-col gap-1.5 fade-in fade-in-delay-1" data-group={groupId} aria-label={GROUPS[groupId].label}>
 				<!-- Asset Allocation -->
 				{#if groupId === 'personal'}
 					{@const personalBalances = getPersonalAccountBalances()}
@@ -521,7 +521,7 @@
 				{/if}
 
 				<!-- Monthly Cashflow Trends -->
-				<section class="border border-border bg-panel p-2.5 flex flex-col gap-2 min-h-[540px]">
+				<section class="border border-border bg-panel p-2.5 flex flex-col gap-2 min-h-[385px]">
 					<header class="flex items-start justify-between gap-2.5">
 						<div>
 							<div class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} cashflow</div>
@@ -537,7 +537,7 @@
 					</header>
 
 					{#if (groupCashflowSeries[groupId]?.length ?? 0) > 0}
-						<div class="overflow-hidden h-[480px]">
+						<div class="overflow-hidden h-[325px]">
 							<SeriesChart
 								data={groupCashflowSeries[groupId] ?? []}
 								getDate={(p) => `${p.month}-01`}
@@ -579,11 +579,11 @@
 									return parts.join(' | ');
 								}}
 								timeUnit="month"
-								height={480}
+								height={325}
 							/>
 						</div>
 					{:else}
-						<div class="border border-dashed border-white/[0.16] h-[480px] grid place-items-center text-white/55 text-sm select-none">
+						<div class="border border-dashed border-white/[0.16] h-[325px] grid place-items-center text-white/55 text-sm select-none">
 							No cashflow data yet.
 						</div>
 					{/if}
@@ -593,7 +593,7 @@
 				{#if getSankeyNodes(groupId).length > 0 && getSankeyLinks(groupId).length > 0}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 						<header class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} Distribution</header>
-						<div class="h-[400px]">
+						<div class="h-[350px]">
 							<Sankey nodes={getSankeyNodes(groupId)} links={getSankeyLinks(groupId)} {colorScheme} />
 						</div>
 					</article>
