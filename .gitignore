@@ -93,3 +93,4 @@ certificates
 # Personal config (covered by /data/ but explicit for clarity)
 data/fin.config.toml
 data/rules_personal.ts
+data/backups/

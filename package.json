@@ -17,6 +17,8 @@
 		"sanitize:discover:unmapped": "bun run cli sanitize discover --unmapped",
 		"sanitize:migrate": "bun run cli sanitize migrate",
 		"sanitize:migrate:dry": "bun run cli sanitize migrate --dry-run --verbose",
+		"demo:generate": "bun run packages/core/src/demo/generate-demo-data.ts",
+		"backup": "bun run packages/core/src/scripts/backup.ts",
 		"util:format": "biome format --write .",
 		"util:lint": "biome check . --max-diagnostics 500",
 		"util:lint:fix": "biome check --write .",
