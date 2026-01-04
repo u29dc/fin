@@ -5,14 +5,14 @@
 # SANITIZATION
 # Optional: path to rules file for transaction name mapping
 # =============================================================================
-# 
+
 [sanitization]
 rules = "data/fin.rules.ts"
 
 # =============================================================================
 # FINANCIAL PARAMETERS
 # =============================================================================
-# 
+
 [financial]
 corp_tax_rate = 0.25
 vat_rate = 0.2
