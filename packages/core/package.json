@@ -1,0 +1,21 @@
+{
+	"name": "core",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./config": "./src/config/index.ts"
+	},
+	"scripts": {
+		"check": "bun run util:types"
+	},
+	"dependencies": {
+		"papaparse": "^5.5.3",
+		"smol-toml": "^1.6.0",
+		"zod": "^4.3.4"
+	},
+	"devDependencies": {
+		"@types/papaparse": "^5.5.1"
+	}
+}
