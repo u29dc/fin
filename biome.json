@@ -1,0 +1,128 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": true,
+		"includes": [
+			"**/*.ts",
+			"**/*.tsx",
+			"**/*.js",
+			"**/*.jsx",
+			"**/*.mjs",
+			"**/*.cjs",
+			"**/*.json",
+			"**/*.jsonc",
+			"**/*.md",
+			"!**/node_modules",
+			"!**/build",
+			"!**/dist",
+			"!**/.svelte-kit",
+			"!**/tmp",
+			"!**/.tmp",
+			"!**/temp",
+			"!**/.temp",
+			"!**/.archive"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"formatWithErrors": false,
+		"indentStyle": "tab",
+		"indentWidth": 4,
+		"lineWidth": 200,
+		"lineEnding": "lf",
+		"attributePosition": "auto"
+	},
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	},
+	"json": {
+		"parser": {
+			"allowComments": true,
+			"allowTrailingCommas": false
+		},
+		"formatter": {
+			"trailingCommas": "none"
+		}
+	},
+	"javascript": {
+		"globals": ["Bun"],
+		"formatter": {
+			"quoteStyle": "single",
+			"jsxQuoteStyle": "double",
+			"trailingCommas": "all",
+			"semicolons": "always",
+			"arrowParentheses": "always",
+			"quoteProperties": "asNeeded"
+		}
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"complexity": {
+				"noForEach": "off",
+				"useOptionalChain": "warn",
+				"noExcessiveCognitiveComplexity": "warn",
+				"useLiteralKeys": "off"
+			},
+			"correctness": {
+				"noUnusedVariables": "error",
+				"noUnusedImports": "error",
+				"useExhaustiveDependencies": "warn"
+			},
+			"suspicious": {
+				"noExplicitAny": "error",
+				"noConsole": "error",
+				"noShadowRestrictedNames": "error",
+				"noDoubleEquals": "error",
+				"noGlobalIsNan": "error",
+				"noVar": "error",
+				"noAssignInExpressions": "off",
+				"noUnknownAtRules": "off"
+			},
+			"style": {
+				"useImportType": "warn",
+				"useExportType": "warn",
+				"useConst": "error",
+				"useNodejsImportProtocol": "error",
+				"noNonNullAssertion": "error",
+				"useTemplate": "warn"
+			},
+			"a11y": {
+				"useSemanticElements": "off"
+			},
+			"nursery": {
+				"useSortedClasses": {
+					"level": "warn",
+					"options": {
+						"attributes": ["className", "class", "classList"],
+						"functions": ["clsx", "cva", "tw", "cn"]
+					}
+				}
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["packages/cli/**/*.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": { "noConsole": "off" }
+				}
+			}
+		},
+		{
+			"includes": ["packages/core/src/import/**/*.ts"],
+			"linter": { "rules": { "complexity": { "noExcessiveCognitiveComplexity": "off" } } }
+		}
+	]
+}
