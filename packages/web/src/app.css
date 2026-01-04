@@ -1,0 +1,125 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+	--breakpoint-3xl: 1700px;
+	--color-bg: var(--bg);
+	--color-panel: var(--panel);
+	--color-border: var(--border);
+	--color-border-subtle: var(--border-subtle);
+	--color-text: var(--text);
+	--color-muted: var(--muted);
+	--color-error: var(--error);
+	--color-success: var(--success);
+	--color-pending: var(--pending);
+	--color-active-bg: rgba(255, 255, 255, 0.06);
+	--font-mono: 'Fira Code', 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+	--text-2xs: 10px;
+	--text-xs: 11px;
+	--text-sm: 12px;
+	--text-base: 13px;
+	--text-lg: 14px;
+}
+
+/* Chart component shared styles */
+.chart-wrap {
+	@apply relative w-full;
+}
+
+.chart-inner {
+	@apply w-full;
+}
+
+.hover-label {
+	@apply absolute top-2 left-2 z-[2] pointer-events-none opacity-0;
+	@apply transition-opacity duration-[80ms];
+	@apply text-xs tracking-wider uppercase leading-none;
+	@apply py-[3px] px-1.5;
+	color: var(--text);
+	background: var(--panel);
+	border: 1px solid var(--border);
+}
+
+.hover-label.visible {
+	@apply opacity-100;
+}
+
+/* Light theme (default) */
+:root {
+	--bg: #f8f9fa;
+	--panel: #ffffff;
+	--border: #e1e4e8;
+	--border-subtle: rgba(0, 0, 0, 0.06);
+	--text: #1a1a1a;
+	--muted: #6b7280;
+	--error: #dc2626;
+	--success: #16a34a;
+	--pending: #ca8a04;
+}
+
+/* Dark theme */
+.dark {
+	--bg: #0d0f10;
+	--panel: #111315;
+	--border: #24272c;
+	--border-subtle: rgba(255, 255, 255, 0.06);
+	--text: #e6e6e8;
+	--muted: #9aa0a6;
+	--error: #ff6b6b;
+	--success: #4ade80;
+	--pending: #f0b429;
+}
+
+body {
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	-webkit-text-size-adjust: 100%;
+}
+
+/* Hide scrollbars globally but keep scroll functionality */
+* {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
+button {
+	font: inherit;
+}
+
+/* Fade-in animation */
+@keyframes fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.fade-in {
+	animation: fade-in 200ms ease-out both;
+}
+
+.fade-in-delay-1 {
+	animation-delay: 50ms;
+}
+
+.fade-in-delay-2 {
+	animation-delay: 100ms;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+	.fade-in,
+	.fade-in-delay-1,
+	.fade-in-delay-2 {
+		animation: none;
+	}
+}
