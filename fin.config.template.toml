@@ -29,10 +29,10 @@ higher_rate = 0.3375
 
 [financial.scenario]
 lookback_months = 12
-salary_dividend_split_minor = 0
-dividends_monthly_minor = 0
-salary_monthly_minor = 0
-joint_expenses_monthly_minor = 0
+salary_dividend_split_minor = 200000
+dividends_monthly_minor = 600000
+salary_monthly_minor = 300000
+joint_expenses_monthly_minor = 300000
 
 [financial.scenario.toggles]
 include_dividends = true
@@ -45,8 +45,8 @@ mid = 0.06
 high = 0.12
 
 # Runway chart thresholds (optional, in minor units e.g., pence)
-runway_threshold_minor = 4000000  # 40K - minimum acceptable runway
-runway_warning_minor = 5000000    # 50K - warning line on chart
+runway_threshold_minor = 3000000
+runway_warning_minor = 6000000
 
 # =============================================================================
 # GROUPS
@@ -57,14 +57,14 @@ id = "business"
 label = "Business"
 icon = "briefcase"
 tax_type = "corp"
-expense_reserve_months = 1
+expense_reserve_months = 12
 
 [[groups]]
 id = "personal"
 label = "Personal"
 icon = "user"               # Options: user, briefcase, heart, building, wallet, piggy-bank
 tax_type = "income"         # Options: corp, income, none - affects tax reserve calculations
-expense_reserve_months = 3  # Months of expenses to set aside as reserve
+expense_reserve_months = 6  # Months of expenses to set aside as reserve
 
 [[groups]]
 id = "joint"
