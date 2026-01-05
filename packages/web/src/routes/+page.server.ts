@@ -17,8 +17,8 @@ import {
 	getLatestBalances,
 	type MonthlyCashflowPoint,
 	type SankeyFlowData,
-} from 'core';
-import { getAccountById, getAllGroupMetadata, getGroupChartAccounts, getGroupIds, getGroupMetadata } from 'core/config';
+} from '@fin/core';
+import { getAccountById, getAllGroupMetadata, getGroupChartAccounts, getGroupIds, getGroupMetadata } from '@fin/core/config';
 
 import { db } from '$lib/server/db';
 

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import { migrateToLatest, openDatabase } from 'core';
-import { findMonorepoRoot, initConfig } from 'core/config';
+import { migrateToLatest, openDatabase } from '@fin/core';
+import { findMonorepoRoot, initConfig } from '@fin/core/config';
 
 // Initialize config before database operations (required for SSR build)
 initConfig();

@@ -1,5 +1,5 @@
-import { getAllTransactions, type Transaction } from 'core';
-import { getAllGroupMetadata, getGroupIds } from 'core/config';
+import { getAllTransactions, type Transaction } from '@fin/core';
+import { getAllGroupMetadata, getGroupIds } from '@fin/core/config';
 
 import { db } from '$lib/server/db';
 

@@ -1,5 +1,5 @@
-import { getAllAccountsDailyBalanceSeries, getGroupDailyRunwaySeries, getLatestBalances } from 'core';
-import { type Account, getAllGroupMetadata, getAssetAccountIds, getConfig, getGroupIds, getLiquidAccountIds } from 'core/config';
+import { getAllAccountsDailyBalanceSeries, getGroupDailyRunwaySeries, getLatestBalances } from '@fin/core';
+import { type Account, getAllGroupMetadata, getAssetAccountIds, getConfig, getGroupIds, getLiquidAccountIds } from '@fin/core/config';
 import { db } from '$lib/server/db';
 
 const ALL_CHART_ACCOUNT_IDS = getAssetAccountIds();
