@@ -1,16 +1,4 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
-	"extends": ["/Users/han/.config/biome/biome.json"],
-	"overrides": [
-		{
-			"includes": ["packages/cli/**/*.ts"],
-			"linter": {
-				"rules": {
-					"suspicious": {
-						"noConsole": "off"
-					}
-				}
-			}
-		}
-	]
+	"extends": ["/Users/han/.config/biome/biome.json"]
 }
