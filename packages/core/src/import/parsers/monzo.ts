@@ -8,11 +8,47 @@ type MonzoRow = Record<string, string>;
 
 function isMonzoAccount(chartAccountId: string): boolean {
 	if (!isConfigInitialized()) {
-		// Fallback pattern match when config not loaded
 		return chartAccountId.includes(':Monzo') || chartAccountId.includes(':Savings');
 	}
 	const monzoAccounts = getAccountsByProvider('monzo').map((a) => a.id);
 	return monzoAccounts.includes(chartAccountId);
+}
+
+function parseMonzoRow(row: MonzoRow, chartAccountId: AssetAccountId, filePath: string): ParsedTransaction | null {
+	const providerTxnId = row['Transaction ID']?.trim() || null;
+	const datePart = row['Date']?.trim();
+	const timePart = row['Time']?.trim();
+
+	if (!datePart || !timePart) {
+		return null;
+	}
+
+	const postedAt = toIsoLocalDateTime(datePart, timePart);
+	const amountRaw = row['Amount']?.trim() || row['Money In']?.trim() || row['Money Out']?.trim() || '';
+	const amountMinor = parseAmountMinor(amountRaw);
+	const currency = row['Currency']?.trim() || 'GBP';
+
+	const name = row['Name']?.trim();
+	const description = row['Description']?.trim();
+	const rawDescription = (description && description.length > 0 ? description : name) || '';
+	const counterparty = name && name.length > 0 ? name : null;
+	const providerCategory = row['Category']?.trim() || null;
+
+	const balanceRaw = row['Balance']?.trim();
+	const balanceMinor = balanceRaw && balanceRaw.length > 0 ? parseAmountMinor(balanceRaw) : null;
+
+	return {
+		chartAccountId,
+		postedAt,
+		amountMinor,
+		currency,
+		rawDescription,
+		counterparty,
+		providerCategory,
+		providerTxnId,
+		balanceMinor,
+		sourceFile: filePath,
+	};
 }
 
 export async function parseMonzoCsv(filePath: string, chartAccountId: AssetAccountId): Promise<ParseResult> {
@@ -33,41 +69,10 @@ export async function parseMonzoCsv(filePath: string, chartAccountId: AssetAccou
 	const transactions: ParsedTransaction[] = [];
 
 	for (const row of result.data) {
-		const providerTxnId = row['Transaction ID']?.trim() || null;
-		const datePart = row['Date']?.trim();
-		const timePart = row['Time']?.trim();
-		if (!datePart || !timePart) {
-			continue;
+		const txn = parseMonzoRow(row, chartAccountId, filePath);
+		if (txn) {
+			transactions.push(txn);
 		}
-
-		const postedAt = toIsoLocalDateTime(datePart, timePart);
-
-		const amountRaw = row['Amount']?.trim() || row['Money In']?.trim() || row['Money Out']?.trim() || '';
-		const amountMinor = parseAmountMinor(amountRaw);
-
-		const currency = row['Currency']?.trim() || 'GBP';
-		const name = row['Name']?.trim();
-		const description = row['Description']?.trim();
-		const rawDescription = (description && description.length > 0 ? description : name) || '';
-
-		const counterparty = name && name.length > 0 ? name : null;
-		const providerCategory = row['Category']?.trim() || null;
-
-		const balanceRaw = row['Balance']?.trim();
-		const balanceMinor = balanceRaw && balanceRaw.length > 0 ? parseAmountMinor(balanceRaw) : null;
-
-		transactions.push({
-			chartAccountId,
-			postedAt,
-			amountMinor,
-			currency,
-			rawDescription,
-			counterparty,
-			providerCategory,
-			providerTxnId,
-			balanceMinor,
-			sourceFile: filePath,
-		});
 	}
 
 	const hasBalances = transactions.some((txn) => txn.balanceMinor !== null);
