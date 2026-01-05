@@ -15,6 +15,7 @@ import { runReserves } from './commands/reserves';
 import { runRunway } from './commands/runway';
 import { runSanitize } from './commands/sanitize';
 import { runTransactions } from './commands/transactions';
+import { error, log } from './logger';
 
 const COMMANDS: Record<string, (args: string[]) => Promise<void> | void> = {
 	accounts: runAccounts,
@@ -114,7 +115,7 @@ async function main() {
 
 	// Global help
 	if (args.includes('--help') || args.includes('-h') || args.includes('help') || args.length === 0) {
-		console.log(HELP);
+		log(HELP);
 		process.exit(0);
 	}
 
@@ -122,14 +123,14 @@ async function main() {
 	const command = commandIndex === -1 ? undefined : args[commandIndex];
 
 	if (!command) {
-		console.log(HELP);
+		log(HELP);
 		process.exit(0);
 	}
 
 	const handler = COMMANDS[command];
 	if (!handler) {
-		console.error(`Unknown command: ${command}\n`);
-		console.log(HELP);
+		error(`Unknown command: ${command}\n`);
+		log(HELP);
 		process.exit(1);
 	}
 
@@ -138,7 +139,7 @@ async function main() {
 	await handler([...globalArgs, ...commandArgs]);
 }
 
-main().catch((error) => {
-	console.error(`Error: ${error instanceof Error ? error.message : error}`);
+main().catch((err) => {
+	error(`Error: ${err instanceof Error ? err.message : err}`);
 	process.exit(1);
 });

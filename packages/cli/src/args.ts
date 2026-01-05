@@ -4,6 +4,7 @@
  */
 
 import { type GroupId, isGroupId } from 'core';
+import { error } from './logger';
 
 export type ParsedArgs = {
 	/** Boolean flags like --verbose, --json */
@@ -147,8 +148,8 @@ export function getOptionAsNumberOrDefault(parsed: ParsedArgs, name: string, def
  */
 export function validateGroupId(value: string | undefined, commandName: string): asserts value is GroupId | undefined {
 	if (value && !isGroupId(value)) {
-		console.error(`Invalid group: ${value}. Use: personal, business, joint`);
-		console.error(`Run: bun run cli ${commandName} --help`);
+		error(`Invalid group: ${value}. Use: personal, business, joint`);
+		error(`Run: bun run cli ${commandName} --help`);
 		process.exit(1);
 	}
 }

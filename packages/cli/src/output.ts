@@ -3,6 +3,8 @@
  * Clean minimal design - no box-drawing characters.
  */
 
+import { log, json as logJson } from './logger';
+
 export type Column<T = Record<string, unknown>> = {
 	/** Key in the row object */
 	key: keyof T & string;
@@ -123,15 +125,15 @@ export function summary(text: string): string {
 export function renderOutput<T extends Record<string, unknown>>(rows: T[], columns: Column<T>[], format: 'table' | 'json' | 'tsv', summaryText?: string): void {
 	switch (format) {
 		case 'json':
-			console.log(JSON.stringify(rows, null, 2));
+			logJson(rows);
 			break;
 		case 'tsv':
-			console.log(toTsv(rows, columns));
+			log(toTsv(rows, columns));
 			break;
 		default:
-			console.log(table(rows, columns));
+			log(table(rows, columns));
 			if (summaryText) {
-				console.log(summary(summaryText));
+				log(summary(summaryText));
 			}
 	}
 }

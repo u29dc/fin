@@ -7,6 +7,7 @@ import { getJournalEntries, getJournalEntryCount } from '@fin/core';
 import { getOption, parseArgs } from '../args';
 import { getReadonlyDb } from '../db';
 import { formatAmount, formatDate } from '../format';
+import { json, log } from '../logger';
 import { parseFormat } from '../output';
 
 function formatPosting(accountId: string, amountMinor: number): string {
@@ -34,17 +35,17 @@ export function runLedger(args: string[]): void {
 	const entries = getJournalEntries(db, options);
 
 	if (format === 'json') {
-		console.log(JSON.stringify(entries, null, 2));
+		json(entries);
 		return;
 	}
 
 	if (format === 'tsv') {
-		console.log(['date', 'description', 'account', 'amount'].join('\t'));
+		log(['date', 'description', 'account', 'amount'].join('\t'));
 		for (const entry of entries) {
 			for (const posting of entry.postings) {
 				const date = entry.postedAt.slice(0, 10);
 				const desc = entry.description.replace(/[\t\n]/g, ' ');
-				console.log([date, desc, posting.accountId, posting.amountMinor].join('\t'));
+				log([date, desc, posting.accountId, posting.amountMinor].join('\t'));
 			}
 		}
 		return;
@@ -52,19 +53,19 @@ export function runLedger(args: string[]): void {
 
 	// Table format - custom rendering for ledger
 	if (entries.length === 0) {
-		console.log('No journal entries found.');
+		log('No journal entries found.');
 		return;
 	}
 
 	for (const entry of entries) {
 		const date = formatDate(entry.postedAt.slice(0, 10));
-		console.log(`${date}  ${entry.description}`);
+		log(`${date}  ${entry.description}`);
 		for (const posting of entry.postings) {
-			console.log(formatPosting(posting.accountId, posting.amountMinor));
+			log(formatPosting(posting.accountId, posting.amountMinor));
 		}
-		console.log('');
+		log('');
 	}
 
 	const total = getJournalEntryCount(db, accountId);
-	console.log(`Showing ${entries.length} of ${total} entries`);
+	log(`Showing ${entries.length} of ${total} entries`);
 }

@@ -8,33 +8,34 @@ import { initConfig } from 'core/config';
 
 import { getOption, parseArgs } from '../args';
 import { resolveDbPath } from '../db';
+import { error, json, log } from '../logger';
 
 function renderProcessedFiles(files: string[]): void {
 	if (files.length === 0) return;
-	console.log('Processed:');
+	log('Processed:');
 	for (const file of files) {
-		console.log(`  ${file}`);
+		log(`  ${file}`);
 	}
-	console.log('');
+	log('');
 }
 
 function renderSkippedFiles(files: Array<{ path: string; reason: string }>): void {
 	if (files.length === 0) return;
-	console.log('Skipped:');
+	log('Skipped:');
 	for (const { path, reason } of files) {
-		console.log(`  ${path}: ${reason}`);
+		log(`  ${path}: ${reason}`);
 	}
-	console.log('');
+	log('');
 }
 
 function renderUnmappedDescriptions(descriptions: string[]): void {
 	if (descriptions.length === 0) return;
-	console.log(`\nUnmapped descriptions: ${descriptions.length}`);
+	log(`\nUnmapped descriptions: ${descriptions.length}`);
 	for (const desc of descriptions.slice(0, 10)) {
-		console.log(`  "${desc}"`);
+		log(`  "${desc}"`);
 	}
 	if (descriptions.length > 10) {
-		console.log(`  ... and ${descriptions.length - 10} more`);
+		log(`  ... and ${descriptions.length - 10} more`);
 	}
 }
 
@@ -42,17 +43,17 @@ function renderTableOutput(result: ImportResult): void {
 	renderProcessedFiles(result.processedFiles);
 	renderSkippedFiles(result.skippedFiles);
 
-	console.log('Results:');
-	console.log(`  Journal entries created: ${result.journalEntriesCreated}`);
+	log('Results:');
+	log(`  Journal entries created: ${result.journalEntriesCreated}`);
 
 	if (result.accountsTouched.length > 0) {
-		console.log(`  Accounts touched: ${result.accountsTouched.join(', ')}`);
+		log(`  Accounts touched: ${result.accountsTouched.join(', ')}`);
 	}
 
 	renderUnmappedDescriptions(result.unmappedDescriptions);
 
 	if (result.archivedFiles.length > 0) {
-		console.log(`\nArchived ${result.archivedFiles.length} file${result.archivedFiles.length !== 1 ? 's' : ''}`);
+		log(`\nArchived ${result.archivedFiles.length} file${result.archivedFiles.length !== 1 ? 's' : ''}`);
 	}
 }
 
@@ -62,7 +63,7 @@ export async function runImport(args: string[]): Promise<void> {
 	const parsed = parseArgs(args);
 	const formatRaw = getOption(parsed, 'format');
 	if (formatRaw && formatRaw !== 'json' && formatRaw !== 'table') {
-		console.error('Invalid format. Use: table, json');
+		error('Invalid format. Use: table, json');
 		process.exit(1);
 	}
 
@@ -71,7 +72,7 @@ export async function runImport(args: string[]): Promise<void> {
 	const dbPath = resolveDbPath(parsed);
 
 	if (format !== 'json') {
-		console.log('Scanning inbox...\n');
+		log('Scanning inbox...\n');
 	}
 
 	const options: { inboxDir?: string; dbPath: string; migrate: boolean } = { dbPath, migrate: true };
@@ -79,7 +80,7 @@ export async function runImport(args: string[]): Promise<void> {
 	const result = await importInbox(options);
 
 	if (format === 'json') {
-		console.log(JSON.stringify(result, null, 2));
+		json(result);
 		return;
 	}
 

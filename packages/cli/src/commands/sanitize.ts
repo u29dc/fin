@@ -9,6 +9,7 @@ import { initConfig } from 'core/config';
 import { getOption, getOptionAsNumberOrDefault, hasFlag, parseArgs } from '../args';
 import { getDiscoverDb, getWritableDb } from '../db';
 import { formatAmount } from '../format';
+import { error, log } from '../logger';
 
 let rulesConfig: NameMappingConfig | null = null;
 
@@ -22,27 +23,27 @@ async function getRulesConfig(): Promise<NameMappingConfig> {
 
 function displayVerboseChanges(toUpdate: MigrationPlan['toUpdate'], limit = 50): void {
 	if (toUpdate.length === 0) return;
-	console.log('\nChanges:');
+	log('\nChanges:');
 	for (const c of toUpdate.slice(0, limit)) {
-		console.log(`  "${c.currentClean}" -> "${c.proposedClean}"`);
+		log(`  "${c.currentClean}" -> "${c.proposedClean}"`);
 	}
 	if (toUpdate.length > limit) {
-		console.log(`  ... and ${toUpdate.length - limit} more`);
+		log(`  ... and ${toUpdate.length - limit} more`);
 	}
 }
 
 function displayVerboseRecategorizations(toUpdate: RecategorizePlan['toUpdate'], limit = 50): void {
 	if (toUpdate.length === 0) return;
-	console.log('\nRecategorizations:');
+	log('\nRecategorizations:');
 	for (const c of toUpdate.slice(0, limit)) {
-		console.log(`  "${c.description}"`);
-		console.log(`    ${c.currentAccountId} -> ${c.proposedAccountId}`);
+		log(`  "${c.description}"`);
+		log(`    ${c.currentAccountId} -> ${c.proposedAccountId}`);
 		if (c.category) {
-			console.log(`    (category: ${c.category})`);
+			log(`    (category: ${c.category})`);
 		}
 	}
 	if (toUpdate.length > limit) {
-		console.log(`  ... and ${toUpdate.length - limit} more`);
+		log(`  ... and ${toUpdate.length - limit} more`);
 	}
 }
 
@@ -51,7 +52,7 @@ export async function runSanitize(args: string[]): Promise<void> {
 	const subcommand = parsed.positional[0];
 
 	if (!subcommand || !['discover', 'migrate', 'recategorize'].includes(subcommand)) {
-		console.error('Usage: fin sanitize <discover|migrate|recategorize> [options]');
+		error('Usage: fin sanitize <discover|migrate|recategorize> [options]');
 		process.exit(1);
 	}
 
@@ -77,13 +78,13 @@ async function runDiscover(args: string[]): Promise<void> {
 	const options = chartAccountId ? { minOccurrences, chartAccountId } : { minOccurrences };
 	const results = unmappedOnly ? discoverUnmappedDescriptions(db, config, options) : discoverDescriptions(db, options);
 
-	console.log(`Found ${results.length} unique descriptions${unmappedOnly ? ' (unmapped only)' : ''}:\n`);
+	log(`Found ${results.length} unique descriptions${unmappedOnly ? ' (unmapped only)' : ''}:\n`);
 
 	for (const r of results) {
-		console.log(`"${r.rawDescription}"`);
-		console.log(`  Occurrences: ${r.occurrences}, Total: ${formatAmount(r.totalAmountMinor)}`);
-		console.log(`  Accounts: ${r.chartAccountIds.join(', ')}`);
-		console.log(`  Range: ${r.firstSeen} to ${r.lastSeen}\n`);
+		log(`"${r.rawDescription}"`);
+		log(`  Occurrences: ${r.occurrences}, Total: ${formatAmount(r.totalAmountMinor)}`);
+		log(`  Accounts: ${r.chartAccountIds.join(', ')}`);
+		log(`  Range: ${r.firstSeen} to ${r.lastSeen}\n`);
 	}
 }
 
@@ -97,26 +98,26 @@ async function runMigrate(args: string[]): Promise<void> {
 
 	const plan = planMigration(db, config);
 
-	console.log('Migration Plan:');
-	console.log(`  To update: ${plan.toUpdate.length}`);
-	console.log(`  Already clean: ${plan.alreadyClean}`);
-	console.log(`  No matching rule: ${plan.noMatch}`);
+	log('Migration Plan:');
+	log(`  To update: ${plan.toUpdate.length}`);
+	log(`  Already clean: ${plan.alreadyClean}`);
+	log(`  No matching rule: ${plan.noMatch}`);
 
 	if (verbose) {
 		displayVerboseChanges(plan.toUpdate);
 	}
 
 	if (dryRun) {
-		console.log('\n[DRY RUN] No changes made.');
+		log('\n[DRY RUN] No changes made.');
 	} else if (plan.toUpdate.length === 0) {
-		console.log('\nNo changes needed.');
+		log('\nNo changes needed.');
 	} else {
 		const result = executeMigration(db, plan);
-		console.log(`\nResult: ${result.updated} updated, ${result.skipped} skipped`);
+		log(`\nResult: ${result.updated} updated, ${result.skipped} skipped`);
 		if (result.errors.length > 0) {
-			console.log(`Errors: ${result.errors.length}`);
+			log(`Errors: ${result.errors.length}`);
 			for (const err of result.errors) {
-				console.log(`  ${err.id}: ${err.error}`);
+				log(`  ${err.id}: ${err.error}`);
 			}
 		}
 	}
@@ -132,26 +133,26 @@ async function runRecategorize(args: string[]): Promise<void> {
 
 	const plan = planRecategorize(db, config);
 
-	console.log('Recategorize Plan:');
-	console.log(`  To update: ${plan.toUpdate.length}`);
-	console.log(`  Already categorized: ${plan.alreadyCategorized}`);
-	console.log(`  No better category found: ${plan.noMatch}`);
+	log('Recategorize Plan:');
+	log(`  To update: ${plan.toUpdate.length}`);
+	log(`  Already categorized: ${plan.alreadyCategorized}`);
+	log(`  No better category found: ${plan.noMatch}`);
 
 	if (verbose) {
 		displayVerboseRecategorizations(plan.toUpdate);
 	}
 
 	if (dryRun) {
-		console.log('\n[DRY RUN] No changes made.');
+		log('\n[DRY RUN] No changes made.');
 	} else if (plan.toUpdate.length === 0) {
-		console.log('\nNo changes needed.');
+		log('\nNo changes needed.');
 	} else {
 		const result = executeRecategorize(db, plan);
-		console.log(`\nResult: ${result.updated} updated, ${result.skipped} skipped`);
+		log(`\nResult: ${result.updated} updated, ${result.skipped} skipped`);
 		if (result.errors.length > 0) {
-			console.log(`Errors: ${result.errors.length}`);
+			log(`Errors: ${result.errors.length}`);
 			for (const err of result.errors) {
-				console.log(`  ${err.id}: ${err.error}`);
+				log(`  ${err.id}: ${err.error}`);
 			}
 		}
 	}

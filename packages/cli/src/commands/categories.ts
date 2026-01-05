@@ -7,6 +7,7 @@ import { getGroupCategoryBreakdown, getGroupCategoryMonthlyMedian } from 'core';
 import { getOption, getOptionAsNumberOrDefault, parseArgs, requireOption, validateGroupId } from '../args';
 import { getReadonlyDb } from '../db';
 import { formatAmount } from '../format';
+import { error } from '../logger';
 import { type Column, parseFormat, renderOutput } from '../output';
 
 export function runCategories(args: string[]): void {
@@ -14,7 +15,7 @@ export function runCategories(args: string[]): void {
 	const subcommand = parsed.positional[0];
 
 	if (subcommand && !['breakdown', 'median'].includes(subcommand)) {
-		console.error('Usage: fin categories <breakdown|median> --group=GROUP [options]');
+		error('Usage: fin categories <breakdown|median> --group=GROUP [options]');
 		process.exit(1);
 	}
 
