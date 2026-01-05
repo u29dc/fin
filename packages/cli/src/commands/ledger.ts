@@ -2,7 +2,7 @@
  * ledger - Query journal entries with double-entry postings.
  */
 
-import { getJournalEntries, getJournalEntryCount } from 'core';
+import { getJournalEntries, getJournalEntryCount } from '@fin/core';
 
 import { getOption, parseArgs } from '../args';
 import { getReadonlyDb } from '../db';
@@ -39,13 +39,12 @@ export function runLedger(args: string[]): void {
 	}
 
 	if (format === 'tsv') {
-		// Flat TSV output
-		console.log('date\tdescription\taccount\tamount');
+		console.log(['date', 'description', 'account', 'amount'].join('\t'));
 		for (const entry of entries) {
 			for (const posting of entry.postings) {
 				const date = entry.postedAt.slice(0, 10);
 				const desc = entry.description.replace(/[\t\n]/g, ' ');
-				console.log(`${date}\t${desc}\t${posting.accountId}\t${posting.amountMinor}`);
+				console.log([date, desc, posting.accountId, posting.amountMinor].join('\t'));
 			}
 		}
 		return;
