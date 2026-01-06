@@ -2,14 +2,14 @@
  * sanitize - Discover and migrate descriptions.
  */
 
+import { defineCommand } from 'citty';
 import type { AssetAccountId, MigrationPlan, NameMappingConfig, RecategorizePlan } from 'core';
 import { discoverDescriptions, discoverUnmappedDescriptions, executeMigration, executeRecategorize, isAssetAccountId, loadRules, planMigration, planRecategorize } from 'core';
 import { initConfig } from 'core/config';
 
-import { getOption, getOptionAsNumberOrDefault, hasFlag, parseArgs } from '../args';
 import { getDiscoverDb, getWritableDb } from '../db';
 import { formatAmount } from '../format';
-import { error, log } from '../logger';
+import { log } from '../logger';
 
 let rulesConfig: NameMappingConfig | null = null;
 
@@ -47,113 +47,145 @@ function displayVerboseRecategorizations(toUpdate: RecategorizePlan['toUpdate'],
 	}
 }
 
-export async function runSanitize(args: string[]): Promise<void> {
-	const parsed = parseArgs(args);
-	const subcommand = parsed.positional[0];
+// ============================================================================
+// discover
+// ============================================================================
 
-	if (!subcommand || !['discover', 'migrate', 'recategorize'].includes(subcommand)) {
-		error('Usage: fin sanitize <discover|migrate|recategorize> [options]');
-		process.exit(1);
-	}
+const discover = defineCommand({
+	meta: { name: 'discover', description: 'Find description patterns' },
+	args: {
+		unmapped: { type: 'boolean', description: 'Show only unmapped descriptions' },
+		min: { type: 'string', description: 'Minimum occurrences', default: '2' },
+		account: { type: 'string', description: 'Filter by chart account ID' },
+		db: { type: 'string', description: 'Database path' },
+	},
+	async run({ args }) {
+		const unmappedOnly = args.unmapped ?? false;
+		const minOccurrences = Number.parseInt(args.min ?? '2', 10);
+		const chartAccountIdRaw = args.account;
+		const dbPath = args.db;
 
-	if (subcommand === 'discover') {
-		await runDiscover(args.slice(1));
-	} else if (subcommand === 'migrate') {
-		await runMigrate(args.slice(1));
-	} else if (subcommand === 'recategorize') {
-		await runRecategorize(args.slice(1));
-	}
-}
+		const db = getDiscoverDb(dbPath ? { options: new Map([['db', dbPath]]) } : undefined);
+		const config = await getRulesConfig();
 
-async function runDiscover(args: string[]): Promise<void> {
-	const parsed = parseArgs(args);
-	const unmappedOnly = hasFlag(parsed, 'unmapped');
-	const minOccurrences = getOptionAsNumberOrDefault(parsed, 'min', 2);
-	const chartAccountIdRaw = getOption(parsed, 'account');
+		const chartAccountId: AssetAccountId | undefined = chartAccountIdRaw && isAssetAccountId(chartAccountIdRaw) ? chartAccountIdRaw : undefined;
+		const options = chartAccountId ? { minOccurrences, chartAccountId } : { minOccurrences };
+		const results = unmappedOnly ? discoverUnmappedDescriptions(db, config, options) : discoverDescriptions(db, options);
 
-	const db = getDiscoverDb(parsed);
-	const config = await getRulesConfig();
+		log(`Found ${results.length} unique descriptions${unmappedOnly ? ' (unmapped only)' : ''}:\n`);
 
-	const chartAccountId: AssetAccountId | undefined = chartAccountIdRaw && isAssetAccountId(chartAccountIdRaw) ? chartAccountIdRaw : undefined;
-	const options = chartAccountId ? { minOccurrences, chartAccountId } : { minOccurrences };
-	const results = unmappedOnly ? discoverUnmappedDescriptions(db, config, options) : discoverDescriptions(db, options);
+		for (const r of results) {
+			log(`"${r.rawDescription}"`);
+			log(`  Occurrences: ${r.occurrences}, Total: ${formatAmount(r.totalAmountMinor)}`);
+			log(`  Accounts: ${r.chartAccountIds.join(', ')}`);
+			log(`  Range: ${r.firstSeen} to ${r.lastSeen}\n`);
+		}
+	},
+});
 
-	log(`Found ${results.length} unique descriptions${unmappedOnly ? ' (unmapped only)' : ''}:\n`);
+// ============================================================================
+// migrate
+// ============================================================================
 
-	for (const r of results) {
-		log(`"${r.rawDescription}"`);
-		log(`  Occurrences: ${r.occurrences}, Total: ${formatAmount(r.totalAmountMinor)}`);
-		log(`  Accounts: ${r.chartAccountIds.join(', ')}`);
-		log(`  Range: ${r.firstSeen} to ${r.lastSeen}\n`);
-	}
-}
+const migrate = defineCommand({
+	meta: { name: 'migrate', description: 'Apply description mapping rules' },
+	args: {
+		'dry-run': { type: 'boolean', description: 'Preview changes without applying' },
+		verbose: { type: 'boolean', description: 'Show detailed changes' },
+		db: { type: 'string', description: 'Database path' },
+	},
+	async run({ args }) {
+		const dryRun = args['dry-run'] ?? false;
+		const verbose = args.verbose ?? false;
+		const dbPath = args.db;
 
-async function runMigrate(args: string[]): Promise<void> {
-	const parsed = parseArgs(args);
-	const dryRun = hasFlag(parsed, 'dry-run');
-	const verbose = hasFlag(parsed, 'verbose');
+		const db = getWritableDb(dbPath ? { options: new Map([['db', dbPath]]) } : undefined);
+		const config = await getRulesConfig();
 
-	const db = getWritableDb(parsed);
-	const config = await getRulesConfig();
+		const plan = planMigration(db, config);
 
-	const plan = planMigration(db, config);
+		log('Migration Plan:');
+		log(`  To update: ${plan.toUpdate.length}`);
+		log(`  Already clean: ${plan.alreadyClean}`);
+		log(`  No matching rule: ${plan.noMatch}`);
 
-	log('Migration Plan:');
-	log(`  To update: ${plan.toUpdate.length}`);
-	log(`  Already clean: ${plan.alreadyClean}`);
-	log(`  No matching rule: ${plan.noMatch}`);
+		if (verbose) {
+			displayVerboseChanges(plan.toUpdate);
+		}
 
-	if (verbose) {
-		displayVerboseChanges(plan.toUpdate);
-	}
-
-	if (dryRun) {
-		log('\n[DRY RUN] No changes made.');
-	} else if (plan.toUpdate.length === 0) {
-		log('\nNo changes needed.');
-	} else {
-		const result = executeMigration(db, plan);
-		log(`\nResult: ${result.updated} updated, ${result.skipped} skipped`);
-		if (result.errors.length > 0) {
-			log(`Errors: ${result.errors.length}`);
-			for (const err of result.errors) {
-				log(`  ${err.id}: ${err.error}`);
+		if (dryRun) {
+			log('\n[DRY RUN] No changes made.');
+		} else if (plan.toUpdate.length === 0) {
+			log('\nNo changes needed.');
+		} else {
+			const result = executeMigration(db, plan);
+			log(`\nResult: ${result.updated} updated, ${result.skipped} skipped`);
+			if (result.errors.length > 0) {
+				log(`Errors: ${result.errors.length}`);
+				for (const err of result.errors) {
+					log(`  ${err.id}: ${err.error}`);
+				}
 			}
 		}
-	}
-}
+	},
+});
 
-async function runRecategorize(args: string[]): Promise<void> {
-	const parsed = parseArgs(args);
-	const dryRun = hasFlag(parsed, 'dry-run');
-	const verbose = hasFlag(parsed, 'verbose');
+// ============================================================================
+// recategorize
+// ============================================================================
 
-	const db = getWritableDb(parsed);
-	const config = await getRulesConfig();
+const recategorize = defineCommand({
+	meta: { name: 'recategorize', description: 'Recategorize transactions based on rules' },
+	args: {
+		'dry-run': { type: 'boolean', description: 'Preview changes without applying' },
+		verbose: { type: 'boolean', description: 'Show detailed changes' },
+		db: { type: 'string', description: 'Database path' },
+	},
+	async run({ args }) {
+		const dryRun = args['dry-run'] ?? false;
+		const verbose = args.verbose ?? false;
+		const dbPath = args.db;
 
-	const plan = planRecategorize(db, config);
+		const db = getWritableDb(dbPath ? { options: new Map([['db', dbPath]]) } : undefined);
+		const config = await getRulesConfig();
 
-	log('Recategorize Plan:');
-	log(`  To update: ${plan.toUpdate.length}`);
-	log(`  Already categorized: ${plan.alreadyCategorized}`);
-	log(`  No better category found: ${plan.noMatch}`);
+		const plan = planRecategorize(db, config);
 
-	if (verbose) {
-		displayVerboseRecategorizations(plan.toUpdate);
-	}
+		log('Recategorize Plan:');
+		log(`  To update: ${plan.toUpdate.length}`);
+		log(`  Already categorized: ${plan.alreadyCategorized}`);
+		log(`  No better category found: ${plan.noMatch}`);
 
-	if (dryRun) {
-		log('\n[DRY RUN] No changes made.');
-	} else if (plan.toUpdate.length === 0) {
-		log('\nNo changes needed.');
-	} else {
-		const result = executeRecategorize(db, plan);
-		log(`\nResult: ${result.updated} updated, ${result.skipped} skipped`);
-		if (result.errors.length > 0) {
-			log(`Errors: ${result.errors.length}`);
-			for (const err of result.errors) {
-				log(`  ${err.id}: ${err.error}`);
+		if (verbose) {
+			displayVerboseRecategorizations(plan.toUpdate);
+		}
+
+		if (dryRun) {
+			log('\n[DRY RUN] No changes made.');
+		} else if (plan.toUpdate.length === 0) {
+			log('\nNo changes needed.');
+		} else {
+			const result = executeRecategorize(db, plan);
+			log(`\nResult: ${result.updated} updated, ${result.skipped} skipped`);
+			if (result.errors.length > 0) {
+				log(`Errors: ${result.errors.length}`);
+				for (const err of result.errors) {
+					log(`  ${err.id}: ${err.error}`);
+				}
 			}
 		}
-	}
-}
+	},
+});
+
+// ============================================================================
+// sanitize (parent command)
+// ============================================================================
+
+export const sanitize = defineCommand({
+	meta: { name: 'sanitize', description: 'Discover and apply description mappings' },
+	subCommands: {
+		discover,
+		migrate,
+		recategorize,
+	},
+});

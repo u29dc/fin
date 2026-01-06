@@ -1,7 +1,7 @@
 /**
  * Database connection utilities for CLI.
  *
- * Path resolution priority: --db flag > DB_PATH env > default
+ * Path resolution priority: --db flag > DB_PATH env > config dir > cwd
  * Read-only commands use create: false to prevent empty DB creation.
  */
 
@@ -9,20 +9,31 @@ import type { Database } from 'bun:sqlite';
 import { resolve } from 'node:path';
 
 import { openDatabase } from 'core';
-
-import { getOption, type ParsedArgs } from './args';
+import { getConfigDir } from 'core/config';
 
 const DEFAULT_DB_PATH = 'data/fin.db';
+
+type DbArgs = { options?: Map<string, string> } | undefined;
+
+function getOption(args: DbArgs, name: string): string | undefined {
+	return args?.options?.get(name);
+}
 
 /**
  * Resolve database path from args, env, or default.
  */
-export function resolveDbPath(parsed: ParsedArgs): string {
-	const fromArg = getOption(parsed, 'db');
+export function resolveDbPath(args?: DbArgs): string {
+	const fromArg = getOption(args, 'db');
 	if (fromArg) return resolve(fromArg);
 
 	const fromEnv = process.env['DB_PATH'];
 	if (fromEnv) return resolve(fromEnv);
+
+	// Use config directory (same as fin.config.toml location)
+	const configDir = getConfigDir();
+	if (configDir) {
+		return resolve(configDir, 'fin.db');
+	}
 
 	return resolve(process.cwd(), DEFAULT_DB_PATH);
 }
@@ -35,8 +46,8 @@ export function resolveDbPath(parsed: ParsedArgs): string {
  * - readonly: true for safety
  * - migrate: true to ensure schema is up to date
  */
-export function getReadonlyDb(parsed: ParsedArgs): Database {
-	const path = resolveDbPath(parsed);
+export function getReadonlyDb(args?: DbArgs): Database {
+	const path = resolveDbPath(args);
 	return openDatabase({ path, readonly: true, create: false, migrate: true });
 }
 
@@ -47,15 +58,15 @@ export function getReadonlyDb(parsed: ParsedArgs): Database {
  * - create: true allows initial setup
  * - migrate: true to ensure schema is up to date
  */
-export function getWritableDb(parsed: ParsedArgs): Database {
-	const path = resolveDbPath(parsed);
+export function getWritableDb(args?: DbArgs): Database {
+	const path = resolveDbPath(args);
 	return openDatabase({ path, readonly: false, create: true, migrate: true });
 }
 
 /**
  * Open database for sanitize discover (read-only, no create).
  */
-export function getDiscoverDb(parsed: ParsedArgs): Database {
-	const path = resolveDbPath(parsed);
+export function getDiscoverDb(args?: DbArgs): Database {
+	const path = resolveDbPath(args);
 	return openDatabase({ path, readonly: true, create: false, migrate: true });
 }

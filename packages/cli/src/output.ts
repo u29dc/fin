@@ -1,7 +1,9 @@
 /**
- * Elegant TUI table and output formatting.
- * Clean minimal design - no box-drawing characters.
+ * Table output using console-table-printer.
+ * Provides consistent formatting across all commands.
  */
+
+import { Table } from 'console-table-printer';
 
 import { log, json as logJson } from './logger';
 
@@ -10,7 +12,7 @@ export type Column<T = Record<string, unknown>> = {
 	key: keyof T & string;
 	/** Column header label */
 	label: string;
-	/** Minimum width (actual width is max of label, values, minWidth) */
+	/** Minimum width */
 	minWidth?: number;
 	/** Maximum width (values are truncated when longer) */
 	maxWidth?: number;
@@ -20,69 +22,56 @@ export type Column<T = Record<string, unknown>> = {
 	format?: (value: unknown) => string;
 };
 
+function truncate(value: string, width: number): string {
+	if (value.length <= width) return value;
+	if (width <= 3) return value.slice(0, width);
+	return `${value.slice(0, width - 3)}...`;
+}
+
 /**
- * Render data as an elegant minimal table.
- *
- * Style:
- * - Header in uppercase, followed by blank line separator
- * - Right-aligned numbers, left-aligned text
- * - Consistent column widths
- * - Clean spacing (2 spaces between columns)
+ * Render data as a table using console-table-printer.
  */
 export function table<T extends Record<string, unknown>>(rows: T[], columns: Column<T>[]): string {
 	if (rows.length === 0) {
 		return 'No results.';
 	}
 
-	const gap = '  ';
-
-	// Calculate column widths
-	const widths = columns.map((col) => {
-		const headerWidth = col.label.length;
-		const valueWidths = rows.map((row) => {
-			const val = row[col.key];
-			const formatted = col.format ? col.format(val) : String(val ?? '');
-			return formatted.length;
-		});
-		let width = Math.max(headerWidth, ...valueWidths, col.minWidth ?? 0);
-		if (col.maxWidth && width > col.maxWidth) {
-			width = col.maxWidth;
-		}
-		return width;
+	const tableColumns = columns.map((col) => {
+		const colConfig: { name: string; title: string; alignment: 'left' | 'right'; minLen?: number; maxLen?: number } = {
+			name: col.key,
+			title: col.label.toUpperCase(),
+			alignment: col.align ?? 'left',
+		};
+		if (col.minWidth !== undefined) colConfig.minLen = col.minWidth;
+		if (col.maxWidth !== undefined) colConfig.maxLen = col.maxWidth;
+		return colConfig;
 	});
 
-	// Build header
-	const header = columns
-		.map((col, i) => {
-			const width = widths[i] ?? 0;
-			const label = truncate(col.label.toUpperCase(), width);
-			return label.padEnd(width);
-		})
-		.join(gap);
+	const t = new Table({
+		style: {
+			headerTop: { left: '', mid: '', right: '', other: '' },
+			headerBottom: { left: '', mid: '', right: '', other: '' },
+			tableBottom: { left: '', mid: '', right: '', other: '' },
+			vertical: '',
+			rowSeparator: { left: '', mid: '', right: '', other: '' },
+		},
+		columns: tableColumns,
+	});
 
-	// Build data rows
-	const dataRows = rows.map((row) =>
-		columns
-			.map((col, i) => {
-				const val = row[col.key];
-				let formatted = col.format ? col.format(val) : String(val ?? '');
-				const width = widths[i] ?? 0;
-				if (col.maxWidth) {
-					formatted = truncate(formatted, width);
-				}
-				return col.align === 'right' ? formatted.padStart(width) : formatted.padEnd(width);
-			})
-			.join(gap),
-	);
+	for (const row of rows) {
+		const formattedRow: Record<string, string> = {};
+		for (const col of columns) {
+			const val = row[col.key];
+			let formatted = col.format ? col.format(val) : String(val ?? '');
+			if (col.maxWidth) {
+				formatted = truncate(formatted, col.maxWidth);
+			}
+			formattedRow[col.key] = formatted;
+		}
+		t.addRow(formattedRow);
+	}
 
-	// Combine with blank line separator after header
-	return [header, '', ...dataRows].join('\n');
-}
-
-function truncate(value: string, width: number): string {
-	if (value.length <= width) return value;
-	if (width <= 3) return value.slice(0, width);
-	return `${value.slice(0, width - 3)}...`;
+	return t.render();
 }
 
 /**

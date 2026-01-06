@@ -2,13 +2,13 @@
  * import - Run import pipeline.
  */
 
+import { defineCommand } from 'citty';
 import type { ImportResult } from 'core';
 import { importInbox } from 'core';
 import { initConfig } from 'core/config';
 
-import { getOption, parseArgs } from '../args';
 import { resolveDbPath } from '../db';
-import { error, json, log } from '../logger';
+import { json, log } from '../logger';
 
 function renderProcessedFiles(files: string[]): void {
 	if (files.length === 0) return;
@@ -57,32 +57,33 @@ function renderTableOutput(result: ImportResult): void {
 	}
 }
 
-export async function runImport(args: string[]): Promise<void> {
-	initConfig();
+export const importCmd = defineCommand({
+	meta: { name: 'import', description: 'Import transactions from inbox' },
+	args: {
+		inbox: { type: 'string', description: 'Custom inbox directory' },
+		format: { type: 'string', description: 'Output format: table, json', default: 'table' },
+		db: { type: 'string', description: 'Database path' },
+	},
+	async run({ args }) {
+		initConfig();
 
-	const parsed = parseArgs(args);
-	const formatRaw = getOption(parsed, 'format');
-	if (formatRaw && formatRaw !== 'json' && formatRaw !== 'table') {
-		error('Invalid format. Use: table, json');
-		process.exit(1);
-	}
+		const format = args.format === 'json' ? 'json' : 'table';
+		const inboxDir = args.inbox;
+		const dbPath = resolveDbPath(args.db ? { options: new Map([['db', args.db]]) } : undefined);
 
-	const format = formatRaw === 'json' ? 'json' : 'table';
-	const inboxDir = getOption(parsed, 'inbox');
-	const dbPath = resolveDbPath(parsed);
+		if (format !== 'json') {
+			log('Scanning inbox...\n');
+		}
 
-	if (format !== 'json') {
-		log('Scanning inbox...\n');
-	}
+		const options: { inboxDir?: string; dbPath: string; migrate: boolean } = { dbPath, migrate: true };
+		if (inboxDir) options.inboxDir = inboxDir;
+		const result = await importInbox(options);
 
-	const options: { inboxDir?: string; dbPath: string; migrate: boolean } = { dbPath, migrate: true };
-	if (inboxDir) options.inboxDir = inboxDir;
-	const result = await importInbox(options);
+		if (format === 'json') {
+			json(result);
+			return;
+		}
 
-	if (format === 'json') {
-		json(result);
-		return;
-	}
-
-	renderTableOutput(result);
-}
+		renderTableOutput(result);
+	},
+});
