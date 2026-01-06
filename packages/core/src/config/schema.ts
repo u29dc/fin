@@ -37,11 +37,14 @@ const BankPresetSchema = z.object({
 	columns: BankColumnsSchema,
 });
 
-// Financial config schema
+// Financial config schema helpers
+const rateSchema = z.number().min(0, 'Rate must be >= 0').max(1, 'Rate must be <= 1 (use 0.25 not 25)');
+const positiveIntSchema = z.number().int().min(0, 'Must be a non-negative integer');
+
 const PersonalDividendTaxSchema = z.object({
-	allowance_minor: z.number(),
-	basic_rate: z.number(),
-	higher_rate: z.number(),
+	allowance_minor: positiveIntSchema,
+	basic_rate: rateSchema,
+	higher_rate: rateSchema,
 });
 
 const ScenarioTogglesSchema = z.object({
@@ -66,18 +69,18 @@ const InvestmentProjectionSchema = z.object({
 });
 
 const FinancialSchema = z.object({
-	corp_tax_rate: z.number(),
-	vat_rate: z.number(),
+	corp_tax_rate: rateSchema,
+	vat_rate: rateSchema,
 	personal_dividend_tax: PersonalDividendTaxSchema,
-	personal_income_tax_rate: z.number(),
-	joint_share_you: z.number(),
-	expense_reserve_months: z.number(),
-	trailing_expense_window_months: z.number(),
+	personal_income_tax_rate: rateSchema,
+	joint_share_you: rateSchema,
+	expense_reserve_months: positiveIntSchema,
+	trailing_expense_window_months: positiveIntSchema,
 	scenario: ScenarioSchema,
-	fixed_monthly_personal_outflow_minor: z.number().nullable(),
+	fixed_monthly_personal_outflow_minor: z.number().int().nullable(),
 	investment_projection_annual_returns: InvestmentProjectionSchema,
-	runway_threshold_minor: z.number().optional(), // Minimum runway balance (e.g., 4000000 = 40K GBP)
-	runway_warning_minor: z.number().optional(), // Warning line for runway chart (e.g., 5000000 = 50K GBP)
+	runway_threshold_minor: positiveIntSchema.optional(),
+	runway_warning_minor: positiveIntSchema.optional(),
 });
 
 // Sanitization config schema

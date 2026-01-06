@@ -70,6 +70,9 @@ function getAssetAccountSeeds(): ChartAccountSeed[] {
 const STATIC_SEEDS: ChartAccountSeed[] = [
 	// Root accounts (non-asset placeholders)
 	{ id: 'Liabilities', name: 'Liabilities', type: 'liability', parent: null, placeholder: true },
+	{ id: 'Liabilities:Business', name: 'Business', type: 'liability', parent: 'Liabilities', placeholder: true },
+	{ id: 'Liabilities:Business:CorpTaxPayable', name: 'Corp Tax Payable', type: 'liability', parent: 'Liabilities:Business', placeholder: false },
+	{ id: 'Liabilities:Business:VATPayable', name: 'VAT Payable', type: 'liability', parent: 'Liabilities:Business', placeholder: false },
 	{ id: 'Equity', name: 'Equity', type: 'equity', parent: null, placeholder: true },
 	{ id: 'Income', name: 'Income', type: 'income', parent: null, placeholder: true },
 	{ id: 'Expenses', name: 'Expenses', type: 'expense', parent: null, placeholder: true },
