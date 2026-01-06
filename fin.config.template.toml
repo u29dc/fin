@@ -119,6 +119,7 @@ id = "Assets:Personal:Investments"
 group = "personal"
 type = "asset"
 provider = "vanguard"
+subtype = "investment"
 label = "Personal Investments"
 inbox_folder = "personal-investments"
 

@@ -24,6 +24,7 @@ export const EXACT_CATEGORY_TO_ACCOUNT: Record<string, string> = {
 	tax: 'Expenses:Taxes:VAT',
 	government: 'Expenses:Taxes:VAT',
 	insurance: 'Expenses:Business:Insurance',
+	office: 'Expenses:Business:Equipment',
 	vehicle: 'Expenses:Transport:Vehicle',
 
 	// Personal expenses

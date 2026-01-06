@@ -32,6 +32,13 @@ function findConfigPath(startPath?: string): string {
 		return isAbsolute(envPath) ? envPath : join(process.cwd(), envPath);
 	}
 
+	// Check for FIN_HOME environment variable (project root directory)
+	const homeDir = process.env['FIN_HOME'];
+	if (homeDir) {
+		const homePath = isAbsolute(homeDir) ? homeDir : join(process.cwd(), homeDir);
+		return join(homePath, 'data', 'fin.config.toml');
+	}
+
 	// Walk up to find monorepo root (handles running from packages/web/ etc.)
 	const root = findMonorepoRoot(process.cwd());
 	if (root) {
