@@ -92,9 +92,10 @@ type PreparedStatements = {
 function createTransferEntry(pair: TransferPair, stmts: PreparedStatements, result: JournalEntryResult): void {
 	const journalId = generateId('je');
 	const postedAt = pair.from.postedAt < pair.to.postedAt ? pair.from.postedAt : pair.to.postedAt;
+	const description = pair.from.cleanDescription || pair.from.rawDescription || 'Transfer';
 
 	try {
-		stmts.insertJournal.run(journalId, postedAt, 'Transfer', 'Transfer', 'Transfer', null, pair.from.sourceFile);
+		stmts.insertJournal.run(journalId, postedAt, description, pair.from.rawDescription, pair.from.cleanDescription, pair.from.counterparty, pair.from.sourceFile);
 		stmts.insertPosting.run(generateId('p'), journalId, pair.from.chartAccountId, pair.from.amountMinor, pair.from.currency, null, pair.from.providerTxnId, pair.from.balanceMinor);
 		stmts.insertPosting.run(generateId('p'), journalId, pair.to.chartAccountId, pair.to.amountMinor, pair.to.currency, null, pair.to.providerTxnId, pair.to.balanceMinor);
 		result.journalEntriesCreated++;

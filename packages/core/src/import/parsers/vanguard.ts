@@ -5,8 +5,7 @@ import type { AssetAccountId, ParsedTransaction, ParseResult } from '../types';
 
 function isVanguardAccount(chartAccountId: string): boolean {
 	if (!isConfigInitialized()) {
-		// Fallback pattern match when config not loaded
-		return chartAccountId.includes(':Vanguard');
+		throw new Error('Config must be initialized before parsing Vanguard files');
 	}
 	const vanguardAccounts = getAccountsByProvider('vanguard').map((a) => a.id);
 	return vanguardAccounts.includes(chartAccountId);
