@@ -2,6 +2,7 @@ import Papa from 'papaparse';
 import { getAccountsByProvider, isConfigInitialized } from '../../config/index';
 import { parseAmountMinor } from '../../utils/amount';
 import type { AssetAccountId, ParsedTransaction, ParseResult } from '../types';
+import { getColumnMapping, validateCsvHeaders } from './validation';
 
 function isVanguardAccount(chartAccountId: string): boolean {
 	if (!isConfigInitialized()) {
@@ -125,6 +126,9 @@ export async function parseVanguardCsv(filePath: string, chartAccountId: AssetAc
 		throw new Error(`Account "${chartAccountId}" is not configured as a Vanguard account for file: ${filePath}`);
 	}
 
+	// Get column mapping from config
+	const cols = getColumnMapping('vanguard');
+
 	const text = await Bun.file(filePath).text();
 	const result = Papa.parse<VanguardRow>(text, {
 		header: true,
@@ -135,12 +139,17 @@ export async function parseVanguardCsv(filePath: string, chartAccountId: AssetAc
 		throw new Error(`Vanguard CSV parse errors: ${result.errors.map((e) => e.message).join('; ')}`);
 	}
 
+	// Validate headers against config-defined required columns
+	const headers = result.meta.fields ?? [];
+	validateCsvHeaders(headers, 'vanguard');
+
 	const transactions: ParsedTransaction[] = [];
 
 	for (const row of result.data) {
-		const datePart = row['Date']?.trim();
-		const details = row['Details']?.trim() || '';
-		const amountRaw = row['Amount']?.trim();
+		// Use config-defined column names
+		const datePart = row[cols.date]?.trim();
+		const details = row[cols.description]?.trim() || '';
+		const amountRaw = row[cols.amount]?.trim();
 
 		if (!datePart || !amountRaw) {
 			continue;

@@ -3,6 +3,7 @@ import { getAccountsByProvider, isConfigInitialized } from '../../config/index';
 import { parseAmountMinor } from '../../utils/amount';
 import { parseWiseDateTime } from '../../utils/datetime';
 import type { AssetAccountId, ParsedTransaction, ParseResult } from '../types';
+import { type ColumnMapping, getColumnMapping, validateCsvHeaders } from './validation';
 
 type WiseRow = Record<string, string>;
 
@@ -14,20 +15,25 @@ function isWiseAccount(chartAccountId: string): boolean {
 	return wiseAccounts.includes(chartAccountId);
 }
 
-function parseWiseRow(row: WiseRow, chartAccountId: AssetAccountId, filePath: string): ParsedTransaction {
-	const providerTxnId = row['TransferWise ID']?.trim() || null;
-	const postedAt = parseWiseDateTime(row['Date Time'] ?? '', row['Date']);
+function parseWiseRow(row: WiseRow, cols: ColumnMapping, chartAccountId: AssetAccountId, filePath: string): ParsedTransaction {
+	// Use config-defined column names
+	const providerTxnId = (cols.transactionId ? row[cols.transactionId]?.trim() : null) || null;
 
-	const amountMinor = parseAmountMinor(row['Amount'] ?? '');
+	// Wise has two date formats: "Date Time" or separate "Date"
+	const dateTime = row['Date Time'] ?? '';
+	const dateOnly = row[cols.date] ?? '';
+	const postedAt = parseWiseDateTime(dateTime, dateOnly);
+
+	const amountMinor = parseAmountMinor(row[cols.amount] ?? '');
 	const currency = row['Currency']?.trim() || 'GBP';
 
-	const description = row['Description']?.trim() || '';
+	const description = row[cols.description]?.trim() || '';
 	const reference = row['Payment Reference']?.trim() || '';
 	const rawDescription = reference.length > 0 ? `${reference} - ${description}`.trim() : description;
 
 	const counterparty = row['Payee Name']?.trim() || row['Payer Name']?.trim() || null;
 
-	const balanceRaw = row['Running Balance']?.trim();
+	const balanceRaw = cols.balance ? row[cols.balance]?.trim() : undefined;
 	const balanceMinor = balanceRaw && balanceRaw.length > 0 ? parseAmountMinor(balanceRaw) : null;
 
 	return {
@@ -49,6 +55,9 @@ export async function parseWiseCsv(filePath: string, chartAccountId: AssetAccoun
 		throw new Error(`Account "${chartAccountId}" is not configured as a Wise account for file: ${filePath}`);
 	}
 
+	// Get column mapping from config
+	const cols = getColumnMapping('wise');
+
 	const text = await Bun.file(filePath).text();
 	const result = Papa.parse<WiseRow>(text, {
 		header: true,
@@ -59,8 +68,14 @@ export async function parseWiseCsv(filePath: string, chartAccountId: AssetAccoun
 		throw new Error(`Wise CSV parse errors: ${result.errors.map((e) => e.message).join('; ')}`);
 	}
 
-	const transactions = result.data.map((row) => parseWiseRow(row, chartAccountId, filePath));
-	const hasBalances = true;
+	// Validate headers against config-defined required columns
+	const headers = result.meta.fields ?? [];
+	validateCsvHeaders(headers, 'wise');
+
+	const transactions = result.data.map((row) => parseWiseRow(row, cols, chartAccountId, filePath));
+
+	// Fix: actually check if balances are present instead of hardcoded true
+	const hasBalances = transactions.some((txn) => txn.balanceMinor !== null);
 
 	return { chartAccountId, transactions, hasBalances };
 }

@@ -4,7 +4,7 @@ import { openDatabase } from '../db';
 import { migrateToLatest } from '../db/migrate';
 import { loadRules, resetRulesCache } from '../sanitize/rules-loader';
 
-import { archiveFiles } from './archiver';
+import { ArchiveManager } from './archive-manager';
 import { createJournalEntriesFromTransactions } from './journal-entry-creator';
 import { parseMonzoCsv, parseVanguardCsv, parseVanguardPdf, parseWiseCsv } from './parsers';
 import { scanInbox } from './scanner';
@@ -103,14 +103,34 @@ export async function importInbox(options: ImportInboxOptions = {}): Promise<Imp
 	const canonResult = canonicalize(parsedTransactions, rulesConfig);
 	const accountsTouched = Array.from(accountsTouchedSet.values());
 
-	const journalResult = createJournalEntriesFromTransactions(db, canonResult.transactions);
-	const archivedFiles = await archiveFiles(processedFiles, archiveDir);
+	// Two-phase commit: prepare archive first, then DB operations, then commit archive
+	const archiveManager = new ArchiveManager();
+	let journalEntriesCreated = 0;
+	let archivedFiles: string[] = [];
+
+	try {
+		// Phase 1: Prepare archive (creates target dir, but doesn't move files yet)
+		await archiveManager.prepareArchive(processedFiles, archiveDir);
+
+		// Phase 2: DB operations (can fail safely, no files moved yet)
+		const journalResult = createJournalEntriesFromTransactions(db, canonResult.transactions);
+		journalEntriesCreated = journalResult.journalEntriesCreated;
+
+		// Phase 3: Commit archive (move files only after DB succeeds)
+		archivedFiles = await archiveManager.commitArchive();
+	} catch (error) {
+		// Rollback any archived files if something failed after archiving started
+		if (archiveManager.hasArchivedFiles()) {
+			await archiveManager.rollbackArchive();
+		}
+		throw error;
+	}
 
 	return {
 		processedFiles,
 		archivedFiles,
 		skippedFiles,
-		journalEntriesCreated: journalResult.journalEntriesCreated,
+		journalEntriesCreated,
 		accountsTouched,
 		unmappedDescriptions: canonResult.unmappedDescriptions,
 	};

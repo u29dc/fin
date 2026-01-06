@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises';
+import { access, constants, readdir } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { getInboxFolderToChartId, getProviderForAccount, isConfigInitialized } from '../config/index';
 import type { AssetAccountId, DetectedFile, DetectedProvider } from './types';
@@ -81,6 +81,13 @@ async function scanAccountDirectory(accountDir: string, chartAccountId: AssetAcc
 }
 
 export async function scanInbox(inboxDir: string): Promise<DetectedFile[]> {
+	// Validate inbox directory exists and is readable
+	try {
+		await access(inboxDir, constants.R_OK);
+	} catch {
+		throw new Error(`Inbox directory not found or not readable: ${inboxDir}\nCreate it with: mkdir -p "${inboxDir}"`);
+	}
+
 	const entries = await readdir(inboxDir, { withFileTypes: true });
 	const detected: DetectedFile[] = [];
 
