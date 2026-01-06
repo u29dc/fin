@@ -53,17 +53,31 @@
 
 Commands via `bun run fin <command>`:
 
-- `accounts` - List accounts with balances
-- `balance-sheet` - Balance sheet from double-entry ledger
-- `transactions` - Query with filters (account, group, category, date range)
-- `ledger` - Query journal entries with postings
-- `cashflow` - Monthly income/expense/savings breakdown
-- `import` - Run import pipeline
-- `sanitize discover|migrate` - Description discovery and migration
-- `health` - Financial health metrics (balance - reserves)
-- `runway` - Months of cash remaining
-- `reserves` - Reserve breakdown (tax + expense)
-- `categories breakdown|median` - Spending by category
+```
+fin help                       Show all commands and options
+
+fin view                       View stored data
+  fin view accounts            Account balances [--group]
+  fin view transactions        Transaction list [--account, --group, --from, --to, --limit]
+  fin view ledger              Journal entries [--account, --from, --to, --limit]
+  fin view balance             Balance sheet [--as-of]
+
+fin report                     Financial analytics
+  fin report cashflow          Monthly cashflow [--group*, --months, --from]
+  fin report health            Health metrics [--group*, --from, --to]
+  fin report runway            Runway projection [--group*, --from, --to]
+  fin report reserves          Reserve breakdown [--group*, --from, --to]
+  fin report categories        Category spending [--group*, --months, --limit]
+    breakdown                  Total by category (default)
+    median                     Monthly median
+
+fin import                     Import pipeline [--inbox]
+
+fin sanitize                   Data cleanup
+  fin sanitize discover        Find patterns [--unmapped, --min, --account]
+  fin sanitize migrate         Apply rules [--dry-run, --verbose]
+  fin sanitize recategorize    Recategorize [--dry-run, --verbose]
+```
 
 Global flags: `--help`, `--db=PATH`, `--format=table|json|tsv`
 
