@@ -7,6 +7,24 @@ import { type ColumnMapping, getColumnMapping, validateCsvHeaders } from './vali
 
 type MonzoRow = Record<string, string>;
 
+function getColumnValue(row: MonzoRow, column: string | undefined): string | null {
+	if (!column) return null;
+	const value = row[column]?.trim();
+	return value && value.length > 0 ? value : null;
+}
+
+function resolveAmount(row: MonzoRow, cols: ColumnMapping): string {
+	return getColumnValue(row, cols.amount) || getColumnValue(row, 'Money In') || getColumnValue(row, 'Money Out') || '';
+}
+
+function resolveDescription(row: MonzoRow, cols: ColumnMapping): { rawDescription: string; counterparty: string | null } {
+	const name = getColumnValue(row, cols.name);
+	const description = getColumnValue(row, cols.description);
+	const rawDescription = description || name || '';
+	const counterparty = name;
+	return { rawDescription, counterparty };
+}
+
 function isMonzoAccount(chartAccountId: string): boolean {
 	if (!isConfigInitialized()) {
 		return chartAccountId.includes(':Monzo') || chartAccountId.includes(':Savings');
@@ -16,47 +34,26 @@ function isMonzoAccount(chartAccountId: string): boolean {
 }
 
 function parseMonzoRow(row: MonzoRow, cols: ColumnMapping, chartAccountId: AssetAccountId, filePath: string): ParsedTransaction | null {
-	// Use config-defined column names
-	const providerTxnId = (cols.transactionId ? row[cols.transactionId]?.trim() : null) || null;
-	const datePart = row[cols.date]?.trim();
-	const timePart = cols.time ? row[cols.time]?.trim() : undefined;
+	const datePart = getColumnValue(row, cols.date);
+	const timePart = getColumnValue(row, cols.time);
 
-	if (!datePart) {
-		return null;
-	}
-
-	// If time column is configured and required (Monzo), skip rows with missing time
-	// If no time column configured (Wise), default to midnight
-	if (cols.time && !timePart) {
-		return null;
-	}
+	if (!datePart) return null;
+	if (cols.time && !timePart) return null;
 
 	const postedAt = timePart ? toIsoLocalDateTime(datePart, timePart) : `${datePart}T00:00:00`;
-
-	// Amount column with fallback for Money In/Money Out format
-	const amountRaw = row[cols.amount]?.trim() || row['Money In']?.trim() || row['Money Out']?.trim() || '';
-	const amountMinor = parseAmountMinor(amountRaw);
-	const currency = row['Currency']?.trim() || 'GBP';
-
-	const name = cols.name ? row[cols.name]?.trim() : undefined;
-	const description = row[cols.description]?.trim();
-	const rawDescription = (description && description.length > 0 ? description : name) || '';
-	const counterparty = name && name.length > 0 ? name : null;
-	const providerCategory = (cols.category ? row[cols.category]?.trim() : null) || null;
-
-	const balanceRaw = cols.balance ? row[cols.balance]?.trim() : undefined;
-	const balanceMinor = balanceRaw && balanceRaw.length > 0 ? parseAmountMinor(balanceRaw) : null;
+	const { rawDescription, counterparty } = resolveDescription(row, cols);
+	const balanceRaw = getColumnValue(row, cols.balance);
 
 	return {
 		chartAccountId,
 		postedAt,
-		amountMinor,
-		currency,
+		amountMinor: parseAmountMinor(resolveAmount(row, cols)),
+		currency: getColumnValue(row, 'Currency') || 'GBP',
 		rawDescription,
 		counterparty,
-		providerCategory,
-		providerTxnId,
-		balanceMinor,
+		providerCategory: getColumnValue(row, cols.category),
+		providerTxnId: getColumnValue(row, cols.transactionId),
+		balanceMinor: balanceRaw ? parseAmountMinor(balanceRaw) : null,
 		sourceFile: filePath,
 	};
 }
