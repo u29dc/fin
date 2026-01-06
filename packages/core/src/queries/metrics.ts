@@ -86,6 +86,13 @@ export type TransferPair = {
 	absAmountMinor: number;
 };
 
+type TransferDbRow = {
+	id: string;
+	chart_account_id: string;
+	posted_at: string;
+	amount_minor: number;
+};
+
 function dateOnly(iso: string): string {
 	return iso.slice(0, 10);
 }
@@ -249,14 +256,56 @@ export function getTypicalMonthlyMinor(totals: number[]): number {
 	return mean(totals);
 }
 
-function loadTransferRows(_db: Database, chartAccountIds: AssetAccountId[], _fromDate: string): TransferRow[] {
-	// In the new ledger system, transfers are detected by counterparty patterns.
-	// For now, return empty to use config defaults for scenario calculations.
-	// TODO: Implement transfer detection from journal_entries + postings
+export function loadTransferRows(db: Database, chartAccountIds: AssetAccountId[], fromDate: string): TransferRow[] {
 	if (chartAccountIds.length === 0) {
 		return [];
 	}
-	return [];
+
+	const placeholders = chartAccountIds.map(() => '?').join(', ');
+
+	// Query finds postings from journal entries where:
+	// 1. Entry has exactly 2 total postings
+	// 2. Both postings are to asset accounts
+	// 3. At least one posting is to a requested account
+	// 4. Entry is after fromDate
+	const sql = `
+		WITH two_posting_entries AS (
+			SELECT journal_entry_id
+			FROM postings
+			GROUP BY journal_entry_id
+			HAVING COUNT(*) = 2
+		),
+		transfer_entries AS (
+			SELECT tpe.journal_entry_id AS journal_id
+			FROM two_posting_entries tpe
+			INNER JOIN postings p ON p.journal_entry_id = tpe.journal_entry_id
+			INNER JOIN chart_of_accounts coa ON p.account_id = coa.id
+			INNER JOIN journal_entries je ON je.id = tpe.journal_entry_id
+			WHERE coa.account_type = 'asset'
+			  AND je.posted_at >= ?
+			GROUP BY tpe.journal_entry_id
+			HAVING COUNT(*) = 2
+		)
+		SELECT
+			p.id,
+			p.account_id AS chart_account_id,
+			je.posted_at,
+			p.amount_minor
+		FROM transfer_entries te
+		INNER JOIN journal_entries je ON te.journal_id = je.id
+		INNER JOIN postings p ON p.journal_entry_id = je.id
+		WHERE p.account_id IN (${placeholders})
+	`;
+
+	const params = [fromDate, ...chartAccountIds];
+	const rows = db.query<TransferDbRow, string[]>(sql).all(...params);
+
+	return rows.map((row) => ({
+		id: row.id,
+		chart_account_id: row.chart_account_id as AssetAccountId,
+		posted_at: row.posted_at,
+		amount_minor: row.amount_minor,
+	}));
 }
 
 type SalaryDividendResult = {

@@ -1146,7 +1146,7 @@ type MonthlyTotalRow = {
 	month_total: number;
 };
 
-function calculateMedianMap(monthlyTotals: MonthlyTotalRow[]): Map<string, number> {
+function calculateMedianMap(monthlyTotals: MonthlyTotalRow[], months: number): Map<string, number> {
 	// Group by account
 	const byAccount = new Map<string, number[]>();
 	for (const row of monthlyTotals) {
@@ -1156,13 +1156,13 @@ function calculateMedianMap(monthlyTotals: MonthlyTotalRow[]): Map<string, numbe
 		byAccount.get(row.account_id)?.push(row.month_total);
 	}
 
-	// Calculate median for each account
+	// Calculate monthly average for each account (total / months)
+	// This properly represents quarterly/infrequent payments as monthly costs
 	const medianMap = new Map<string, number>();
 	for (const [accountId, totals] of byAccount) {
-		const sorted = [...totals].sort((a, b) => a - b);
-		const mid = Math.floor(sorted.length / 2);
-		const median = sorted.length % 2 === 1 ? (sorted[mid] ?? 0) : Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
-		medianMap.set(accountId, median);
+		const total = totals.reduce((sum, v) => sum + v, 0);
+		const monthlyAvg = Math.round(total / months);
+		medianMap.set(accountId, monthlyAvg);
 	}
 	return medianMap;
 }
@@ -1221,8 +1221,8 @@ function buildMedianExpenseTree(accounts: MedianAccountRow[], medianMap: Map<str
 }
 
 /**
- * Get expense hierarchy with monthly median values for stable representation.
- * Uses median of monthly totals over the specified period.
+ * Get expense hierarchy with monthly average values for stable representation.
+ * Uses total / months to properly represent quarterly/infrequent payments.
  */
 export function getGroupExpenseHierarchyMedian(db: Database, chartAccountIds: string[], options: GroupExpenseHierarchyOptions = {}): ExpenseNode[] {
 	const { months = 6 } = options;
@@ -1254,7 +1254,7 @@ export function getGroupExpenseHierarchyMedian(db: Database, chartAccountIds: st
 	`;
 
 	const monthlyTotals = db.query<MonthlyTotalRow, (string | number)[]>(sql).all(months, ...matchParams);
-	const medianMap = calculateMedianMap(monthlyTotals);
+	const medianMap = calculateMedianMap(monthlyTotals, months);
 
 	const accounts = db
 		.query<MedianAccountRow, []>(
@@ -1267,7 +1267,78 @@ export function getGroupExpenseHierarchyMedian(db: Database, chartAccountIds: st
 		)
 		.all();
 
-	return buildMedianExpenseTree(accounts, medianMap);
+	const expenseTree = buildMedianExpenseTree(accounts, medianMap);
+
+	// Query asset-to-asset transfers (outbound from this group's accounts)
+	const orConditionsFrom = chartAccountIds.flatMap(() => ['p_from.account_id = ?', 'p_from.account_id LIKE ?']);
+	// Extract group name from destination account path (Assets:Joint:Monzo -> Joint Account)
+	const transferSql = `
+		SELECT
+			CASE
+				WHEN p_to.account_id LIKE 'Assets:%:%' THEN
+					SUBSTR(p_to.account_id, 8, INSTR(SUBSTR(p_to.account_id, 8), ':') - 1) || ' Account'
+				ELSE coa_to.name
+			END as transfer_type,
+			strftime('%Y-%m', je.posted_at) AS month,
+			SUM(ABS(p_from.amount_minor)) as month_total
+		FROM postings p_from
+		JOIN postings p_to ON p_from.journal_entry_id = p_to.journal_entry_id
+		JOIN journal_entries je ON p_from.journal_entry_id = je.id
+		JOIN chart_of_accounts coa_from ON p_from.account_id = coa_from.id
+		JOIN chart_of_accounts coa_to ON p_to.account_id = coa_to.id
+		WHERE coa_from.account_type = 'asset'
+			AND coa_to.account_type = 'asset'
+			AND p_from.amount_minor < 0
+			AND p_to.amount_minor > 0
+			AND p_from.account_id != p_to.account_id
+			AND je.posted_at >= date('now', '-' || ? || ' months')
+			AND (${orConditionsFrom.join(' OR ')})
+		GROUP BY transfer_type, strftime('%Y-%m', je.posted_at)
+	`;
+
+	type TransferMonthlyRow = { transfer_type: string; month: string; month_total: number };
+	const transferMonthly = db.query<TransferMonthlyRow, (string | number)[]>(transferSql).all(months, ...matchParams);
+
+	// Group by transfer type and calculate medians
+	const transferByType = new Map<string, number[]>();
+	for (const row of transferMonthly) {
+		const type = row.transfer_type || 'Other Transfer';
+		if (!transferByType.has(type)) {
+			transferByType.set(type, []);
+		}
+		transferByType.get(type)?.push(row.month_total);
+	}
+
+	// Calculate monthly average for each transfer type (total / months)
+	const transferAverages: ExpenseNode[] = [];
+	for (const [type, amounts] of transferByType) {
+		if (amounts.length === 0) continue;
+		const total = amounts.reduce((sum, v) => sum + v, 0);
+		const monthlyAvg = Math.round(total / months);
+		if (monthlyAvg > 0) {
+			transferAverages.push({
+				accountId: `Outflows:Transfers:${type.replace(/\s+/g, '')}`,
+				name: type,
+				totalMinor: monthlyAvg,
+				children: [],
+			});
+		}
+	}
+
+	// Add "Transfers" as a root-level node if there are any transfers
+	if (transferAverages.length > 0) {
+		// Sort by total descending
+		transferAverages.sort((a, b) => b.totalMinor - a.totalMinor);
+		const transfersTotal = transferAverages.reduce((sum, t) => sum + t.totalMinor, 0);
+		expenseTree.push({
+			accountId: 'Outflows:Transfers',
+			name: 'Transfers',
+			totalMinor: transfersTotal,
+			children: transferAverages,
+		});
+	}
+
+	return expenseTree;
 }
 
 // ============================================
@@ -1375,14 +1446,42 @@ export function getCashFlowData(db: Database, chartAccountIds: string[], options
 
 	const assetToExpense = db.query<FlowRow, (string | number)[]>(assetToExpenseSql).all(months, ...matchParams);
 
+	// Asset to Asset flows (transfers between accounts)
+	const orConditionsFrom = chartAccountIds.flatMap(() => ['p_from.account_id = ?', 'p_from.account_id LIKE ?']);
+	const assetToAssetSql = `
+		SELECT
+			p_from.account_id as source_id,
+			coa_from.name as source_name,
+			p_to.account_id as target_id,
+			coa_to.name as target_name,
+			SUM(p_to.amount_minor) as flow_amount
+		FROM postings p_from
+		JOIN postings p_to ON p_from.journal_entry_id = p_to.journal_entry_id
+		JOIN journal_entries je ON p_from.journal_entry_id = je.id
+		JOIN chart_of_accounts coa_from ON p_from.account_id = coa_from.id
+		JOIN chart_of_accounts coa_to ON p_to.account_id = coa_to.id
+		WHERE coa_from.account_type = 'asset'
+			AND coa_to.account_type = 'asset'
+			AND p_from.amount_minor < 0
+			AND p_to.amount_minor > 0
+			AND p_from.account_id != p_to.account_id
+			AND je.posted_at >= date('now', '-' || ? || ' months')
+			AND (${orConditionsFrom.join(' OR ')})
+		GROUP BY p_from.account_id, p_to.account_id
+		HAVING flow_amount > 0
+	`;
+
+	const assetToAsset = db.query<FlowRow, (string | number)[]>(assetToAssetSql).all(months, ...matchParams);
+
 	// Build nodes map
 	const nodeMap: SankeyNodeMap = new Map();
 	addFlowNodesToMap(incomeToAsset, nodeMap, 'income', 'asset');
 	addFlowNodesToMap(assetToExpense, nodeMap, 'asset', 'expense');
+	addFlowNodesToMap(assetToAsset, nodeMap, 'asset', 'asset');
 
 	// Build nodes and links arrays
 	const nodes = Array.from(nodeMap.values());
-	const links = [...flowsToLinks(incomeToAsset, nodeMap), ...flowsToLinks(assetToExpense, nodeMap)];
+	const links = [...flowsToLinks(incomeToAsset, nodeMap), ...flowsToLinks(assetToExpense, nodeMap), ...flowsToLinks(assetToAsset, nodeMap)];
 
 	return { nodes, links };
 }
@@ -1396,7 +1495,7 @@ type MonthlyFlowRow = {
 	month_flow: number;
 };
 
-function calculateMedianFlows(monthlyFlows: MonthlyFlowRow[]): FlowRow[] {
+function calculateMedianFlows(monthlyFlows: MonthlyFlowRow[], months: number): FlowRow[] {
 	// Group by source/target pair
 	const byPair = new Map<string, { source_id: string; source_name: string; target_id: string; target_name: string; flows: number[] }>();
 	for (const row of monthlyFlows) {
@@ -1413,19 +1512,19 @@ function calculateMedianFlows(monthlyFlows: MonthlyFlowRow[]): FlowRow[] {
 		byPair.get(key)?.flows.push(row.month_flow);
 	}
 
-	// Calculate median for each pair
+	// Calculate monthly average for each pair (total / months)
+	// This properly represents quarterly/infrequent flows as monthly costs
 	const result: FlowRow[] = [];
 	for (const data of byPair.values()) {
-		const sorted = [...data.flows].sort((a, b) => a - b);
-		const mid = Math.floor(sorted.length / 2);
-		const median = sorted.length % 2 === 1 ? (sorted[mid] ?? 0) : Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
-		if (median > 0) {
+		const total = data.flows.reduce((sum, v) => sum + v, 0);
+		const monthlyAvg = Math.round(total / months);
+		if (monthlyAvg > 0) {
 			result.push({
 				source_id: data.source_id,
 				source_name: data.source_name,
 				target_id: data.target_id,
 				target_name: data.target_name,
-				flow_amount: median,
+				flow_amount: monthlyAvg,
 			});
 		}
 	}
@@ -1433,8 +1532,8 @@ function calculateMedianFlows(monthlyFlows: MonthlyFlowRow[]): FlowRow[] {
 }
 
 /**
- * Get cash flow data with monthly median values for stable representation.
- * Uses median of monthly flows over the specified period.
+ * Get cash flow data with monthly average values for stable representation.
+ * Uses total / months to properly represent quarterly/infrequent payments.
  */
 export function getCashFlowDataMedian(db: Database, chartAccountIds: string[], options: CashFlowOptions = {}): SankeyFlowData {
 	const { months = 6 } = options;
@@ -1471,7 +1570,7 @@ export function getCashFlowDataMedian(db: Database, chartAccountIds: string[], o
 	`;
 
 	const incomeToAssetMonthly = db.query<MonthlyFlowRow, (string | number)[]>(incomeToAssetSql).all(months, ...matchParams);
-	const incomeToAsset = calculateMedianFlows(incomeToAssetMonthly);
+	const incomeToAsset = calculateMedianFlows(incomeToAssetMonthly, months);
 
 	// Asset to Expense monthly flows
 	const assetToExpenseSql = `
@@ -1497,16 +1596,47 @@ export function getCashFlowDataMedian(db: Database, chartAccountIds: string[], o
 	`;
 
 	const assetToExpenseMonthly = db.query<MonthlyFlowRow, (string | number)[]>(assetToExpenseSql).all(months, ...matchParams);
-	const assetToExpense = calculateMedianFlows(assetToExpenseMonthly);
+	const assetToExpense = calculateMedianFlows(assetToExpenseMonthly, months);
+
+	// Asset to Asset monthly flows (transfers between accounts)
+	// Build OR conditions for source asset matching (where money leaves)
+	const orConditionsFrom = chartAccountIds.flatMap(() => ['p_from.account_id = ?', 'p_from.account_id LIKE ?']);
+	const assetToAssetSql = `
+		SELECT
+			p_from.account_id as source_id,
+			coa_from.name as source_name,
+			p_to.account_id as target_id,
+			coa_to.name as target_name,
+			strftime('%Y-%m', je.posted_at) AS month,
+			SUM(p_to.amount_minor) as month_flow
+		FROM postings p_from
+		JOIN postings p_to ON p_from.journal_entry_id = p_to.journal_entry_id
+		JOIN journal_entries je ON p_from.journal_entry_id = je.id
+		JOIN chart_of_accounts coa_from ON p_from.account_id = coa_from.id
+		JOIN chart_of_accounts coa_to ON p_to.account_id = coa_to.id
+		WHERE coa_from.account_type = 'asset'
+			AND coa_to.account_type = 'asset'
+			AND p_from.amount_minor < 0
+			AND p_to.amount_minor > 0
+			AND p_from.account_id != p_to.account_id
+			AND je.posted_at >= date('now', '-' || ? || ' months')
+			AND (${orConditionsFrom.join(' OR ')})
+		GROUP BY p_from.account_id, p_to.account_id, strftime('%Y-%m', je.posted_at)
+		HAVING month_flow > 0
+	`;
+
+	const assetToAssetMonthly = db.query<MonthlyFlowRow, (string | number)[]>(assetToAssetSql).all(months, ...matchParams);
+	const assetToAsset = calculateMedianFlows(assetToAssetMonthly, months);
 
 	// Build nodes map
 	const nodeMap: SankeyNodeMap = new Map();
 	addFlowNodesToMap(incomeToAsset, nodeMap, 'income', 'asset');
 	addFlowNodesToMap(assetToExpense, nodeMap, 'asset', 'expense');
+	addFlowNodesToMap(assetToAsset, nodeMap, 'asset', 'asset');
 
 	// Build nodes and links arrays
 	const nodes = Array.from(nodeMap.values());
-	const links = [...flowsToLinks(incomeToAsset, nodeMap), ...flowsToLinks(assetToExpense, nodeMap)];
+	const links = [...flowsToLinks(incomeToAsset, nodeMap), ...flowsToLinks(assetToExpense, nodeMap), ...flowsToLinks(assetToAsset, nodeMap)];
 
 	return { nodes, links };
 }
