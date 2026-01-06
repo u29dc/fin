@@ -88,7 +88,7 @@ body {
 }
 
 button {
-	font: inherit;
+	font-family: inherit;
 }
 
 /* Fade-in animation */

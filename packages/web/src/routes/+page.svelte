@@ -365,7 +365,7 @@
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 						<header class="flex items-center justify-between gap-2.5">
 							<div class="font-normal text-sm uppercase tracking-widest">Asset Allocation</div>
-							<div class="text-lg font-normal flex items-center gap-1">
+							<div class="text-sm font-normal flex items-center gap-1">
 								{#if isUnderBuffer}
 									<span class="size-2 bg-error rounded-full"></span>
 								{/if}
@@ -431,7 +431,7 @@
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 						<header class="flex items-center justify-between gap-2.5">
 							<div class="font-normal text-sm uppercase tracking-widest">Asset Allocation</div>
-							<div class="text-lg font-normal flex items-center gap-1">
+							<div class="text-sm font-normal flex items-center gap-1">
 								{#if isUnderBuffer}
 									<span class="size-2 bg-error rounded-full"></span>
 								{/if}
@@ -592,7 +592,7 @@
 				<!-- Cash Flow Distribution (Sankey) -->
 				{#if getSankeyNodes(groupId).length > 0 && getSankeyLinks(groupId).length > 0}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
-						<header class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} Distribution</header>
+						<header class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} Distribution <span class="text-muted">[6MO MEDIAN]</span></header>
 						<div class="h-[350px]">
 							<Sankey nodes={getSankeyNodes(groupId)} links={getSankeyLinks(groupId)} {colorScheme} />
 						</div>
@@ -602,7 +602,7 @@
 				<!-- Expense Breakdown (Treemap) -->
 				{#if getTreemapData(groupId).length > 0}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
-						<header class="font-normal text-sm uppercase tracking-widest">Expense Breakdown</header>
+						<header class="font-normal text-sm uppercase tracking-widest">Expense Breakdown <span class="text-muted">[6MO MEDIAN]</span></header>
 						<div class="h-[350px]">
 							<Treemap data={getTreemapData(groupId)} {colorScheme} />
 						</div>
