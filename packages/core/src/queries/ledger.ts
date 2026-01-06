@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 
-import type { BalanceSheet, CategoryBreakdown, ExpenseNode, JournalEntryWithPostings, MonthlyCashflow, Posting } from '../types/ledger';
+import type { BalanceSheet, CategoryBreakdown, ExpenseNode, JournalEntryWithPostings, MonthlyCashflow } from '../types/ledger';
 
 // ============================================
 // LEDGER TYPES (matching groups.ts types)
@@ -83,18 +83,6 @@ type JournalEntryRow = {
 	source_file: string | null;
 	created_at: string;
 	updated_at: string;
-};
-
-type PostingRow = {
-	id: string;
-	journal_entry_id: string;
-	account_id: string;
-	amount_minor: number;
-	currency: string;
-	memo: string | null;
-	provider_txn_id: string | null;
-	provider_balance_minor: number | null;
-	created_at: string;
 };
 
 export function getAccountBalance(db: Database, accountId: string, asOf?: string): number {
@@ -317,22 +305,6 @@ export function getBalanceSheet(db: Database, asOf?: string): BalanceSheet {
 	};
 }
 
-function loadPostingsForEntry(db: Database, journalEntryId: string): Posting[] {
-	const rows = db.query<PostingRow, [string]>(`SELECT * FROM postings WHERE journal_entry_id = ? ORDER BY id`).all(journalEntryId);
-
-	return rows.map((row) => ({
-		id: row.id,
-		journalEntryId: row.journal_entry_id,
-		accountId: row.account_id,
-		amountMinor: row.amount_minor,
-		currency: row.currency,
-		memo: row.memo,
-		providerTxnId: row.provider_txn_id,
-		providerBalanceMinor: row.provider_balance_minor,
-		createdAt: row.created_at,
-	}));
-}
-
 export type GetJournalEntriesOptions = {
 	accountId?: string;
 	startDate?: string;
@@ -368,30 +340,97 @@ export function getJournalEntries(db: Database, options: GetJournalEntriesOption
 
 	params.push(limit, offset);
 
-	const entries = db
-		.query<JournalEntryRow, (string | number)[]>(
+	// First query: get the journal entry IDs we want (with limit/offset)
+	const entryIds = db
+		.query<{ id: string }, (string | number)[]>(
 			`
-		SELECT je.*
+		SELECT je.id
 		FROM journal_entries je
 		${whereClause}
 		ORDER BY je.posted_at DESC
 		LIMIT ? OFFSET ?
 	`,
 		)
-		.all(...params);
+		.all(...params)
+		.map((row) => row.id);
 
-	return entries.map((entry) => ({
-		id: entry.id,
-		postedAt: entry.posted_at,
-		description: entry.description,
-		rawDescription: entry.raw_description,
-		cleanDescription: entry.clean_description,
-		counterparty: entry.counterparty,
-		sourceFile: entry.source_file,
-		createdAt: entry.created_at,
-		updatedAt: entry.updated_at,
-		postings: loadPostingsForEntry(db, entry.id),
-	}));
+	if (entryIds.length === 0) {
+		return [];
+	}
+
+	// Second query: get all data with a single JOIN (no N+1)
+	const placeholders = entryIds.map(() => '?').join(',');
+	type JoinedRow = JournalEntryRow & {
+		p_id: string | null;
+		p_journal_entry_id: string | null;
+		p_account_id: string | null;
+		p_amount_minor: number | null;
+		p_currency: string | null;
+		p_memo: string | null;
+		p_provider_txn_id: string | null;
+		p_provider_balance_minor: number | null;
+		p_created_at: string | null;
+	};
+
+	const rows = db
+		.query<JoinedRow, string[]>(
+			`
+		SELECT
+			je.id, je.posted_at, je.description, je.raw_description,
+			je.clean_description, je.counterparty, je.source_file,
+			je.created_at, je.updated_at,
+			p.id as p_id, p.journal_entry_id as p_journal_entry_id,
+			p.account_id as p_account_id, p.amount_minor as p_amount_minor,
+			p.currency as p_currency, p.memo as p_memo,
+			p.provider_txn_id as p_provider_txn_id,
+			p.provider_balance_minor as p_provider_balance_minor,
+			p.created_at as p_created_at
+		FROM journal_entries je
+		LEFT JOIN postings p ON p.journal_entry_id = je.id
+		WHERE je.id IN (${placeholders})
+		ORDER BY je.posted_at DESC, je.id, p.id
+	`,
+		)
+		.all(...entryIds);
+
+	// Group by journal entry in memory
+	const entryMap = new Map<string, JournalEntryWithPostings>();
+
+	for (const row of rows) {
+		if (!entryMap.has(row.id)) {
+			entryMap.set(row.id, {
+				id: row.id,
+				postedAt: row.posted_at,
+				description: row.description,
+				rawDescription: row.raw_description,
+				cleanDescription: row.clean_description,
+				counterparty: row.counterparty,
+				sourceFile: row.source_file,
+				createdAt: row.created_at,
+				updatedAt: row.updated_at,
+				postings: [],
+			});
+		}
+
+		// Add posting if it exists (LEFT JOIN may produce null postings)
+		// When p_id exists, all required posting fields will be non-null
+		if (row.p_id && row.p_journal_entry_id && row.p_account_id && row.p_amount_minor !== null && row.p_currency && row.p_created_at) {
+			entryMap.get(row.id)?.postings.push({
+				id: row.p_id,
+				journalEntryId: row.p_journal_entry_id,
+				accountId: row.p_account_id,
+				amountMinor: row.p_amount_minor,
+				currency: row.p_currency,
+				memo: row.p_memo,
+				providerTxnId: row.p_provider_txn_id,
+				providerBalanceMinor: row.p_provider_balance_minor,
+				createdAt: row.p_created_at,
+			});
+		}
+	}
+
+	// Return in original order (by posted_at DESC)
+	return entryIds.map((id) => entryMap.get(id)).filter((entry): entry is JournalEntryWithPostings => entry !== undefined);
 }
 
 export function getJournalEntryCount(db: Database, accountId?: string): number {

@@ -64,7 +64,12 @@
 
 	const colorScheme = $derived(theme.resolved);
 
-	function buildChartOption() {
+	// Memoize chart option - only recomputes when dependencies change
+	const chartOption = $derived.by(() => {
+		if (data.length === 0) {
+			return null;
+		}
+
 		const echartsSeriesList: LineSeriesDefinition[] = [];
 
 		// Build series in definition order
@@ -115,7 +120,7 @@
 			},
 		}));
 
-		const option = createLineChartOption(echartsSeriesList, {
+		return createLineChartOption(echartsSeriesList, {
 			colorScheme,
 			compact,
 			showTooltip: !compact,
@@ -131,16 +136,14 @@
 				return '';
 			},
 		});
-
-		return option;
-	}
+	});
 
 	function render() {
-		if (!chart || data.length === 0) {
+		if (!chart || !chartOption) {
 			return;
 		}
 
-		chart.setOption(buildChartOption(), true);
+		chart.setOption(chartOption, true);
 	}
 
 	onMount(() => {
@@ -163,9 +166,9 @@
 		};
 	});
 
-	// Re-render when data or options change
+	// Re-render when chartOption changes (memoized)
 	$effect(() => {
-		if (data && series && colorScheme) {
+		if (chartOption) {
 			render();
 		}
 	});
