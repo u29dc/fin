@@ -8,7 +8,7 @@ import { type AssetAccountId, getAssetAccounts, getBalanceSheet, getGroupChartAc
 
 import { getReadonlyDb } from '../db';
 import { formatAmount, formatCount, formatDate } from '../format';
-import { json, log } from '../logger';
+import { json } from '../logger';
 import { type Column, parseFormat, renderOutput } from '../output';
 
 // Shared args for all view commands
@@ -159,36 +159,36 @@ const transactions = defineCommand({
 
 type JournalEntry = Awaited<ReturnType<typeof getJournalEntries>>[number];
 
-function formatPosting(accountId: string, amountMinor: number): string {
-	const sign = amountMinor >= 0 ? '+' : '';
-	return `  ${accountId}: ${sign}${formatAmount(amountMinor)}`;
-}
+type LedgerRow = {
+	date: string;
+	title: string;
+	account1: string;
+	amount1: number | null;
+	account2: string;
+	amount2: number | null;
+};
 
-function renderLedgerTsv(entries: JournalEntry[]): void {
-	log(['date', 'description', 'account', 'amount'].join('\t'));
-	for (const entry of entries) {
-		for (const posting of entry.postings) {
-			const date = entry.postedAt.slice(0, 10);
-			const desc = entry.description.replace(/[\t\n]/g, ' ');
-			log([date, desc, posting.accountId, posting.amountMinor].join('\t'));
-		}
-	}
-}
+const LEDGER_COLUMNS: Column<LedgerRow>[] = [
+	{ key: 'date', label: 'Date', minWidth: 10, format: (v) => formatDate(v as string) },
+	{ key: 'title', label: 'Title', minWidth: 20, maxWidth: 28 },
+	{ key: 'account1', label: 'Account 1', minWidth: 20 },
+	{ key: 'amount1', label: 'Amount', align: 'right', minWidth: 10, format: (v) => formatAmount(v as number | null) },
+	{ key: 'account2', label: 'Account 2', minWidth: 20 },
+	{ key: 'amount2', label: 'Amount', align: 'right', minWidth: 10, format: (v) => formatAmount(v as number | null) },
+];
 
-function renderLedgerTable(entries: JournalEntry[], total: number): void {
-	if (entries.length === 0) {
-		log('No journal entries found.');
-		return;
-	}
-	for (const entry of entries) {
-		const date = formatDate(entry.postedAt.slice(0, 10));
-		log(`${date}  ${entry.description}`);
-		for (const posting of entry.postings) {
-			log(formatPosting(posting.accountId, posting.amountMinor));
-		}
-		log('');
-	}
-	log(`Showing ${entries.length} of ${total} entries`);
+function entriesToRows(entries: JournalEntry[]): LedgerRow[] {
+	return entries.map((entry) => {
+		const [p1, p2] = entry.postings;
+		return {
+			date: entry.postedAt.slice(0, 10),
+			title: entry.description,
+			account1: p1?.accountId ?? '',
+			amount1: p1?.amountMinor ?? null,
+			account2: p2?.accountId ?? '',
+			amount2: p2?.amountMinor ?? null,
+		};
+	});
 }
 
 const ledger = defineCommand({
@@ -223,11 +223,11 @@ const ledger = defineCommand({
 			json(entries);
 			return;
 		}
-		if (format === 'tsv') {
-			renderLedgerTsv(entries);
-			return;
-		}
-		renderLedgerTable(entries, getJournalEntryCount(db, accountId));
+
+		const rows = entriesToRows(entries);
+		const total = getJournalEntryCount(db, accountId);
+		const summaryText = `Showing ${formatCount(rows.length, 'entry', 'entries')} of ${total}`;
+		renderOutput(rows, LEDGER_COLUMNS, format, summaryText);
 	},
 });
 
