@@ -13,7 +13,7 @@
 	"scripts": {
 		"init---------------------------------": "",
 		"prepare": "husky",
-		"build:cli": "bun build --compile packages/cli/src/index.ts --outfile bin/fin",
+		"build:cli": "bun build --compile packages/cli/src/index.ts --outfile bin/let && rm -f .*.bun-build",
 		"dev----------------------------------": "",
 		"dev": "bun run --filter @fin/web dev",
 		"build": "bun run --filter @fin/web build",
