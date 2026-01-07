@@ -30,12 +30,11 @@
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
 
-		"baseUrl": ".",
 		"paths": {
-			"@core/*": ["packages/core/src/*"],
-			"@web/*": ["packages/web/src/*"],
-			"$lib": ["packages/web/src/lib"],
-			"$lib/*": ["packages/web/src/lib/*"]
+			"@core/*": ["./packages/core/src/*"],
+			"@web/*": ["./packages/web/src/*"],
+			"$lib": ["./packages/web/src/lib"],
+			"$lib/*": ["./packages/web/src/lib/*"]
 		}
 	},
 	"include": ["packages/**/*", "scripts/**/*"],
