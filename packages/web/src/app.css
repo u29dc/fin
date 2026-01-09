@@ -55,6 +55,11 @@
 	--error: #dc2626;
 	--success: #16a34a;
 	--pending: #ca8a04;
+
+	/* Custom easing curves - Rauno Freiberg's recommendations */
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Dark theme */
@@ -74,6 +79,20 @@ body {
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 	-webkit-text-size-adjust: 100%;
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* Text selection styling */
+::selection {
+	background: var(--text);
+	color: var(--bg);
+}
+
+/* Prevent iOS zoom on input focus */
+input,
+textarea,
+select {
+	font-size: 16px;
 }
 
 /* Hide scrollbars globally but keep scroll functionality */
@@ -91,11 +110,44 @@ button {
 	font-family: inherit;
 }
 
-/* Fade-in animation */
+/* Global interactive element transitions */
+button,
+a {
+	transition:
+		background 150ms var(--ease-out),
+		color 150ms var(--ease-out),
+		border-color 150ms var(--ease-out),
+		transform 150ms var(--ease-out),
+		box-shadow 150ms var(--ease-out),
+		opacity 150ms var(--ease-out);
+}
+
+/* Button press feedback - subtle scale down */
+button:active:not(:disabled),
+a:active {
+	transform: scale(0.97);
+}
+
+/* Focus-visible styling with box-shadow (respects border-radius) */
+button:focus-visible,
+a:focus-visible {
+	outline: none;
+	box-shadow:
+		0 0 0 2px var(--bg),
+		0 0 0 4px var(--text);
+}
+
+/* Disabled button styling */
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+/* Fade-in animation - subtle translateY for staggered elements */
 @keyframes fade-in {
 	from {
 		opacity: 0;
-		transform: translateY(4px);
+		transform: translateY(6px);
 	}
 	to {
 		opacity: 1;
@@ -104,7 +156,7 @@ button {
 }
 
 .fade-in {
-	animation: fade-in 200ms ease-out both;
+	animation: fade-in 200ms var(--ease-out) both;
 }
 
 .fade-in-delay-1 {
@@ -115,11 +167,19 @@ button {
 	animation-delay: 100ms;
 }
 
-/* Respect reduced motion preference */
+/* Respect reduced motion preference - disable all animations and transitions */
 @media (prefers-reduced-motion: reduce) {
 	.fade-in,
 	.fade-in-delay-1,
 	.fade-in-delay-2 {
 		animation: none;
+		opacity: 1;
+	}
+
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
 	}
 }

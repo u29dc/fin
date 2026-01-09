@@ -88,14 +88,15 @@
 
 <article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 	<header class="flex items-center justify-between gap-2.5">
-		<div class="flex gap-3">
+		<div class="flex gap-1">
 			{#each accounts as account (account.id)}
 				<button
 					type="button"
-					class="pb-0.5 border-b text-[12px] uppercase tracking-widest cursor-pointer transition-colors duration-150
+					class="min-h-[44px] px-2 pb-0.5 border-b text-[12px] uppercase tracking-widest cursor-pointer
 						   {selectedAccountId === account.id
 						? 'border-text text-text'
 						: 'border-transparent text-muted hover:text-text hover:border-text/50'}"
+					aria-pressed={selectedAccountId === account.id}
 					onclick={() => (selectedAccountId = account.id)}
 				>
 					{account.label}

@@ -49,70 +49,70 @@
 </script>
 
 <header
-	class="sticky top-0 z-10 py-3 px-2.5 bg-bg border-b border-border-subtle flex justify-between items-center gap-2.5"
+	class="sticky top-0 z-10 py-1.5 px-2.5 bg-bg border-b border-border-subtle flex justify-between items-center gap-2.5"
 >
 	<!-- Left: Page Navigation -->
-	<nav class="flex items-center gap-1" aria-label="Page navigation">
+	<nav class="flex items-center gap-0.5" aria-label="Page navigation">
 		<a
 			href="/"
-			class="p-2 border-t-2 transition-colors"
+			class="min-h-[44px] min-w-[44px] flex items-center justify-center border-t-2"
 			class:border-text={activePage === 'dashboard'}
 			class:text-text={activePage === 'dashboard'}
 			class:border-transparent={activePage !== 'dashboard'}
 			class:text-muted={activePage !== 'dashboard'}
 			class:hover:text-text={activePage !== 'dashboard'}
 			aria-current={activePage === 'dashboard' ? 'page' : undefined}
-			title="Dashboard"
+			aria-label="Dashboard"
 		>
-			<LayoutGrid class="size-4" />
+			<LayoutGrid class="size-4" aria-hidden="true" />
 		</a>
 		<a
 			href="/overview"
-			class="p-2 border-t-2 transition-colors"
+			class="min-h-[44px] min-w-[44px] flex items-center justify-center border-t-2"
 			class:border-text={activePage === 'overview'}
 			class:text-text={activePage === 'overview'}
 			class:border-transparent={activePage !== 'overview'}
 			class:text-muted={activePage !== 'overview'}
 			class:hover:text-text={activePage !== 'overview'}
 			aria-current={activePage === 'overview' ? 'page' : undefined}
-			title="Overview"
+			aria-label="Overview"
 		>
-			<Layers class="size-4" />
+			<Layers class="size-4" aria-hidden="true" />
 		</a>
 		<a
 			href="/transactions"
-			class="p-2 border-t-2 transition-colors"
+			class="min-h-[44px] min-w-[44px] flex items-center justify-center border-t-2"
 			class:border-text={activePage === 'transactions'}
 			class:text-text={activePage === 'transactions'}
 			class:border-transparent={activePage !== 'transactions'}
 			class:text-muted={activePage !== 'transactions'}
 			class:hover:text-text={activePage !== 'transactions'}
 			aria-current={activePage === 'transactions' ? 'page' : undefined}
-			title="Transactions"
+			aria-label="Transactions"
 		>
-			<List class="size-4" />
+			<List class="size-4" aria-hidden="true" />
 		</a>
 	</nav>
 
 	<!-- Center: Group Tabs -->
-	<nav class="absolute left-1/2 -translate-x-1/2 flex items-center gap-1" aria-label="Account group">
+	<nav class="absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5" aria-label="Account group">
 		{#each availableGroups as groupId (groupId)}
 			{@const isActive = allGroupsActive || activeGroup === groupId}
 			{@const Icon = getGroupIcon(groupId)}
 			{@const label = getGroupLabel(groupId)}
 			<button
 				type="button"
-				class="p-2 border-t-2 cursor-pointer transition-colors"
+				class="min-h-[44px] px-3 flex items-center justify-center border-t-2 cursor-pointer"
 				class:border-text={isActive}
 				class:text-text={isActive}
 				class:border-transparent={!isActive}
 				class:text-muted={!isActive}
 				class:hover:text-text={!isActive}
 				aria-pressed={activeGroup === groupId}
+				aria-label={label}
 				onclick={() => onGroupChange(groupId)}
-				title={label}
 			>
-				<Icon class="size-4 md:hidden" />
+				<Icon class="size-4 md:hidden" aria-hidden="true" />
 				<span class="hidden md:inline text-xs uppercase tracking-widest leading-none">{label}</span>
 			</button>
 		{/each}
