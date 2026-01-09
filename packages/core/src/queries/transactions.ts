@@ -90,7 +90,7 @@ export function getTransactions(db: Database, options: TransactionQueryOptions =
 
 	const rows = db.query<JournalEntryRow, (string | number)[]>(sql).all(...params);
 
-	return rows.map((row) => ({
+	return rows.map((row: JournalEntryRow) => ({
 		id: row.id,
 		chartAccountId: row.chart_account_id,
 		pairAccountId: row.pair_account_id,

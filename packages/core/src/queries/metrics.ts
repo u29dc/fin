@@ -300,7 +300,7 @@ export function loadTransferRows(db: Database, chartAccountIds: AssetAccountId[]
 	const params = [fromDate, ...chartAccountIds];
 	const rows = db.query<TransferDbRow, string[]>(sql).all(...params);
 
-	return rows.map((row) => ({
+	return rows.map((row: TransferDbRow) => ({
 		id: row.id,
 		chart_account_id: row.chart_account_id as AssetAccountId,
 		posted_at: row.posted_at,

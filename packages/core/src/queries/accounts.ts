@@ -34,7 +34,7 @@ export function getChartAccounts(db: Database): ChartAccountInfo[] {
 		)
 		.all();
 
-	return rows.map((row) => ({
+	return rows.map((row: ChartAccountRow) => ({
 		id: row.id,
 		name: row.name,
 		accountType: row.account_type,

@@ -17,14 +17,15 @@
 	type ApiAccount = {
 		id: string;
 		name: string;
-		kind: string;
+		accountType: string;
+		parentId: string | null;
+		currency: string;
+		isPlaceholder: boolean;
+		active: boolean;
 		provider: string;
 		subtype?: AccountSubtype;
-		currency: string;
-		sortOrder: number;
-		active: boolean;
 		latestBalance: {
-			accountId: string;
+			chartAccountId: string;
 			date: string | null;
 			balanceMinor: number | null;
 		};
@@ -478,18 +479,19 @@
 				<!-- Period Summary Card -->
 				{#if getLastTwoMonthsData(groupId).current}
 					{@const monthData = getLastTwoMonthsData(groupId)}
-					{@const incomeChange = monthData.previous ? getMonthOverMonthChange(monthData.current.incomeMinor, monthData.previous.incomeMinor) : null}
-					{@const expenseChange = monthData.previous ? getMonthOverMonthChange(monthData.current.expenseMinor, monthData.previous.expenseMinor) : null}
-					{@const netChange = monthData.previous ? getMonthOverMonthChange(monthData.current.netMinor, monthData.previous.netMinor) : null}
+					{@const current = monthData.current as NonNullable<typeof monthData.current>}
+					{@const incomeChange = monthData.previous ? getMonthOverMonthChange(current.incomeMinor, monthData.previous.incomeMinor) : null}
+					{@const expenseChange = monthData.previous ? getMonthOverMonthChange(current.expenseMinor, monthData.previous.expenseMinor) : null}
+					{@const netChange = monthData.previous ? getMonthOverMonthChange(current.netMinor, monthData.previous.netMinor) : null}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 						<header class="flex items-center justify-between gap-2.5">
 							<div class="font-normal text-sm uppercase tracking-widest">Last Month</div>
-							<div class="text-xs text-muted">{monthData.current.month}</div>
+							<div class="text-xs text-muted">{current.month}</div>
 						</header>
 						<div class="grid grid-cols-3 gap-2">
 							<div class="flex flex-col gap-0.5">
 								<div class="text-2xs uppercase tracking-widest text-muted">Income</div>
-								<div class="text-sm tabular-nums text-success">{formatMoneyRounded(monthData.current.incomeMinor)}</div>
+								<div class="text-sm tabular-nums text-success">{formatMoneyRounded(current.incomeMinor)}</div>
 								{#if incomeChange !== null}
 									<div class="text-2xs tabular-nums" class:text-success={incomeChange >= 0} class:text-error={incomeChange < 0}>
 										{incomeChange >= 0 ? '+' : ''}{incomeChange}%
@@ -498,7 +500,7 @@
 							</div>
 							<div class="flex flex-col gap-0.5">
 								<div class="text-2xs uppercase tracking-widest text-muted">Expenses</div>
-								<div class="text-sm tabular-nums text-error">{formatMoneyRounded(monthData.current.expenseMinor)}</div>
+								<div class="text-sm tabular-nums text-error">{formatMoneyRounded(current.expenseMinor)}</div>
 								{#if expenseChange !== null}
 									<div class="text-2xs tabular-nums" class:text-error={expenseChange > 0} class:text-success={expenseChange <= 0}>
 										{expenseChange >= 0 ? '+' : ''}{expenseChange}%
@@ -507,12 +509,12 @@
 							</div>
 							<div class="flex flex-col gap-0.5">
 								<div class="text-2xs uppercase tracking-widest text-muted">Net</div>
-								<div class="text-sm tabular-nums" class:text-success={monthData.current.netMinor >= 0} class:text-error={monthData.current.netMinor < 0}>
-									{monthData.current.netMinor >= 0 ? '+' : ''}{formatMoneyRounded(monthData.current.netMinor)}
+								<div class="text-sm tabular-nums" class:text-success={current.netMinor >= 0} class:text-error={current.netMinor < 0}>
+									{current.netMinor >= 0 ? '+' : ''}{formatMoneyRounded(current.netMinor)}
 								</div>
-								{#if monthData.current.savingsRatePct !== null}
+								{#if current.savingsRatePct !== null}
 									<div class="text-2xs tabular-nums text-muted">
-										{monthData.current.savingsRatePct >= 0 ? '+' : ''}{monthData.current.savingsRatePct.toFixed(0)}% rate
+										{current.savingsRatePct >= 0 ? '+' : ''}{current.savingsRatePct.toFixed(0)}% rate
 									</div>
 								{/if}
 							</div>

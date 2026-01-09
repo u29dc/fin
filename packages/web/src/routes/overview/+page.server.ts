@@ -1,11 +1,16 @@
 import { getAllAccountsDailyBalanceSeries, getGroupDailyRunwaySeries, getLatestBalances } from '@fin/core';
-import { type Account, getAllGroupMetadata, getAssetAccountIds, getConfig, getGroupIds, getLiquidAccountIds } from '@fin/core/config';
+import { getAllGroupMetadata, getAssetAccountIds, getConfig, getGroupIds, getLiquidAccountIds } from '@fin/core/config';
 import { db } from '$lib/server/db';
 
 const ALL_CHART_ACCOUNT_IDS = getAssetAccountIds();
 const LIQUID_CHART_ACCOUNT_IDS = getLiquidAccountIds();
 
-export type ChartAccount = Pick<Account, 'id' | 'label' | 'group' | 'provider'>;
+export type ChartAccount = {
+	id: string;
+	label: string;
+	group: string;
+	provider: string;
+};
 
 export function load() {
 	const availableGroups = getGroupIds();

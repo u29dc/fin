@@ -142,7 +142,7 @@ export function getMonthlyCashflow(db: Database, startDate?: string, endDate?: s
 		)
 		.all(...params);
 
-	return rows.map((row) => ({
+	return rows.map((row: CashflowRow) => ({
 		month: row.month,
 		incomeMinor: row.income_minor,
 		expenseMinor: row.expense_minor,
@@ -169,7 +169,7 @@ export function getExpensesByCategory(db: Database, months = 3): CategoryBreakdo
 		)
 		.all(months);
 
-	return rows.map((row) => ({
+	return rows.map((row: CategoryRow) => ({
 		accountId: row.account_id,
 		categoryName: row.category_name,
 		totalMinor: row.total_minor,
@@ -200,7 +200,7 @@ export function getExpenseHierarchy(db: Database, months = 3): ExpenseNode[] {
 		.all(months);
 
 	// Build map of account_id to total
-	const totalMap = new Map(totals.map((t) => [t.account_id, t.total_minor]));
+	const totalMap = new Map<string, number>(totals.map((t: TotalRow) => [t.account_id, t.total_minor]));
 
 	// Get all expense accounts
 	type AccountRow = {
@@ -352,7 +352,7 @@ export function getJournalEntries(db: Database, options: GetJournalEntriesOption
 	`,
 		)
 		.all(...params)
-		.map((row) => row.id);
+		.map((row: { id: string }) => row.id);
 
 	if (entryIds.length === 0) {
 		return [];
@@ -430,7 +430,7 @@ export function getJournalEntries(db: Database, options: GetJournalEntriesOption
 	}
 
 	// Return in original order (by posted_at DESC)
-	return entryIds.map((id) => entryMap.get(id)).filter((entry): entry is JournalEntryWithPostings => entry !== undefined);
+	return entryIds.map((id: string) => entryMap.get(id)).filter((entry: JournalEntryWithPostings | undefined): entry is JournalEntryWithPostings => entry !== undefined);
 }
 
 export function getJournalEntryCount(db: Database, accountId?: string): number {
@@ -487,7 +487,7 @@ export function getChartOfAccounts(db: Database): Array<{
 		)
 		.all();
 
-	return rows.map((row) => ({
+	return rows.map((row: Row) => ({
 		id: row.id,
 		name: row.name,
 		accountType: row.account_type,
@@ -607,7 +607,7 @@ function fetchStartingBalances(db: Database, mapping: AccountMappingSQL, fromDat
 		)
 		.all(...params);
 
-	return new Map(rows.map((r) => [r.chart_account_id, r.balance]));
+	return new Map<string, number>(rows.map((r: StartBalanceRow) => [r.chart_account_id, r.balance]));
 }
 
 /**
@@ -878,8 +878,16 @@ export function getLedgerMonthlyCashflowSeries(db: Database, chartAccountIds: st
 
 	const rows = db.query<MonthlyCashflowFullRow, string[]>(sql).all(...params);
 
+	type BasePoint = {
+		month: string;
+		incomeMinor: number;
+		expenseMinor: number;
+		netMinor: number;
+		savingsRatePct: number | null;
+	};
+
 	// First pass: create base points
-	const basePoints = rows.map((row) => {
+	const basePoints: BasePoint[] = rows.map((row: MonthlyCashflowFullRow) => {
 		const netMinor = row.income_minor - row.expense_minor;
 		const savingsRatePct = row.income_minor > 0 ? Math.round((netMinor / row.income_minor) * 1000) / 10 : null;
 		return {
@@ -893,9 +901,9 @@ export function getLedgerMonthlyCashflowSeries(db: Database, chartAccountIds: st
 
 	// Second pass: calculate rolling 6-month median expense and deviation
 	const ROLLING_WINDOW = 6;
-	return basePoints.map((point, i) => {
+	return basePoints.map((point: BasePoint, i: number) => {
 		const start = Math.max(0, i - ROLLING_WINDOW);
-		const prevExpenses = basePoints.slice(start, i).map((p) => p.expenseMinor);
+		const prevExpenses = basePoints.slice(start, i).map((p: BasePoint) => p.expenseMinor);
 
 		let rollingMedianExpenseMinor: number | null = null;
 		let expenseDeviationRatio: number | null = null;
@@ -905,7 +913,7 @@ export function getLedgerMonthlyCashflowSeries(db: Database, chartAccountIds: st
 			const mid = Math.floor(sorted.length / 2);
 			rollingMedianExpenseMinor = sorted.length % 2 === 1 ? (sorted[mid] ?? 0) : Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
 
-			if (rollingMedianExpenseMinor > 0) {
+			if (rollingMedianExpenseMinor !== null && rollingMedianExpenseMinor > 0) {
 				expenseDeviationRatio = Math.round((point.expenseMinor / rollingMedianExpenseMinor) * 100) / 100;
 			}
 		}
@@ -1101,7 +1109,7 @@ export function getGroupExpenseHierarchy(db: Database, chartAccountIds: string[]
 	const totals = db.query<TotalRow, (string | number)[]>(sql).all(months, ...matchParams);
 
 	// Build map of account_id to total
-	const totalMap = new Map(totals.map((t) => [t.account_id, t.total_minor]));
+	const totalMap = new Map<string, number>(totals.map((t: TotalRow) => [t.account_id, t.total_minor]));
 
 	// Get all expense accounts that have transactions
 	type AccountRow = {
