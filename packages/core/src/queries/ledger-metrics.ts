@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { getFinanceConfig } from '../config';
 import { getGroupChartAccounts, getGroupMetadata, isConfigInitialized } from '../config/index';
-import { getLedgerAccountsDailyBalanceSeries, getLedgerMonthlyCashflowSeries, type LedgerBalanceSeriesOptions, type LedgerMonthlyCashflowPoint } from './ledger';
+import { getConsolidatedMonthlyCashflow, getLedgerAccountsDailyBalanceSeries, getLedgerMonthlyCashflowSeries, type LedgerBalanceSeriesOptions, type LedgerMonthlyCashflowPoint } from './ledger';
 
 // ============================================
 // TYPES (matching metrics.ts)
@@ -414,9 +414,10 @@ function computeScenarioOutflowDelta(groupId: LedgerGroupId, scenario: LedgerSce
 
 function computeRunwayPoint(date: string, balanceMinor: number, avgOutflowMinor: number, maxRunwayMonths: number, medianExpenseMinor: number | undefined): LedgerGroupRunwayPoint {
 	if (avgOutflowMinor <= 0) {
+		const runwayMonths = balanceMinor > 0 ? maxRunwayMonths : 0;
 		return {
 			date,
-			runwayMonths: maxRunwayMonths,
+			runwayMonths,
 			isNetPositive: true,
 			...(medianExpenseMinor !== undefined && { medianExpenseMinor }),
 		};
@@ -483,6 +484,98 @@ export function getLedgerGroupDailyRunwaySeries(
 		}
 
 		runway.push(computeRunwayPoint(point.date, point.balanceMinor, currentAvgOutflowMinor ?? 0, maxRunwayMonths, medianExpenseMinor));
+	}
+
+	return runway;
+}
+
+// ============================================
+// CONSOLIDATED RUNWAY SERIES
+// ============================================
+
+export type ConsolidatedRunwayOptions = {
+	includeGroups: string[];
+	from?: string;
+	to?: string;
+	limit?: number;
+};
+
+export type ConsolidatedRunwayPoint = {
+	date: string;
+	balanceMinor: number;
+	burnRateMinor: number;
+	runwayMonths: number;
+	isNetPositive?: boolean;
+};
+
+function collectLiquidChartAccountIds(includeGroups: string[]): string[] {
+	const accountIds: string[] = [];
+	for (const groupId of includeGroups) {
+		const groupAccounts = getLedgerGroupChartAccountIds(groupId);
+		const liquidAccounts = groupAccounts.filter((id) => !id.toLowerCase().includes('vanguard'));
+		accountIds.push(...liquidAccounts);
+	}
+	return accountIds;
+}
+
+function computeConsolidatedRunwayPoint(date: string, balanceMinor: number, avgOutflow: number, maxRunwayMonths: number): ConsolidatedRunwayPoint {
+	if (avgOutflow <= 0) {
+		const runwayMonths = balanceMinor > 0 ? maxRunwayMonths : 0;
+		return { date, balanceMinor, burnRateMinor: 0, runwayMonths, isNetPositive: true };
+	}
+	const rawRunway = balanceMinor / avgOutflow;
+	const clamped = clampNumber(rawRunway, 0, maxRunwayMonths);
+	const runwayMonths = Math.round(clamped * 100) / 100;
+	return { date, balanceMinor, burnRateMinor: avgOutflow, runwayMonths };
+}
+
+/**
+ * Get consolidated runway across multiple groups, excluding internal transfers.
+ * This answers "how long until I'm broke across ALL accounts I control."
+ *
+ * Internal transfers (money moving between accounts in included groups) are excluded
+ * from burn calculation because they don't represent money leaving the system.
+ */
+export function getLedgerConsolidatedDailyRunwaySeries(db: Database, options: ConsolidatedRunwayOptions, assumptions: Partial<LedgerRunwayAssumptions> = {}): ConsolidatedRunwayPoint[] {
+	const { includeGroups, from, to, limit = 10_000 } = options;
+	if (includeGroups.length === 0) return [];
+
+	const mergedAssumptions: LedgerRunwayAssumptions = { ...DEFAULT_RUNWAY_ASSUMPTIONS, ...assumptions };
+	const trailingMonths = clampInt(mergedAssumptions.trailingOutflowWindowMonths, 1, 120);
+	const maxRunwayMonths = clampInt(mergedAssumptions.maxRunwayMonths, 1, 600);
+
+	const allChartAccountIds = collectLiquidChartAccountIds(includeGroups);
+	if (allChartAccountIds.length === 0) return [];
+
+	const balanceOptions: LedgerBalanceSeriesOptions = { limit };
+	if (from) balanceOptions.from = from;
+	if (to) balanceOptions.to = to;
+
+	const cashSeries = getLedgerAccountsDailyBalanceSeries(db, allChartAccountIds, balanceOptions);
+	if (cashSeries.length === 0) return [];
+
+	const cashflowOptions: { limit: number; from?: string; to?: string } = { limit: 200_000 };
+	if (from) cashflowOptions.from = from;
+	if (to) cashflowOptions.to = to;
+
+	const monthlyCashflow = getConsolidatedMonthlyCashflow(db, allChartAccountIds, cashflowOptions);
+	const monthlyOutflow: MonthlyOutflowPoint[] = monthlyCashflow.map((row) => ({ month: row.month, outflowMinor: row.expenseMinor }));
+	const avgOutflowByMonth = getMonthlyTrailingAverageOutflowMap(monthlyOutflow, trailingMonths);
+	const months = Array.from(avgOutflowByMonth.keys()).sort();
+
+	let monthIndex = -1;
+	let currentAvgOutflowMinor: number | null = null;
+	const runway: ConsolidatedRunwayPoint[] = [];
+
+	for (const point of cashSeries) {
+		const month = point.date.slice(0, 7);
+		let nextMonth = months[monthIndex + 1];
+		while (nextMonth !== undefined && nextMonth <= month) {
+			monthIndex += 1;
+			currentAvgOutflowMinor = avgOutflowByMonth.get(nextMonth) ?? currentAvgOutflowMinor;
+			nextMonth = months[monthIndex + 1];
+		}
+		runway.push(computeConsolidatedRunwayPoint(point.date, point.balanceMinor, currentAvgOutflowMinor ?? 0, maxRunwayMonths));
 	}
 
 	return runway;

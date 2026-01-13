@@ -5,6 +5,7 @@
 import { defineCommand } from 'citty';
 import {
 	type GroupId,
+	getConsolidatedDailyRunwaySeries,
 	getGroupCategoryBreakdown,
 	getGroupCategoryMonthlyMedian,
 	getGroupDailyHealthSeries,
@@ -165,42 +166,88 @@ type RunwayRow = {
 	runway: number;
 };
 
+type ConsolidatedRunwayRow = {
+	date: string;
+	balance: number;
+	burnRate: number;
+	runway: number;
+};
+
 const RUNWAY_COLUMNS: Column<RunwayRow>[] = [
 	{ key: 'date', label: 'Date', minWidth: 10, format: (v) => formatDate(v as string) },
 	{ key: 'runway', label: 'Runway', align: 'right', minWidth: 10, format: (v) => formatMonths(v as number) },
 ];
 
+const CONSOLIDATED_RUNWAY_COLUMNS: Column<ConsolidatedRunwayRow>[] = [
+	{ key: 'date', label: 'Date', minWidth: 10, format: (v) => formatDate(v as string) },
+	{ key: 'balance', label: 'Balance', align: 'right', minWidth: 14, format: (v) => formatAmount(v as number) },
+	{ key: 'burnRate', label: 'Burn Rate', align: 'right', minWidth: 12, format: (v) => formatAmount(v as number) },
+	{ key: 'runway', label: 'Runway', align: 'right', minWidth: 10, format: (v) => formatMonths(v as number) },
+];
+
+function parseIncludeGroups(include: string | undefined): GroupId[] {
+	if (!include) {
+		error('Missing required option: --include\nUsage: fin report runway --consolidated --include=personal,business');
+		process.exit(1);
+	}
+	const groups = include.split(',').map((g) => g.trim());
+	for (const g of groups) {
+		if (!isGroupId(g)) {
+			error(`Invalid group in --include: ${g}. Use: personal, business, joint`);
+			process.exit(1);
+		}
+	}
+	return groups as GroupId[];
+}
+
+function renderConsolidatedRunway(db: ReturnType<typeof getReadonlyDb>, includeGroups: GroupId[], from: string | undefined, to: string | undefined, format: ReturnType<typeof parseFormat>): void {
+	const options: { includeGroups: GroupId[]; from?: string; to?: string } = { includeGroups };
+	if (from) options.from = from;
+	if (to) options.to = to;
+	const series = getConsolidatedDailyRunwaySeries(db, options);
+	const rows: ConsolidatedRunwayRow[] = series.map((p) => ({
+		date: p.date,
+		balance: p.balanceMinor,
+		burnRate: p.burnRateMinor,
+		runway: p.runwayMonths,
+	}));
+	const latest = rows.length > 0 ? rows[rows.length - 1] : null;
+	const groupsLabel = includeGroups.join('+');
+	const summaryText = latest
+		? `${rows.length} days | ${groupsLabel} | Latest: ${formatMonths(latest.runway)} (${formatAmount(latest.balance)} / ${formatAmount(latest.burnRate)})`
+		: `${rows.length} days | ${groupsLabel}`;
+	renderOutput(rows, CONSOLIDATED_RUNWAY_COLUMNS, format, summaryText);
+}
+
 const runway = defineCommand({
 	meta: { name: 'runway', description: 'Months of cash remaining' },
 	args: {
-		group: groupArg,
+		group: { type: 'string', description: 'Group ID (personal, business, joint)' },
+		consolidated: { type: 'boolean', description: 'Consolidated runway across multiple groups' },
+		include: { type: 'string', description: 'Groups to include (comma-separated, requires --consolidated)' },
 		from: { type: 'string', description: 'Start date (YYYY-MM-DD)' },
 		to: { type: 'string', description: 'End date (YYYY-MM-DD)' },
 		format: formatArg,
 		db: dbArg,
 	},
 	run({ args }) {
-		validateGroup(args.group, 'runway');
 		const format = parseFormat(args.format);
-		const from = args.from;
-		const to = args.to;
-		const dbPath = args.db;
+		const db = getReadonlyDb(args.db ? { options: new Map([['db', args.db]]) } : undefined);
 
-		const db = getReadonlyDb(dbPath ? { options: new Map([['db', dbPath]]) } : undefined);
+		if (args.consolidated) {
+			const includeGroups = parseIncludeGroups(args.include);
+			renderConsolidatedRunway(db, includeGroups, args.from, args.to, format);
+			return;
+		}
+
+		validateGroup(args.group, 'runway');
 		const options: { from?: string; to?: string } = {};
-		if (from) options.from = from;
-		if (to) options.to = to;
+		if (args.from) options.from = args.from;
+		if (args.to) options.to = args.to;
 		const series = getGroupDailyRunwaySeries(db, args.group, options);
-
-		const rows: RunwayRow[] = series.map((p) => ({
-			date: p.date,
-			runway: p.runwayMonths,
-		}));
-
-		// Get latest runway value
+		const rows: RunwayRow[] = series.map((p) => ({ date: p.date, runway: p.runwayMonths }));
 		const latest = rows.length > 0 ? rows[rows.length - 1] : null;
 		const summaryText = latest ? `${rows.length} days | Latest: ${formatMonths(latest.runway)}` : `${rows.length} days`;
-
 		renderOutput(rows, RUNWAY_COLUMNS, format, summaryText);
 	},
 });

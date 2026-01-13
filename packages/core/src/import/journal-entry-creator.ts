@@ -10,6 +10,16 @@ export type JournalEntryResult = {
 	errors: string[];
 };
 
+export type TransferDetectionOptions = {
+	maxTransferDaysDifference?: number;
+	enableCategoryFallback?: boolean;
+};
+
+const DEFAULT_TRANSFER_OPTIONS: Required<TransferDetectionOptions> = {
+	maxTransferDaysDifference: 5,
+	enableCategoryFallback: true,
+};
+
 type TransferPair = {
 	from: CanonicalTransaction;
 	to: CanonicalTransaction;
@@ -26,7 +36,7 @@ function isValidTransferCandidate(txn: CanonicalTransaction, matched: Set<string
 	return true;
 }
 
-function isMatchingTransfer(txn: CanonicalTransaction, candidate: CanonicalTransaction, matched: Set<string>): boolean {
+function isMatchingTransfer(txn: CanonicalTransaction, candidate: CanonicalTransaction, matched: Set<string>, maxDays: number): boolean {
 	if (matched.has(candidate.id)) return false;
 	if (txn.amountMinor + candidate.amountMinor !== 0) return false;
 	if (txn.chartAccountId === candidate.chartAccountId) return false;
@@ -34,20 +44,65 @@ function isMatchingTransfer(txn: CanonicalTransaction, candidate: CanonicalTrans
 	const txnDate = new Date(txn.postedAt);
 	const candidateDate = new Date(candidate.postedAt);
 	const daysDiff = Math.abs(txnDate.getTime() - candidateDate.getTime()) / (1000 * 60 * 60 * 24);
-	return daysDiff <= 2;
+	return daysDiff <= maxDays;
 }
 
-function findMatchingTransfer(txn: CanonicalTransaction, candidates: CanonicalTransaction[], startIndex: number, matched: Set<string>): CanonicalTransaction | null {
+function findMatchingTransfer(txn: CanonicalTransaction, candidates: CanonicalTransaction[], startIndex: number, matched: Set<string>, maxDays: number): CanonicalTransaction | null {
 	for (let j = startIndex; j < candidates.length; j++) {
 		const candidate = candidates[j];
-		if (candidate && isMatchingTransfer(txn, candidate, matched)) {
+		if (candidate && isMatchingTransfer(txn, candidate, matched, maxDays)) {
 			return candidate;
 		}
 	}
 	return null;
 }
 
-function detectTransferPairsInBatch(transactions: CanonicalTransaction[]): {
+function findOppositeAmountTransaction(txn: CanonicalTransaction, candidates: CanonicalTransaction[], matched: Set<string>): CanonicalTransaction | null {
+	for (const candidate of candidates) {
+		if (matched.has(candidate.id)) continue;
+		if (txn.amountMinor + candidate.amountMinor !== 0) continue;
+		if (txn.chartAccountId === candidate.chartAccountId) continue;
+		return candidate;
+	}
+	return null;
+}
+
+function createTransferPair(txn: CanonicalTransaction, candidate: CanonicalTransaction): TransferPair {
+	return {
+		from: txn.amountMinor < 0 ? txn : candidate,
+		to: txn.amountMinor > 0 ? txn : candidate,
+	};
+}
+
+function matchTransfersByTimeWindow(sorted: CanonicalTransaction[], matched: Set<string>, transfers: TransferPair[], maxDays: number): void {
+	for (let i = 0; i < sorted.length; i++) {
+		const txn = sorted[i];
+		if (!txn || !isValidTransferCandidate(txn, matched)) continue;
+		const candidate = findMatchingTransfer(txn, sorted, i + 1, matched, maxDays);
+		if (!candidate) continue;
+		transfers.push(createTransferPair(txn, candidate));
+		matched.add(txn.id);
+		matched.add(candidate.id);
+	}
+}
+
+function matchTransfersByCategoryFallback(sorted: CanonicalTransaction[], matched: Set<string>, transfers: TransferPair[]): void {
+	for (const txn of sorted) {
+		if (matched.has(txn.id)) continue;
+		if (!isValidTransferCandidate(txn, matched)) continue;
+		if (txn.category?.toLowerCase() !== 'transfer') continue;
+		const candidate = findOppositeAmountTransaction(txn, sorted, matched);
+		if (!candidate) continue;
+		transfers.push(createTransferPair(txn, candidate));
+		matched.add(txn.id);
+		matched.add(candidate.id);
+	}
+}
+
+function detectTransferPairsInBatch(
+	transactions: CanonicalTransaction[],
+	options: Required<TransferDetectionOptions>,
+): {
 	transfers: TransferPair[];
 	nonTransfers: CanonicalTransaction[];
 } {
@@ -55,19 +110,9 @@ function detectTransferPairsInBatch(transactions: CanonicalTransaction[]): {
 	const matched = new Set<string>();
 	const sorted = [...transactions].sort((a, b) => a.postedAt.localeCompare(b.postedAt));
 
-	for (let i = 0; i < sorted.length; i++) {
-		const txn = sorted[i];
-		if (!txn || !isValidTransferCandidate(txn, matched)) continue;
-
-		const candidate = findMatchingTransfer(txn, sorted, i + 1, matched);
-		if (candidate) {
-			transfers.push({
-				from: txn.amountMinor < 0 ? txn : candidate,
-				to: txn.amountMinor > 0 ? txn : candidate,
-			});
-			matched.add(txn.id);
-			matched.add(candidate.id);
-		}
+	matchTransfersByTimeWindow(sorted, matched, transfers, options.maxTransferDaysDifference);
+	if (options.enableCategoryFallback) {
+		matchTransfersByCategoryFallback(sorted, matched, transfers);
 	}
 
 	const nonTransfers = sorted.filter((t) => !matched.has(t.id));
@@ -121,7 +166,8 @@ function createNonTransferEntry(txn: CanonicalTransaction, stmts: PreparedStatem
 	}
 }
 
-export function createJournalEntriesFromTransactions(db: Database, transactions: CanonicalTransaction[]): JournalEntryResult {
+export function createJournalEntriesFromTransactions(db: Database, transactions: CanonicalTransaction[], options?: TransferDetectionOptions): JournalEntryResult {
+	const opts: Required<TransferDetectionOptions> = { ...DEFAULT_TRANSFER_OPTIONS, ...options };
 	const result: JournalEntryResult = {
 		journalEntriesCreated: 0,
 		transferPairsCreated: 0,
@@ -154,7 +200,7 @@ export function createJournalEntriesFromTransactions(db: Database, transactions:
 		`),
 	};
 
-	const { transfers, nonTransfers } = detectTransferPairsInBatch(newTransactions);
+	const { transfers, nonTransfers } = detectTransferPairsInBatch(newTransactions, opts);
 
 	db.transaction(() => {
 		for (const pair of transfers) {

@@ -1687,3 +1687,108 @@ export function getCashFlowDataMedian(db: Database, chartAccountIds: string[], o
 
 	return { nodes, links };
 }
+
+// ============================================
+// CONSOLIDATED CASHFLOW (EXCLUDES INTERNAL TRANSFERS)
+// ============================================
+
+export type ConsolidatedMonthlyCashflowPoint = {
+	month: string;
+	incomeMinor: number;
+	expenseMinor: number;
+	netMinor: number;
+};
+
+/**
+ * Get monthly cashflow for multiple chart accounts, excluding internal transfers.
+ * A journal entry is considered an "internal transfer" if ALL its postings touch
+ * accounts within the specified chart account set. These are excluded from the
+ * expense calculation because money didn't leave the controlled system.
+ */
+export function getConsolidatedMonthlyCashflow(db: Database, chartAccountIds: string[], options: LedgerCashflowSeriesOptions = {}): ConsolidatedMonthlyCashflowPoint[] {
+	if (chartAccountIds.length === 0) {
+		return [];
+	}
+
+	const { from, to, limit = 120 } = options;
+
+	// Build OR conditions for matching controlled asset accounts
+	const orConditions: string[] = [];
+	const matchParams: string[] = [];
+	for (const accountId of chartAccountIds) {
+		orConditions.push('(p.account_id = ? OR p.account_id LIKE ?)');
+		matchParams.push(accountId, `${accountId}:%`);
+	}
+
+	// Build date conditions
+	const dateConditions: string[] = [];
+	const dateParams: string[] = [];
+	if (from) {
+		dateConditions.push('je.posted_at >= ?');
+		dateParams.push(`${from}T00:00:00`);
+	}
+	if (to) {
+		dateConditions.push('je.posted_at <= ?');
+		dateParams.push(`${to}T23:59:59`);
+	}
+	const dateWhereClause = dateConditions.length > 0 ? `AND ${dateConditions.join(' AND ')}` : '';
+
+	// Build the controlled accounts check for internal transfer detection
+	// An internal transfer is a journal entry where ALL postings go to controlled accounts
+	const controlledAccountsCheck = orConditions.join(' OR ');
+
+	// Query: Get monthly income/expense excluding internal transfers
+	// Internal transfer = journal entry where both postings are to asset accounts
+	// within the controlled set (money just moved between controlled accounts)
+	const sql = `
+		WITH internal_entries AS (
+			SELECT DISTINCT p1.journal_entry_id
+			FROM postings p1
+			JOIN postings p2 ON p1.journal_entry_id = p2.journal_entry_id AND p1.id != p2.id
+			JOIN chart_of_accounts coa1 ON p1.account_id = coa1.id
+			JOIN chart_of_accounts coa2 ON p2.account_id = coa2.id
+			WHERE coa1.account_type = 'asset'
+				AND coa2.account_type = 'asset'
+				AND (${controlledAccountsCheck.replace(/p\.account_id/g, 'p1.account_id')})
+				AND (${controlledAccountsCheck.replace(/p\.account_id/g, 'p2.account_id')})
+		)
+		SELECT
+			strftime('%Y-%m', je.posted_at) AS month,
+			SUM(CASE
+				WHEN coa.account_type = 'income' AND je.id NOT IN (SELECT journal_entry_id FROM internal_entries)
+				THEN -p.amount_minor
+				ELSE 0
+			END) AS income_minor,
+			SUM(CASE
+				WHEN coa.account_type = 'expense' AND je.id NOT IN (SELECT journal_entry_id FROM internal_entries)
+				THEN p.amount_minor
+				ELSE 0
+			END) AS expense_minor
+		FROM postings p
+		JOIN journal_entries je ON p.journal_entry_id = je.id
+		JOIN chart_of_accounts coa ON p.account_id = coa.id
+		WHERE coa.account_type IN ('income', 'expense')
+			AND EXISTS (
+				SELECT 1 FROM postings p2
+				WHERE p2.journal_entry_id = p.journal_entry_id
+					AND (${controlledAccountsCheck.replace(/p\.account_id/g, 'p2.account_id')})
+			)
+			${dateWhereClause}
+		GROUP BY month
+		ORDER BY month ASC
+		LIMIT ?
+	`;
+
+	// Build params: controlledAccountsCheck appears 3 times in the SQL (as p1, p2, and p2 again)
+	const params: (string | number)[] = [...matchParams, ...matchParams, ...matchParams, ...dateParams, limit];
+
+	type RawRow = { month: string; income_minor: number; expense_minor: number };
+	const rows = db.query<RawRow, (string | number)[]>(sql).all(...params);
+
+	return rows.map((row) => ({
+		month: row.month,
+		incomeMinor: row.income_minor,
+		expenseMinor: row.expense_minor,
+		netMinor: row.income_minor - row.expense_minor,
+	}));
+}

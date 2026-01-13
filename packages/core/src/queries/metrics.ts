@@ -3,7 +3,16 @@ import type { Database } from 'bun:sqlite';
 import { getAccountIdsByGroup, getFirstAccountIdByGroup } from '../config';
 import type { AssetAccountId } from '../types/chart-account-ids';
 import type { BalanceSeriesOptions, GroupId, MonthlyCashflowPoint } from './groups';
-import { getLedgerGroupDailyHealthSeries, getLedgerGroupDailyReserveBreakdownSeries, getLedgerGroupDailyRunwaySeries, type LedgerGroupId, type LedgerScenarioConfig } from './ledger-metrics';
+import {
+	type ConsolidatedRunwayOptions,
+	type ConsolidatedRunwayPoint,
+	getLedgerConsolidatedDailyRunwaySeries,
+	getLedgerGroupDailyHealthSeries,
+	getLedgerGroupDailyReserveBreakdownSeries,
+	getLedgerGroupDailyRunwaySeries,
+	type LedgerGroupId,
+	type LedgerScenarioConfig,
+} from './ledger-metrics';
 
 // ============================================
 // SHARED UTILITIES
@@ -566,4 +575,22 @@ export function getGroupDailyReserveBreakdownSeries(
 	if (scenarioConfig.salaryMonthlyMinor !== undefined) ledgerScenarioConfig.salaryMonthlyMinor = scenarioConfig.salaryMonthlyMinor;
 	if (scenarioConfig.jointExpensesMonthlyMinor !== undefined) ledgerScenarioConfig.jointExpensesMonthlyMinor = scenarioConfig.jointExpensesMonthlyMinor;
 	return getLedgerGroupDailyReserveBreakdownSeries(db, groupId as LedgerGroupId, options, assumptions, scenario, ledgerScenarioConfig);
+}
+
+// ============================================
+// CONSOLIDATED RUNWAY (cross-group)
+// ============================================
+
+export type { ConsolidatedRunwayOptions, ConsolidatedRunwayPoint };
+
+export function getConsolidatedDailyRunwaySeries(
+	db: Database,
+	options: { includeGroups: string[]; from?: string; to?: string; limit?: number },
+	assumptions: Partial<RunwayAssumptions> = {},
+): ConsolidatedRunwayPoint[] {
+	const consolidatedOptions: ConsolidatedRunwayOptions = { includeGroups: options.includeGroups };
+	if (options.from !== undefined) consolidatedOptions.from = options.from;
+	if (options.to !== undefined) consolidatedOptions.to = options.to;
+	if (options.limit !== undefined) consolidatedOptions.limit = options.limit;
+	return getLedgerConsolidatedDailyRunwaySeries(db, consolidatedOptions, assumptions);
 }
