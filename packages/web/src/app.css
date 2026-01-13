@@ -44,6 +44,12 @@
 	@apply opacity-100;
 }
 
+/* iOS Safari viewport height fix - fallback chain */
+html {
+	height: 100%;
+	overscroll-behavior: none;
+}
+
 /* Light theme (default) */
 :root {
 	--bg: #f8f9fa;
@@ -60,6 +66,16 @@
 	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 	--ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+	/* Viewport height - modern browsers use svh, legacy uses --vh from JS */
+	--app-height: 100svh;
+}
+
+/* JS fallback for browsers without svh support */
+@supports not (height: 100svh) {
+	:root {
+		--app-height: calc(var(--vh, 1vh) * 100);
+	}
 }
 
 /* Dark theme */
@@ -76,6 +92,11 @@
 }
 
 body {
+	/* Viewport height fallback chain - last supported value wins */
+	min-height: 100vh;
+	min-height: -webkit-fill-available;
+	min-height: 100svh;
+	overscroll-behavior: none;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 	-webkit-text-size-adjust: 100%;

@@ -143,7 +143,7 @@
 	<title>Finances | Transactions</title>
 </svelte:head>
 
-<main class="h-dvh overflow-hidden box-border px-2.5 pb-2.5 flex flex-col gap-2">
+<main class="h-svh overflow-hidden box-border px-2.5 pb-2.5 flex flex-col gap-2">
 	<Header activePage="transactions" activeGroup={group} onGroupChange={handleGroupChange} availableGroups={availableGroups} {groupMetadata} loading={false} error={null} />
 
 	<section class="border border-border bg-panel flex-1 flex flex-col min-h-0 fade-in">

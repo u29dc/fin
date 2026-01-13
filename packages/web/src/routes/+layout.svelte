@@ -1,8 +1,11 @@
 <script lang="ts">
 	import '../app.css';
+	import ViewportHeight from '$lib/ViewportHeight.svelte';
 
 	let { children } = $props();
 </script>
+
+<ViewportHeight />
 
 <!-- Skip link for keyboard/screen reader accessibility -->
 <a

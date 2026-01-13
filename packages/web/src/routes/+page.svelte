@@ -294,7 +294,7 @@
 	<title>Finances | Dashboard</title>
 </svelte:head>
 
-<main class="h-dvh overflow-auto box-border px-2.5 pb-2.5 flex flex-col gap-1.5">
+<main class="h-svh overflow-auto box-border px-2.5 pb-2.5 flex flex-col gap-1.5">
 	<Header
 		activePage="dashboard"
 		activeGroup={group}

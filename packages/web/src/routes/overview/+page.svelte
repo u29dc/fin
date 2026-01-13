@@ -93,7 +93,7 @@
 	<title>Finances | Overview</title>
 </svelte:head>
 
-<main class="h-dvh overflow-auto box-border px-2.5 pb-2.5 flex flex-col gap-2">
+<main class="h-svh overflow-auto box-border px-2.5 pb-2.5 flex flex-col gap-2">
 	<Header activePage="overview" activeGroup={availableGroups[0]} onGroupChange={() => {}} availableGroups={availableGroups} {groupMetadata} allGroupsActive />
 
 	<article class="border border-border bg-panel p-2.5 flex flex-col gap-2 fade-in flex-1 min-h-0">
