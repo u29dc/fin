@@ -31,7 +31,7 @@
 		"util:format": "biome format --write .",
 		"util:lint": "biome check . --max-diagnostics 500",
 		"util:lint:fix": "biome check --write .",
-		"util:types": "bunx --bun tsgo --noEmit && bunx svelte-check-rs --workspace ./packages/web",
+		"util:types": "bunx --bun tsgo --noEmit && bunx svelte-check-rs --workspace ./packages/web --tsconfig ./tsconfig.svelte.json",
 		"util:clean": "rm -rf .svelte-kit dist build packages/**/.svelte-kit packages/**/dist packages/**/build packages/**/node_modules/.vite",
 		"util:check": "STATUS=0; bun run util:format || STATUS=1; bun run util:lint || STATUS=1; bun run util:types || STATUS=1; bun test || STATUS=1; exit $STATUS"
 	},
