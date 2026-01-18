@@ -35,24 +35,24 @@ export function openDatabase(options: OpenDatabaseOptions = {}): Database {
 	}
 
 	if (shouldMigrate && readonly) {
-		const roDb = new Database(path, { create, readonly: true });
+		const roDb = new Database(path, { readonly: true });
 		applyPragmas(roDb);
 		const needsMigration = getUserVersion(roDb) < SCHEMA_VERSION;
 		roDb.close();
 
 		if (needsMigration) {
-			const rwDb = new Database(path, { create, readonly: false });
+			const rwDb = new Database(path, { create, readwrite: true });
 			applyPragmas(rwDb);
 			migrateToLatest(rwDb);
 			rwDb.close();
 		}
 
-		const db = new Database(path, { create, readonly: true });
+		const db = new Database(path, { readonly: true });
 		applyPragmas(db);
 		return db;
 	}
 
-	const db = new Database(path, { create, readonly });
+	const db = new Database(path, readonly ? { readonly: true } : { create, readwrite: true });
 	applyPragmas(db);
 
 	if (shouldMigrate && !readonly) {
