@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA_SQL = `
 -- Chart of Accounts: hierarchical account structure
@@ -46,8 +46,8 @@ CREATE INDEX IF NOT EXISTS idx_journal_entries_posted ON journal_entries(posted_
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_type ON chart_of_accounts(account_type);
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_parent ON chart_of_accounts(parent_id);
 
--- Unique index on provider_txn_id for deduplication
+-- Unique index on provider_txn_id scoped to account for safe deduplication
 CREATE UNIQUE INDEX IF NOT EXISTS idx_postings_provider_txn
-	ON postings(provider_txn_id)
-	WHERE provider_txn_id IS NOT NULL;
+    ON postings(provider_txn_id, account_id)
+    WHERE provider_txn_id IS NOT NULL;
 `;

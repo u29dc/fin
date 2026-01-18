@@ -11,7 +11,7 @@ import { parseMonzoCsv, parseVanguardCsv, parseVanguardPdf, parseWiseCsv } from 
 import { scanInbox } from './scanner';
 import type { CanonicalizationResult } from './transactions';
 import { canonicalize } from './transactions';
-import type { AssetAccountId, DetectedFile, ParsedTransaction } from './types';
+import type { ArchiveFile, AssetAccountId, DetectedFile, ParsedTransaction } from './types';
 
 export type ImportInboxOptions = {
 	inboxDir?: string;
@@ -24,7 +24,13 @@ export type ImportResult = {
 	processedFiles: string[];
 	archivedFiles: string[];
 	skippedFiles: { path: string; reason: string }[];
+	totalTransactions: number;
+	uniqueTransactions: number;
+	duplicateTransactions: number;
+	journalEntriesAttempted: number;
 	journalEntriesCreated: number;
+	transferPairsCreated: number;
+	entryErrors: string[];
 	accountsTouched: AssetAccountId[];
 	unmappedDescriptions: string[];
 };
@@ -59,14 +65,14 @@ async function parseDetectedFile(file: DetectedFile) {
 }
 
 type FileProcessResult = {
-	processedFiles: string[];
+	processedFiles: ArchiveFile[];
 	skippedFiles: { path: string; reason: string }[];
 	parsedTransactions: ParsedTransaction[];
 	accountsTouched: AssetAccountId[];
 };
 
 async function processDetectedFiles(detected: DetectedFile[]): Promise<FileProcessResult> {
-	const processedFiles: string[] = [];
+	const processedFiles: ArchiveFile[] = [];
 	const skippedFiles: { path: string; reason: string }[] = [];
 	const parsedTransactions: ParsedTransaction[] = [];
 	const accountsTouchedSet = new Set<AssetAccountId>();
@@ -79,7 +85,7 @@ async function processDetectedFiles(detected: DetectedFile[]): Promise<FileProce
 
 		try {
 			const parsed = await parseDetectedFile(file);
-			processedFiles.push(file.path);
+			processedFiles.push({ path: file.path, provider: file.provider, chartAccountId: parsed.chartAccountId });
 			parsedTransactions.push(...parsed.transactions);
 			accountsTouchedSet.add(parsed.chartAccountId);
 		} catch (error) {
@@ -90,14 +96,22 @@ async function processDetectedFiles(detected: DetectedFile[]): Promise<FileProce
 	return { processedFiles, skippedFiles, parsedTransactions, accountsTouched: Array.from(accountsTouchedSet) };
 }
 
-async function commitWithArchive(db: Database, canonResult: CanonicalizationResult, processedFiles: string[], archiveDir: string): Promise<{ journalEntriesCreated: number; archivedFiles: string[] }> {
+async function commitWithArchive(
+	db: Database,
+	canonResult: CanonicalizationResult,
+	processedFiles: ArchiveFile[],
+	archiveDir: string,
+): Promise<{
+	journalResult: ReturnType<typeof createJournalEntriesFromTransactions>;
+	archivedFiles: string[];
+}> {
 	const archiveManager = new ArchiveManager();
 
 	try {
 		await archiveManager.prepareArchive(processedFiles, archiveDir);
 		const journalResult = createJournalEntriesFromTransactions(db, canonResult.transactions);
 		const archivedFiles = await archiveManager.commitArchive();
-		return { journalEntriesCreated: journalResult.journalEntriesCreated, archivedFiles };
+		return { journalResult, archivedFiles };
 	} catch (error) {
 		if (archiveManager.hasArchivedFiles()) {
 			await archiveManager.rollbackArchive();
@@ -124,13 +138,19 @@ export async function importInbox(options: ImportInboxOptions = {}): Promise<Imp
 	const rulesConfig = await loadRules();
 	const canonResult = canonicalize(parsedTransactions, rulesConfig);
 
-	const { journalEntriesCreated, archivedFiles } = await commitWithArchive(db, canonResult, processedFiles, archiveDir);
+	const { journalResult, archivedFiles } = await commitWithArchive(db, canonResult, processedFiles, archiveDir);
 
 	return {
-		processedFiles,
+		processedFiles: processedFiles.map((file) => file.path),
 		archivedFiles,
 		skippedFiles,
-		journalEntriesCreated,
+		totalTransactions: journalResult.totalTransactions,
+		uniqueTransactions: journalResult.uniqueTransactions,
+		duplicateTransactions: journalResult.duplicateTransactions,
+		journalEntriesAttempted: journalResult.entriesAttempted,
+		journalEntriesCreated: journalResult.journalEntriesCreated,
+		transferPairsCreated: journalResult.transferPairsCreated,
+		entryErrors: journalResult.errors,
 		accountsTouched,
 		unmappedDescriptions: canonResult.unmappedDescriptions,
 	};

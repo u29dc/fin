@@ -5,6 +5,10 @@ import { mapCategoryToAccount } from '../db/category-mapping';
 import type { CanonicalTransaction } from './transactions';
 
 export type JournalEntryResult = {
+	totalTransactions: number;
+	uniqueTransactions: number;
+	duplicateTransactions: number;
+	entriesAttempted: number;
 	journalEntriesCreated: number;
 	transferPairsCreated: number;
 	errors: string[];
@@ -124,8 +128,8 @@ function tableExists(db: Database, tableName: string): boolean {
 	return result !== null;
 }
 
-function providerTxnIdExists(db: Database, providerTxnId: string): boolean {
-	const result = db.query<{ count: number }, [string]>(`SELECT COUNT(*) as count FROM postings WHERE provider_txn_id = ?`).get(providerTxnId);
+function providerTxnIdExists(db: Database, providerTxnId: string, accountId: string): boolean {
+	const result = db.query<{ count: number }, [string, string]>(`SELECT COUNT(*) as count FROM postings WHERE provider_txn_id = ? AND account_id = ?`).get(providerTxnId, accountId);
 	return (result?.count ?? 0) > 0;
 }
 
@@ -168,7 +172,12 @@ function createNonTransferEntry(txn: CanonicalTransaction, stmts: PreparedStatem
 
 export function createJournalEntriesFromTransactions(db: Database, transactions: CanonicalTransaction[], options?: TransferDetectionOptions): JournalEntryResult {
 	const opts: Required<TransferDetectionOptions> = { ...DEFAULT_TRANSFER_OPTIONS, ...options };
+	const totalTransactions = transactions.length;
 	const result: JournalEntryResult = {
+		totalTransactions,
+		uniqueTransactions: 0,
+		duplicateTransactions: 0,
+		entriesAttempted: 0,
 		journalEntriesCreated: 0,
 		transferPairsCreated: 0,
 		errors: [],
@@ -179,11 +188,13 @@ export function createJournalEntriesFromTransactions(db: Database, transactions:
 	}
 
 	const newTransactions = transactions.filter((txn) => {
-		if (txn.providerTxnId && providerTxnIdExists(db, txn.providerTxnId)) {
+		if (txn.providerTxnId && providerTxnIdExists(db, txn.providerTxnId, txn.chartAccountId)) {
 			return false;
 		}
 		return true;
 	});
+	result.uniqueTransactions = newTransactions.length;
+	result.duplicateTransactions = totalTransactions - newTransactions.length;
 
 	if (newTransactions.length === 0) {
 		return result;
@@ -201,6 +212,7 @@ export function createJournalEntriesFromTransactions(db: Database, transactions:
 	};
 
 	const { transfers, nonTransfers } = detectTransferPairsInBatch(newTransactions, opts);
+	result.entriesAttempted = transfers.length + nonTransfers.length;
 
 	db.transaction(() => {
 		for (const pair of transfers) {

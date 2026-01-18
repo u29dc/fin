@@ -40,6 +40,17 @@ txn_001,15/01/2024,10:30:45,-25.50,GBP,Tesco,Card payment,groceries,150.00`;
 		expect(txn?.balanceMinor).toBe(15000);
 	});
 
+	test('falls back to Money In/Out when Amount is empty', async () => {
+		const csv = `Transaction ID,Date,Time,Amount,Money In,Money Out,Currency,Name,Description,Category,Balance
+txn_004,15/01/2024,10:30:45,,0.00,25.50,GBP,Tesco,Card payment,groceries,150.00`;
+
+		await writeTestCsv(csv);
+		const result = await parseMonzoCsv(TEST_FILE, 'Assets:Personal:Monzo');
+
+		const txn = result.transactions[0];
+		expect(txn?.amountMinor).toBe(-2550);
+	});
+
 	test('uses Name when Description is empty', async () => {
 		const csv = `Transaction ID,Date,Time,Amount,Currency,Name,Description,Category,Balance
 txn_002,15/01/2024,11:00:00,-15.00,GBP,Coffee Shop,,eating_out,135.00`;

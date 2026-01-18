@@ -44,7 +44,24 @@ function renderTableOutput(result: ImportResult): void {
 	renderSkippedFiles(result.skippedFiles);
 
 	log('Results:');
+	log(`  Transactions parsed: ${result.totalTransactions}`);
+	if (result.duplicateTransactions > 0) {
+		log(`  Duplicates skipped: ${result.duplicateTransactions}`);
+	}
+	log(`  Journal entries attempted: ${result.journalEntriesAttempted}`);
 	log(`  Journal entries created: ${result.journalEntriesCreated}`);
+	if (result.transferPairsCreated > 0) {
+		log(`  Transfer pairs created: ${result.transferPairsCreated}`);
+	}
+	if (result.entryErrors.length > 0) {
+		log(`  Entry errors: ${result.entryErrors.length}`);
+		for (const err of result.entryErrors.slice(0, 10)) {
+			log(`    ${err}`);
+		}
+		if (result.entryErrors.length > 10) {
+			log(`    ... and ${result.entryErrors.length - 10} more`);
+		}
+	}
 
 	if (result.accountsTouched.length > 0) {
 		log(`  Accounts touched: ${result.accountsTouched.join(', ')}`);
@@ -54,6 +71,12 @@ function renderTableOutput(result: ImportResult): void {
 
 	if (result.archivedFiles.length > 0) {
 		log(`\nArchived ${result.archivedFiles.length} file${result.archivedFiles.length !== 1 ? 's' : ''}`);
+		for (const file of result.archivedFiles.slice(0, 5)) {
+			log(`  ${file}`);
+		}
+		if (result.archivedFiles.length > 5) {
+			log(`  ... and ${result.archivedFiles.length - 5} more`);
+		}
 	}
 }
 

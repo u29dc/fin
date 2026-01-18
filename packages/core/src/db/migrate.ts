@@ -43,10 +43,20 @@ export function migrateToLatest(db: Database): void {
 		return;
 	}
 
-	if (currentVersion < SCHEMA_VERSION) {
-		db.transaction(() => {
+	db.transaction(() => {
+		if (currentVersion === 0) {
 			initializeFreshDb(db);
-			setUserVersion(db, SCHEMA_VERSION);
-		})();
-	}
+		}
+
+		if (currentVersion < 2) {
+			db.exec(`
+                DROP INDEX IF EXISTS idx_postings_provider_txn;
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_postings_provider_txn
+                    ON postings(provider_txn_id, account_id)
+                    WHERE provider_txn_id IS NOT NULL;
+            `);
+		}
+
+		setUserVersion(db, SCHEMA_VERSION);
+	})();
 }

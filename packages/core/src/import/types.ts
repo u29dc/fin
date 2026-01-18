@@ -9,6 +9,12 @@ export type DetectedFile = {
 	chartAccountId: AssetAccountId | null;
 };
 
+export type ArchiveFile = {
+	path: string;
+	provider: DetectedProvider;
+	chartAccountId: AssetAccountId;
+};
+
 import type { AssetAccountId } from '../types/chart-account-ids';
 
 export type ParsedTransaction = {

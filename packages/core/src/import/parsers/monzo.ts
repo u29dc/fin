@@ -13,8 +13,22 @@ function getColumnValue(row: MonzoRow, column: string | undefined): string | nul
 	return value && value.length > 0 ? value : null;
 }
 
-function resolveAmount(row: MonzoRow, cols: ColumnMapping): string {
-	return getColumnValue(row, cols.amount) || getColumnValue(row, 'Money In') || getColumnValue(row, 'Money Out') || '';
+function resolveAmountMinor(row: MonzoRow, cols: ColumnMapping): number {
+	const amountRaw = getColumnValue(row, cols.amount);
+	if (amountRaw) {
+		return parseAmountMinor(amountRaw);
+	}
+
+	const moneyInRaw = getColumnValue(row, 'Money In');
+	const moneyOutRaw = getColumnValue(row, 'Money Out');
+
+	if (moneyInRaw || moneyOutRaw) {
+		const moneyIn = moneyInRaw ? parseAmountMinor(moneyInRaw) : 0;
+		const moneyOut = moneyOutRaw ? parseAmountMinor(moneyOutRaw) : 0;
+		return moneyIn - moneyOut;
+	}
+
+	throw new Error('Missing amount columns in Monzo CSV row.');
 }
 
 function resolveDescription(row: MonzoRow, cols: ColumnMapping): { rawDescription: string; counterparty: string | null } {
@@ -47,7 +61,7 @@ function parseMonzoRow(row: MonzoRow, cols: ColumnMapping, chartAccountId: Asset
 	return {
 		chartAccountId,
 		postedAt,
-		amountMinor: parseAmountMinor(resolveAmount(row, cols)),
+		amountMinor: resolveAmountMinor(row, cols),
 		currency: getColumnValue(row, 'Currency') || 'GBP',
 		rawDescription,
 		counterparty,
