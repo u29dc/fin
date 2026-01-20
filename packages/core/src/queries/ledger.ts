@@ -656,11 +656,13 @@ export function getLedgerAllAccountsDailyBalanceSeries(db: Database, chartAccoun
 		result[row.chart_account_id]?.push({ date: row.date, balanceMinor: newBalance });
 	}
 
-	// Apply limit per account if needed
-	if (limit < 10_000) {
+	// Apply limit per account if needed (keep most recent points)
+	if (limit !== undefined) {
 		for (const accountId of chartAccountIds) {
 			const series = result[accountId];
-			if (series && series.length > limit) result[accountId] = series.slice(0, limit);
+			if (series && series.length > limit) {
+				result[accountId] = series.slice(-limit);
+			}
 		}
 	}
 

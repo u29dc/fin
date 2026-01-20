@@ -9,7 +9,7 @@ import { type AssetAccountId, getGroupChartAccounts } from '../types/chart-accou
 type JournalEntryRow = {
 	id: string;
 	chart_account_id: string;
-	pair_account_id: string;
+	pair_account_id: string | null;
 	posted_at: string;
 	amount_minor: number;
 	currency: string;
@@ -72,7 +72,7 @@ export function getTransactions(db: Database, options: TransactionQueryOptions =
 		SELECT
 			je.id,
 			p.account_id as chart_account_id,
-			p2.account_id as pair_account_id,
+			GROUP_CONCAT(DISTINCT p2.account_id) as pair_account_id,
 			je.posted_at,
 			p.amount_minor,
 			p.currency,
@@ -81,8 +81,9 @@ export function getTransactions(db: Database, options: TransactionQueryOptions =
 			je.counterparty
 		FROM journal_entries je
 		JOIN postings p ON p.journal_entry_id = je.id
-		JOIN postings p2 ON p2.journal_entry_id = je.id AND p2.id != p.id
+		LEFT JOIN postings p2 ON p2.journal_entry_id = je.id AND p2.id != p.id
 		${whereClause}
+		GROUP BY je.id, p.id
 		ORDER BY je.posted_at DESC
 		LIMIT ?;
 	`;
@@ -93,7 +94,7 @@ export function getTransactions(db: Database, options: TransactionQueryOptions =
 	return rows.map((row: JournalEntryRow) => ({
 		id: row.id,
 		chartAccountId: row.chart_account_id,
-		pairAccountId: row.pair_account_id,
+		pairAccountId: row.pair_account_id ?? '',
 		postedAt: row.posted_at,
 		amountMinor: row.amount_minor,
 		currency: row.currency,
@@ -111,32 +112,57 @@ export type AllTransactionsOptions = {
 	limit?: number;
 };
 
+function buildChartAccountToGroupMap(groupIds: string[], groupAccounts: Record<string, string[]>): Map<string, string> {
+	const map = new Map<string, string>();
+	for (const gid of groupIds) {
+		for (const chartAccountId of groupAccounts[gid] ?? []) {
+			map.set(chartAccountId, gid);
+		}
+	}
+	return map;
+}
+
+function mapRowToTransaction(row: JournalEntryRow): Transaction {
+	return {
+		id: row.id,
+		chartAccountId: row.chart_account_id,
+		pairAccountId: row.pair_account_id ?? '',
+		postedAt: row.posted_at,
+		amountMinor: row.amount_minor,
+		currency: row.currency,
+		rawDescription: row.raw_description,
+		cleanDescription: row.clean_description,
+		counterparty: row.counterparty,
+	};
+}
+
+function initEmptyGroupResult(groupIds: string[]): Record<string, Transaction[]> {
+	const result: Record<string, Transaction[]> = {};
+	for (const gid of groupIds) {
+		result[gid] = [];
+	}
+	return result;
+}
+
 /**
  * Fetch transactions for all groups in a single query.
  * Returns transactions grouped by group ID.
  */
 export function getAllTransactions(db: Database, groupIds: string[], options: AllTransactionsOptions = {}): Record<string, Transaction[]> {
 	const { limit = 10_000 } = options;
-
-	// Collect all chart account IDs from all groups
 	const groupAccounts = getGroupChartAccounts();
 	const allChartAccountIds = groupIds.flatMap((gid) => groupAccounts[gid] ?? []);
 
 	if (allChartAccountIds.length === 0) {
-		const result: Record<string, Transaction[]> = {};
-		for (const gid of groupIds) {
-			result[gid] = [];
-		}
-		return result;
+		return initEmptyGroupResult(groupIds);
 	}
 
-	// Single query for all chart accounts with self-join for pair account
 	const placeholders = allChartAccountIds.map(() => '?').join(', ');
 	const sql = `
 		SELECT
 			je.id,
 			p.account_id as chart_account_id,
-			p2.account_id as pair_account_id,
+			GROUP_CONCAT(DISTINCT p2.account_id) as pair_account_id,
 			je.posted_at,
 			p.amount_minor,
 			p.currency,
@@ -145,15 +171,53 @@ export function getAllTransactions(db: Database, groupIds: string[], options: Al
 			je.counterparty
 		FROM journal_entries je
 		JOIN postings p ON p.journal_entry_id = je.id
-		JOIN postings p2 ON p2.journal_entry_id = je.id AND p2.id != p.id
+		LEFT JOIN postings p2 ON p2.journal_entry_id = je.id AND p2.id != p.id
 		WHERE p.account_id IN (${placeholders})
+		GROUP BY je.id, p.id
 		ORDER BY je.posted_at DESC
 		LIMIT ?;
 	`;
 
 	const rows = db.query<JournalEntryRow, (string | number)[]>(sql).all(...allChartAccountIds, limit);
+	const chartAccountToGroup = buildChartAccountToGroupMap(groupIds, groupAccounts);
+	const result = initEmptyGroupResult(groupIds);
 
-	// Build reverse lookup: chart account ID -> group ID
+	for (const row of rows) {
+		const groupId = chartAccountToGroup.get(row.chart_account_id);
+		if (groupId) {
+			result[groupId]?.push(mapRowToTransaction(row));
+		}
+	}
+
+	return result;
+}
+
+export type TransactionCounts = Record<string, number>;
+
+export function getAllTransactionCounts(db: Database, groupIds: string[]): TransactionCounts {
+	const groupAccounts = getGroupChartAccounts();
+	const allChartAccountIds = groupIds.flatMap((gid) => groupAccounts[gid] ?? []);
+
+	const result: TransactionCounts = {};
+	for (const gid of groupIds) {
+		result[gid] = 0;
+	}
+
+	if (allChartAccountIds.length === 0) {
+		return result;
+	}
+
+	const placeholders = allChartAccountIds.map(() => '?').join(', ');
+	type CountRow = { chart_account_id: string; count: number };
+	const sql = `
+		SELECT p.account_id as chart_account_id, COUNT(*) as count
+		FROM postings p
+		JOIN journal_entries je ON p.journal_entry_id = je.id
+		WHERE p.account_id IN (${placeholders})
+		GROUP BY p.account_id
+	`;
+	const rows = db.query<CountRow, (string | number)[]>(sql).all(...allChartAccountIds);
+
 	const chartAccountToGroup = new Map<string, string>();
 	for (const gid of groupIds) {
 		const accountIds = groupAccounts[gid];
@@ -164,29 +228,12 @@ export function getAllTransactions(db: Database, groupIds: string[], options: Al
 		}
 	}
 
-	// Initialize result with empty arrays
-	const result: Record<string, Transaction[]> = {};
-	for (const gid of groupIds) {
-		result[gid] = [];
-	}
-
-	// Group transactions by their group ID
 	for (const row of rows) {
 		const groupId = chartAccountToGroup.get(row.chart_account_id);
-		const groupResult = groupId ? result[groupId] : undefined;
-		if (groupResult) {
-			groupResult.push({
-				id: row.id,
-				chartAccountId: row.chart_account_id,
-				pairAccountId: row.pair_account_id,
-				postedAt: row.posted_at,
-				amountMinor: row.amount_minor,
-				currency: row.currency,
-				rawDescription: row.raw_description,
-				cleanDescription: row.clean_description,
-				counterparty: row.counterparty,
-			});
+		if (!groupId) {
+			continue;
 		}
+		result[groupId] = (result[groupId] ?? 0) + row.count;
 	}
 
 	return result;
