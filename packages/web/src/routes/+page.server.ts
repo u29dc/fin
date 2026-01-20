@@ -7,7 +7,6 @@ import {
 	getAccountCumulativeContributionSeries,
 	getAllAccountsDailyBalanceSeries,
 	getAssetAccounts,
-	getBalanceSheet,
 	getFinanceConfig,
 	getGroupCashFlowDataMedian,
 	getGroupDailyReserveBreakdownSeries,
@@ -22,7 +21,8 @@ import { getAccountById, getAllGroupMetadata, getGroupChartAccounts, getGroupIds
 
 import { db } from '$lib/server/db';
 
-export function load() {
+export function load({ url }: { url: URL }) {
+	const groupParam = url.searchParams.get('group');
 	const financeConfig = getFinanceConfig();
 	const groupChartAccounts = getGroupChartAccounts();
 	const groupIds = getGroupIds();
@@ -102,9 +102,6 @@ export function load() {
 		groupExpenseHierarchy[groupId] = getGroupExpenseTreeMedian(db, groupId, { months: 6 });
 	}
 
-	// Get balance sheet from double-entry ledger
-	const balanceSheet = getBalanceSheet(db);
-
 	// Build UI config from TOML config using group metadata
 	type GroupConfig = { label: string; accountIds: string[]; icon: string };
 	type AccountGroupConfig = { label: string; accounts: { id: string; label: string }[] };
@@ -138,6 +135,9 @@ export function load() {
 		groupMetadata: groupMetadataMap,
 	};
 
+	// Validate group param - must be a valid group ID
+	const validatedGroup = groupParam && groupIds.includes(groupParam) ? groupParam : null;
+
 	return {
 		config: { finance: financeConfig, ui: uiConfig },
 		accounts: accountsWithBalances,
@@ -148,6 +148,6 @@ export function load() {
 		groupReserveBreakdown,
 		groupCashFlowData,
 		groupExpenseHierarchy,
-		balanceSheet,
+		initialGroup: validatedGroup,
 	};
 }

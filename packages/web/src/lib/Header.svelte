@@ -46,6 +46,37 @@
 		const iconName = groupMetadata[groupId]?.icon ?? 'wallet';
 		return ICON_MAP[iconName] ?? Wallet;
 	}
+
+	function handleGroupTabKeydown(event: KeyboardEvent, currentIndex: number) {
+		let newIndex = currentIndex;
+
+		switch (event.key) {
+			case 'ArrowLeft':
+				newIndex = currentIndex > 0 ? currentIndex - 1 : availableGroups.length - 1;
+				break;
+			case 'ArrowRight':
+				newIndex = currentIndex < availableGroups.length - 1 ? currentIndex + 1 : 0;
+				break;
+			case 'Home':
+				newIndex = 0;
+				break;
+			case 'End':
+				newIndex = availableGroups.length - 1;
+				break;
+			default:
+				return;
+		}
+
+		event.preventDefault();
+		const newGroupId = availableGroups[newIndex];
+		if (newGroupId) {
+			onGroupChange(newGroupId);
+			// Focus the newly selected tab
+			const tablist = (event.target as HTMLElement).closest('[role="tablist"]');
+			const tabs = tablist?.querySelectorAll('[role="tab"]');
+			(tabs?.[newIndex] as HTMLElement)?.focus();
+		}
+	}
 </script>
 
 <header
@@ -96,26 +127,31 @@
 
 	<!-- Center: Group Tabs -->
 	<nav class="absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5" aria-label="Account group">
-		{#each availableGroups as groupId (groupId)}
-			{@const isActive = allGroupsActive || activeGroup === groupId}
-			{@const Icon = getGroupIcon(groupId)}
-			{@const label = getGroupLabel(groupId)}
-			<button
-				type="button"
-				class="min-h-[44px] px-3 flex items-center justify-center border-t-2 cursor-pointer"
-				class:border-text={isActive}
-				class:text-text={isActive}
-				class:border-transparent={!isActive}
-				class:text-muted={!isActive}
-				class:hover:text-text={!isActive}
-				aria-pressed={activeGroup === groupId}
-				aria-label={label}
-				onclick={() => onGroupChange(groupId)}
-			>
-				<Icon class="size-4 md:hidden" aria-hidden="true" />
-				<span class="hidden md:inline text-xs uppercase tracking-widest leading-none">{label}</span>
-			</button>
-		{/each}
+		<div role="tablist" aria-label="Account groups" class="flex items-center gap-0.5">
+			{#each availableGroups as groupId, index (groupId)}
+				{@const isActive = allGroupsActive || activeGroup === groupId}
+				{@const Icon = getGroupIcon(groupId)}
+				{@const label = getGroupLabel(groupId)}
+				<button
+					type="button"
+					role="tab"
+					class="min-h-[44px] px-3 flex items-center justify-center border-t-2 cursor-pointer"
+					class:border-text={isActive}
+					class:text-text={isActive}
+					class:border-transparent={!isActive}
+					class:text-muted={!isActive}
+					class:hover:text-text={!isActive}
+					aria-selected={isActive}
+					tabindex={isActive ? 0 : -1}
+					aria-label={label}
+					onclick={() => onGroupChange(groupId)}
+					onkeydown={(e) => handleGroupTabKeydown(e, index)}
+				>
+					<Icon class="size-4 md:hidden" aria-hidden="true" />
+					<span class="hidden md:inline text-xs uppercase tracking-widest leading-none">{label}</span>
+				</button>
+			{/each}
+		</div>
 	</nav>
 
 	<!-- Right: Status + Theme -->

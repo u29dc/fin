@@ -38,7 +38,6 @@
 		formatHover: (point: T) => string;
 		height?: number;
 		compact?: boolean;
-		downsample?: boolean;
 		curve?: boolean;
 		showRawOverlay?: boolean;
 		timeUnit?: 'day' | 'month';
@@ -52,7 +51,6 @@
 		formatHover,
 		height = 180,
 		compact = false,
-		downsample = true,
 		curve = true,
 		showRawOverlay = true,
 		timeUnit = 'day',
@@ -175,4 +173,3 @@
 </script>
 
 <div bind:this={container} class="w-full" style:height={height + 'px'}></div>
-

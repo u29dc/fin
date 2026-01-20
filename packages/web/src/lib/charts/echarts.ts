@@ -42,12 +42,12 @@ export const TREEMAP_PALETTE = {
 
 export const SANKEY_PALETTE = {
 	light: {
-		income: '#16a34a', // green-600 (matches CSS --success)
+		income: '#0d9488', // teal-600 (color-blind safe)
 		asset: '#94a3b8', // slate-400
 		expense: '#94a3b8', // slate-400
 	},
 	dark: {
-		income: '#4ade80', // green-400 (matches CSS --success)
+		income: '#2dd4bf', // teal-400 (color-blind safe)
 		asset: '#64748b', // slate-500
 		expense: '#64748b', // slate-500
 	},
@@ -60,8 +60,9 @@ export function formatGbpMinor(valueMinor: number): string {
 	return pounds.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' });
 }
 
-export function createTreemapOption(data: TreemapDataItem[], colorScheme: ColorScheme = 'dark'): echarts.EChartsCoreOption {
+export function createTreemapOption(data: TreemapDataItem[], colorScheme: ColorScheme = 'dark', compact = false): echarts.EChartsCoreOption {
 	const colors = ECHARTS_COLORS[colorScheme];
+	const fontSize = compact ? 9 : 11;
 
 	return {
 		tooltip: {
@@ -83,7 +84,7 @@ export function createTreemapOption(data: TreemapDataItem[], colorScheme: ColorS
 				label: {
 					show: true,
 					fontFamily: DEFAULT_FONT_FAMILY,
-					fontSize: 11,
+					fontSize,
 					color: colorScheme === 'dark' ? '#ffffff' : '#374151',
 					textShadowColor: colorScheme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)',
 					textShadowBlur: 2,
@@ -94,23 +95,23 @@ export function createTreemapOption(data: TreemapDataItem[], colorScheme: ColorS
 				},
 				upperLabel: {
 					show: true,
-					height: 28,
+					height: compact ? 20 : 28,
 					fontFamily: DEFAULT_FONT_FAMILY,
-					fontSize: 11,
+					fontSize,
 					color: colorScheme === 'dark' ? '#ffffff' : '#374151',
 					textShadowColor: colorScheme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)',
 					textShadowBlur: 2,
 				},
 				itemStyle: {
 					borderColor: colorScheme === 'dark' ? '#1b1e22' : '#ffffff',
-					borderWidth: 2,
-					gapWidth: 2,
+					borderWidth: compact ? 1 : 2,
+					gapWidth: compact ? 1 : 2,
 				},
 				levels: [
 					{
 						itemStyle: {
-							borderWidth: 3,
-							gapWidth: 3,
+							borderWidth: compact ? 2 : 3,
+							gapWidth: compact ? 2 : 3,
 						},
 						upperLabel: {
 							show: false,
@@ -136,8 +137,9 @@ export function createTreemapOption(data: TreemapDataItem[], colorScheme: ColorS
 	};
 }
 
-export function createSankeyOption(nodes: SankeyNode[], links: SankeyLink[], colorScheme: ColorScheme = 'dark'): echarts.EChartsCoreOption {
+export function createSankeyOption(nodes: SankeyNode[], links: SankeyLink[], colorScheme: ColorScheme = 'dark', compact = false): echarts.EChartsCoreOption {
 	const colors = ECHARTS_COLORS[colorScheme];
+	const fontSize = compact ? 9 : 11;
 
 	return {
 		tooltip: {
@@ -168,21 +170,21 @@ export function createSankeyOption(nodes: SankeyNode[], links: SankeyLink[], col
 				},
 				nodeAlign: 'left',
 				orient: 'horizontal',
-				left: 100,
-				right: 150,
-				top: 10,
-				bottom: 10,
-				nodeGap: 12,
-				nodeWidth: 20,
+				left: compact ? 60 : 100,
+				right: compact ? 80 : 150,
+				top: compact ? 5 : 10,
+				bottom: compact ? 5 : 10,
+				nodeGap: compact ? 8 : 12,
+				nodeWidth: compact ? 14 : 20,
 				draggable: false,
 				label: {
 					fontFamily: DEFAULT_FONT_FAMILY,
-					fontSize: 11,
+					fontSize,
 					color: colors.text,
 					position: 'right',
 				},
 				lineStyle: {
-					color: 'gradient',
+					color: 'source',
 					curveness: 0.5,
 					opacity: 0.4,
 				},
@@ -260,30 +262,30 @@ export type LineChartOptions = {
 	xAxisType?: 'time' | 'category';
 };
 
-// Semantic colors for income/expense visualizations (matches utils.ts SEMANTIC_COLORS)
+// Semantic colors for income/expense visualizations (color-blind safe: teal/orange)
 export const LINE_SEMANTIC_COLORS = {
 	light: {
-		income: '#16a34a', // green-600
-		incomeMuted: 'rgba(22, 163, 74, 0.6)',
-		incomeFill: 'rgba(22, 163, 74, 0.28)',
-		incomeFillFaint: 'rgba(22, 163, 74, 0.04)',
-		expense: '#dc2626', // red-600
-		expenseMuted: 'rgba(220, 38, 38, 0.6)',
-		expenseFill: 'rgba(220, 38, 38, 0.28)',
-		expenseFillFaint: 'rgba(220, 38, 38, 0.04)',
+		income: '#0d9488', // teal-600
+		incomeMuted: 'rgba(13, 148, 136, 0.6)',
+		incomeFill: 'rgba(13, 148, 136, 0.28)',
+		incomeFillFaint: 'rgba(13, 148, 136, 0.04)',
+		expense: '#ea580c', // orange-600
+		expenseMuted: 'rgba(234, 88, 12, 0.6)',
+		expenseFill: 'rgba(234, 88, 12, 0.28)',
+		expenseFillFaint: 'rgba(234, 88, 12, 0.04)',
 		warning: 'rgba(217, 119, 6, 0.8)', // amber-700
 		neutral: '#e6e6e8',
 		neutralMuted: 'rgba(230, 230, 232, 0.16)',
 	},
 	dark: {
-		income: '#4ade80', // green-400
-		incomeMuted: 'rgba(74, 222, 128, 0.6)',
-		incomeFill: 'rgba(74, 222, 128, 0.28)',
-		incomeFillFaint: 'rgba(74, 222, 128, 0.04)',
-		expense: '#ff6b6b', // coral red
-		expenseMuted: 'rgba(255, 107, 107, 0.6)',
-		expenseFill: 'rgba(255, 107, 107, 0.28)',
-		expenseFillFaint: 'rgba(255, 107, 107, 0.04)',
+		income: '#2dd4bf', // teal-400
+		incomeMuted: 'rgba(45, 212, 191, 0.6)',
+		incomeFill: 'rgba(45, 212, 191, 0.28)',
+		incomeFillFaint: 'rgba(45, 212, 191, 0.04)',
+		expense: '#fb923c', // orange-400
+		expenseMuted: 'rgba(251, 146, 60, 0.6)',
+		expenseFill: 'rgba(251, 146, 60, 0.28)',
+		expenseFillFaint: 'rgba(251, 146, 60, 0.04)',
 		warning: 'rgba(240, 180, 41, 0.8)', // amber-400
 		neutral: '#e6e6e8',
 		neutralMuted: 'rgba(230, 230, 232, 0.16)',

@@ -1,6 +1,22 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Gate hover styles to devices that support hover (prevents flash on touch) */
+@custom-variant can-hover (@media (hover: hover));
+
+/* Screen reader only utility */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}
+
 @theme {
 	--breakpoint-3xl: 1700px;
 	--color-bg: var(--bg);
@@ -52,14 +68,17 @@ html {
 
 /* Light theme (default) */
 :root {
+	color-scheme: light;
 	--bg: #f8f9fa;
 	--panel: #ffffff;
 	--border: #e1e4e8;
 	--border-subtle: rgba(0, 0, 0, 0.06);
 	--text: #1a1a1a;
 	--muted: #6b7280;
-	--error: #dc2626;
-	--success: #16a34a;
+	--text-secondary: var(--muted);
+	/* Color-blind safe palette: teal for income, orange for expense */
+	--error: #ea580c;
+	--success: #0d9488;
 	--pending: #ca8a04;
 
 	/* Custom easing curves - Rauno Freiberg's recommendations */
@@ -80,14 +99,16 @@ html {
 
 /* Dark theme */
 .dark {
+	color-scheme: dark;
 	--bg: #0d0f10;
 	--panel: #111315;
 	--border: #24272c;
 	--border-subtle: rgba(255, 255, 255, 0.06);
 	--text: #e6e6e8;
 	--muted: #9aa0a6;
-	--error: #ff6b6b;
-	--success: #4ade80;
+	/* Color-blind safe palette: teal for income, orange for expense */
+	--error: #fb923c;
+	--success: #2dd4bf;
 	--pending: #f0b429;
 }
 
@@ -101,6 +122,7 @@ body {
 	-moz-osx-font-smoothing: grayscale;
 	-webkit-text-size-adjust: 100%;
 	-webkit-tap-highlight-color: transparent;
+	text-rendering: optimizeLegibility;
 }
 
 /* Text selection styling */
@@ -116,19 +138,16 @@ select {
 	font-size: 16px;
 }
 
-/* Hide scrollbars globally but keep scroll functionality */
-* {
-	scrollbar-width: none;
-	-ms-overflow-style: none;
-}
-
-*::-webkit-scrollbar {
-	width: 0;
-	height: 0;
-}
 
 button {
 	font-family: inherit;
+	user-select: none;
+}
+
+/* Prevent double-tap zoom on touch devices */
+button,
+a {
+	touch-action: manipulation;
 }
 
 /* Global interactive element transitions */

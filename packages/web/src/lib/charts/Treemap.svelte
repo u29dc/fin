@@ -5,9 +5,10 @@
 	type Props = {
 		data: TreemapDataItem[];
 		colorScheme?: ColorScheme;
+		compact?: boolean;
 	};
 
-	const { data, colorScheme = 'dark' }: Props = $props();
+	const { data, colorScheme = 'dark', compact = false }: Props = $props();
 
 	let container: HTMLDivElement;
 	let chart: ReturnType<typeof echarts.init> | null = null;
@@ -33,7 +34,7 @@
 	function updateChart() {
 		if (!chart) return;
 
-		const option = createTreemapOption(data, colorScheme);
+		const option = createTreemapOption(data, colorScheme, compact);
 		chart.setOption(option, true);
 	}
 
@@ -42,9 +43,10 @@
 	});
 
 	$effect(() => {
-		// Re-render when data or colorScheme changes
+		// Re-render when data, colorScheme, or compact changes
 		data;
 		colorScheme;
+		compact;
 		updateChart();
 	});
 </script>

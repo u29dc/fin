@@ -6,9 +6,10 @@
 		nodes: SankeyNode[];
 		links: SankeyLink[];
 		colorScheme?: ColorScheme;
+		compact?: boolean;
 	};
 
-	const { nodes, links, colorScheme = 'dark' }: Props = $props();
+	const { nodes, links, colorScheme = 'dark', compact = false }: Props = $props();
 
 	let container: HTMLDivElement;
 	let chart: ReturnType<typeof echarts.init> | null = null;
@@ -34,7 +35,7 @@
 	function updateChart() {
 		if (!chart) return;
 
-		const option = createSankeyOption(nodes, links, colorScheme);
+		const option = createSankeyOption(nodes, links, colorScheme, compact);
 		chart.setOption(option, true);
 	}
 
@@ -43,10 +44,11 @@
 	});
 
 	$effect(() => {
-		// Re-render when data or colorScheme changes
+		// Re-render when data, colorScheme, or compact changes
 		nodes;
 		links;
 		colorScheme;
+		compact;
 		updateChart();
 	});
 </script>

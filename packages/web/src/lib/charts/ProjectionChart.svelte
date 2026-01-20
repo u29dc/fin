@@ -12,6 +12,7 @@
 		warningLine?: number;
 		height?: number;
 		formatHover?: (current: ProjectionPoint, minimum: ProjectionPoint) => string;
+		compact?: boolean;
 	};
 
 	let {
@@ -21,6 +22,7 @@
 		warningLine = 50_000,
 		height = 320,
 		formatHover,
+		compact = false,
 	}: Props = $props();
 
 	let container: HTMLDivElement | null = $state(null);
@@ -42,11 +44,11 @@
 		return {
 			animation: false,
 			grid: {
-				left: 60,
-				right: 20,
-				top: 20,
-				bottom: 30,
-				containLabel: true,
+				left: compact ? 8 : 60,
+				right: compact ? 8 : 20,
+				top: compact ? 8 : 20,
+				bottom: compact ? 8 : 30,
+				containLabel: !compact,
 			},
 			tooltip: {
 				trigger: 'axis',
@@ -92,6 +94,7 @@
 			},
 			xAxis: {
 				type: 'time',
+				show: !compact,
 				axisLine: { show: false },
 				axisTick: { show: false },
 				axisLabel: {
@@ -100,7 +103,7 @@
 					fontSize: 11,
 				},
 				splitLine: {
-					show: true,
+					show: !compact,
 					lineStyle: {
 						color: colors.border,
 						type: 'dotted',
@@ -109,6 +112,7 @@
 			},
 			yAxis: {
 				type: 'value',
+				show: !compact,
 				axisLine: { show: false },
 				axisTick: { show: false },
 				axisLabel: {
@@ -151,6 +155,7 @@
 								yAxis: warningLine,
 								name: `${warningLine / 1000}K`,
 								label: {
+									show: !compact,
 									formatter: `${warningLine / 1000}K`,
 									position: 'end',
 									color: colors.textMuted,
@@ -167,6 +172,7 @@
 								yAxis: thresholdPounds,
 								name: `${thresholdPounds / 1000}K`,
 								label: {
+									show: !compact,
 									formatter: `${thresholdPounds / 1000}K`,
 									position: 'end',
 									color: colors.textMuted,
@@ -237,9 +243,10 @@
 		};
 	});
 
-	// Re-render when data or theme changes
+	// Re-render when data, theme, or compact changes
 	$effect(() => {
-		if (currentBurn && minimumBurn && colorScheme) {
+		if (currentBurn && minimumBurn && colorScheme !== undefined) {
+			compact;
 			render();
 		}
 	});

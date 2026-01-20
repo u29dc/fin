@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+
 	import ProjectionChart from '$lib/charts/ProjectionChart.svelte';
 	import SeriesChart from '$lib/charts/SeriesChart.svelte';
 	import Header from '$lib/Header.svelte';
@@ -9,6 +11,21 @@
 	type GroupId = string;
 
 	let { data } = $props();
+
+	let isMobile = $state(false);
+
+	onMount(() => {
+		const mobileQuery = window.matchMedia('(max-width: 640px)');
+		isMobile = mobileQuery.matches;
+		const handleMobileChange = (e: MediaQueryListEvent) => {
+			isMobile = e.matches;
+		};
+		mobileQuery.addEventListener('change', handleMobileChange);
+
+		return () => {
+			mobileQuery.removeEventListener('change', handleMobileChange);
+		};
+	});
 
 	const availableGroups = $derived(data.availableGroups);
 	const groupMetadata = $derived(data.groupMetadata ?? {});
@@ -94,12 +111,13 @@
 </svelte:head>
 
 <main class="h-svh overflow-auto box-border px-2.5 pb-2.5 flex flex-col gap-2">
+	<h1 class="sr-only">Financial Overview</h1>
 	<Header activePage="overview" activeGroup={availableGroups[0]} onGroupChange={() => {}} availableGroups={availableGroups} {groupMetadata} allGroupsActive />
 
 	<article class="border border-border bg-panel p-2.5 flex flex-col gap-2 fade-in flex-1 min-h-0">
 		<header class="flex items-center justify-between gap-2.5">
 			<div>
-				<div class="font-normal text-sm uppercase tracking-widest">Account Balances</div>
+				<h2 class="font-normal text-sm uppercase tracking-widest">Account Balances</h2>
 				<div class="text-sm mt-0.5 leading-snug uppercase tracking-wider text-muted">
 					All accounts over time
 				</div>
@@ -113,7 +131,7 @@
 				series={seriesDefinitions}
 				formatHover={formatHover}
 				height={overviewChartHeight}
-				compact={false}
+				compact={isMobile}
 				curve={true}
 				showRawOverlay={false}
 			/>
@@ -123,7 +141,7 @@
 	<article class="border border-border bg-panel p-2.5 flex flex-col gap-2 fade-in flex-1 min-h-0">
 		<header class="flex items-center justify-between gap-2.5">
 			<div>
-				<div class="font-normal text-sm uppercase tracking-widest">Runway Projection</div>
+				<h2 class="font-normal text-sm uppercase tracking-widest">Runway Projection</h2>
 				<div class="text-sm mt-0.5 leading-snug uppercase tracking-wider text-muted">
 					24-month forward projection
 				</div>
@@ -140,6 +158,7 @@
 				threshold={projection.thresholdMajor}
 				warningLine={projection.warningLineMajor}
 				height={projectionChartHeight}
+				compact={isMobile}
 			/>
 		</div>
 	</article>

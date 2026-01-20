@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 
 	import AccountGroupChart from '$lib/charts/AccountGroupChart.svelte';
 	import Sankey from '$lib/charts/Sankey.svelte';
@@ -63,14 +65,19 @@
 	const ACCOUNT_GROUP_CONFIG = $derived(uiConfig.accountGroupConfig);
 	const GROUP_METADATA = $derived(uiConfig.groupMetadata ?? {});
 
-	// Initialize group to first configured group (fallback to 'personal' for backwards compat)
+	// Initialize group - set via effect to avoid state-referenced-locally warning
 	let group: GroupId = $state('');
+	let _groupInitialized = $state(false);
 	let isLargeScreen = $state(false);
+	let isMobile = $state(false);
 
-	$effect(() => {
-		if (!group) {
-			group = data.config.ui.groupColumnOrder[0] ?? 'personal';
-		}
+	// Set initial group from URL or server data (runs once)
+	$effect.pre(() => {
+		if (_groupInitialized) return;
+		_groupInitialized = true;
+		const urlGroup = page.url.searchParams.get('group');
+		const serverDefault = data.initialGroup ?? data.config.ui.groupColumnOrder[0] ?? 'personal';
+		group = urlGroup && GROUP_IDS.includes(urlGroup) ? urlGroup : serverDefault;
 	});
 
 	// Map SSR data to component state (use $derived to maintain reactivity during hydration)
@@ -110,7 +117,7 @@
 		}
 
 		const pounds = minor / 100;
-		const rounded = Math.floor(pounds / 100) * 100;
+		const rounded = Math.trunc(pounds / 100) * 100;
 		return rounded.toLocaleString('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
 	}
 
@@ -230,6 +237,10 @@
 
 	function handleGroupChange(newGroup: GroupId) {
 		group = newGroup;
+		// Update URL without full navigation
+		const url = new URL(page.url);
+		url.searchParams.set('group', newGroup);
+		goto(url.toString(), { replaceState: true, noScroll: true });
 	}
 
 	// Convert SankeyFlowData to component format with colors
@@ -271,9 +282,14 @@
 	}
 
 	// Dynamic grid columns based on number of groups
-	const gridColsClass = $derived(
-		GROUP_COLUMN_ORDER.length === 2 ? '3xl:grid-cols-2' : '3xl:grid-cols-3'
-	);
+	const gridColsClass = $derived.by(() => {
+		const count = GROUP_COLUMN_ORDER.length;
+		if (count <= 1) return '';
+		if (count === 2) return '3xl:grid-cols-2';
+		if (count === 3) return '3xl:grid-cols-3';
+		if (count === 4) return '3xl:grid-cols-4';
+		return '3xl:grid-cols-[repeat(auto-fit,minmax(350px,1fr))]';
+	});
 
 	onMount(() => {
 		// Track large screen for allGroupsActive prop
@@ -284,8 +300,17 @@
 		};
 		mediaQuery.addEventListener('change', handleMediaChange);
 
+		// Track mobile for compact chart mode
+		const mobileQuery = window.matchMedia('(max-width: 640px)');
+		isMobile = mobileQuery.matches;
+		const handleMobileChange = (e: MediaQueryListEvent) => {
+			isMobile = e.matches;
+		};
+		mobileQuery.addEventListener('change', handleMobileChange);
+
 		return () => {
 			mediaQuery.removeEventListener('change', handleMediaChange);
+			mobileQuery.removeEventListener('change', handleMobileChange);
 		};
 	});
 </script>
@@ -295,6 +320,7 @@
 </svelte:head>
 
 <main class="h-svh overflow-auto box-border px-2.5 pb-2.5 flex flex-col gap-1.5">
+	<h1 class="sr-only">Financial Dashboard</h1>
 	<Header
 		activePage="dashboard"
 		activeGroup={group}
@@ -308,39 +334,41 @@
 
 	<section class="grid grid-cols-1 {gridColsClass} gap-1.5 fade-in" data-active-group={group}>
 		{#each GROUP_COLUMN_ORDER as groupId (groupId)}
-			<div class="flex gap-2 p-2.5 border border-border bg-panel" data-group={groupId}>
-				<div class="flex-1 flex flex-col gap-[2px] min-w-0">
-					<div class="text-2xs uppercase tracking-widest text-muted">Runway</div>
-					<div class="text-lg text-text flex items-center gap-1">
-						{#if groupRunway[groupId]?.isNetPositive}
-							<span class="text-success font-medium">+</span>
-						{:else if groupRunway[groupId]?.runwayMonths !== undefined}
-							{Math.floor(groupRunway[groupId]?.runwayMonths ?? 0)}mo
-						{:else}
-							—
-						{/if}
+			{#if isLargeScreen || groupId === group}
+				<div class="flex gap-2 p-2.5 border border-border bg-panel" data-group={groupId}>
+					<div class="flex-1 flex flex-col gap-[2px] min-w-0">
+						<h2 class="text-2xs uppercase tracking-widest text-muted">Runway</h2>
+						<div class="text-lg text-text flex items-center gap-1 tabular-nums">
+							{#if groupRunway[groupId]?.isNetPositive}
+								<span class="text-success font-medium">+</span>
+							{:else if groupRunway[groupId]?.runwayMonths !== undefined}
+								{Math.floor(groupRunway[groupId]?.runwayMonths ?? 0)}mo
+							{:else}
+								—
+							{/if}
+						</div>
+					</div>
+					<div class="flex-1 flex flex-col gap-[2px] min-w-0">
+						<h2 class="text-2xs uppercase tracking-widest text-muted">Last Month</h2>
+						<div class="text-lg text-text flex items-center gap-1 tabular-nums">
+							{#if get3MonthTrendPositive(groupId) === true}
+								<span class="size-1.5 shrink-0 bg-success"></span>
+							{:else if get3MonthTrendPositive(groupId) === false}
+								<span class="size-1.5 shrink-0 bg-error"></span>
+							{/if}
+							{formatMoneyRounded(getLastFullMonthNet(groupId))}
+						</div>
+					</div>
+					<div class="flex-1 flex flex-col gap-[2px] min-w-0">
+						<h2 class="text-2xs uppercase tracking-widest text-muted">Net Worth</h2>
+						<div class="text-lg text-text flex items-center gap-1 tabular-nums">{formatMoneyRounded(getGroupTotalLatestMinor(groupId))}</div>
+					</div>
+					<div class="flex-1 flex flex-col gap-[2px] min-w-0">
+						<h2 class="text-2xs uppercase tracking-widest text-muted">Med Spend</h2>
+						<div class="text-lg text-text flex items-center gap-1 tabular-nums">{formatMoneyRounded(groupRunway[groupId]?.medianExpenseMinor ?? null)}</div>
 					</div>
 				</div>
-				<div class="flex-1 flex flex-col gap-[2px] min-w-0">
-					<div class="text-2xs uppercase tracking-widest text-muted">Last Month</div>
-					<div class="text-lg text-text flex items-center gap-1">
-						{#if get3MonthTrendPositive(groupId) === true}
-							<span class="size-1.5 shrink-0 bg-success"></span>
-						{:else if get3MonthTrendPositive(groupId) === false}
-							<span class="size-1.5 shrink-0 bg-error"></span>
-						{/if}
-						{formatMoneyRounded(getLastFullMonthNet(groupId))}
-					</div>
-				</div>
-				<div class="flex-1 flex flex-col gap-[2px] min-w-0">
-					<div class="text-2xs uppercase tracking-widest text-muted">Net Worth</div>
-					<div class="text-lg text-text flex items-center gap-1">{formatMoneyRounded(getGroupTotalLatestMinor(groupId))}</div>
-				</div>
-				<div class="flex-1 flex flex-col gap-[2px] min-w-0">
-					<div class="text-2xs uppercase tracking-widest text-muted">Med Spend</div>
-					<div class="text-lg text-text flex items-center gap-1">{formatMoneyRounded(groupRunway[groupId]?.medianExpenseMinor ?? null)}</div>
-				</div>
-			</div>
+			{/if}
 		{/each}
 	</section>
 
@@ -365,7 +393,7 @@
 					{@const isUnderBuffer = checkingBalance < expenseBuffer}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 						<header class="flex items-center justify-between gap-2.5">
-							<div class="font-normal text-sm uppercase tracking-widest">Asset Allocation</div>
+							<h2 class="font-normal text-sm uppercase tracking-widest">Asset Allocation</h2>
 							<div class="text-sm font-normal flex items-center gap-1">
 								{#if isUnderBuffer}
 									<span class="size-2 bg-error rounded-full"></span>
@@ -431,7 +459,7 @@
 					{@const isUnderBuffer = totalBalance < expReserve + taxReserve}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 						<header class="flex items-center justify-between gap-2.5">
-							<div class="font-normal text-sm uppercase tracking-widest">Asset Allocation</div>
+							<h2 class="font-normal text-sm uppercase tracking-widest">Asset Allocation</h2>
 							<div class="text-sm font-normal flex items-center gap-1">
 								{#if isUnderBuffer}
 									<span class="size-2 bg-error rounded-full"></span>
@@ -485,7 +513,7 @@
 					{@const netChange = monthData.previous ? getMonthOverMonthChange(current.netMinor, monthData.previous.netMinor) : null}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 						<header class="flex items-center justify-between gap-2.5">
-							<div class="font-normal text-sm uppercase tracking-widest">Last Month</div>
+							<h2 class="font-normal text-sm uppercase tracking-widest">Last Month</h2>
 							<div class="text-xs text-muted">{current.month}</div>
 						</header>
 						<div class="grid grid-cols-3 gap-2">
@@ -523,10 +551,10 @@
 				{/if}
 
 				<!-- Monthly Cashflow Trends -->
-				<section class="border border-border bg-panel p-2.5 flex flex-col gap-2 min-h-[385px]">
+				<section class="border border-border bg-panel p-2.5 flex flex-col gap-2" style:min-height={isMobile ? '280px' : '385px'}>
 					<header class="flex items-start justify-between gap-2.5">
 						<div>
-							<div class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} cashflow</div>
+							<h2 class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} cashflow</h2>
 							<div class="text-sm mt-0.5 leading-snug uppercase tracking-wider text-muted">Income / expense / net (monthly)</div>
 						</div>
 						{#if getAnomalyMonths(groupId).count > 0}
@@ -539,7 +567,7 @@
 					</header>
 
 					{#if (groupCashflowSeries[groupId]?.length ?? 0) > 0}
-						<div class="overflow-hidden h-[325px]">
+						<div class="overflow-hidden" style:height={isMobile ? '220px' : '325px'}>
 							<SeriesChart
 								data={groupCashflowSeries[groupId] ?? []}
 								getDate={(p) => `${p.month}-01`}
@@ -581,7 +609,8 @@
 									return parts.join(' | ');
 								}}
 								timeUnit="month"
-								height={325}
+								height={isMobile ? 220 : 325}
+								compact={isMobile}
 							/>
 						</div>
 					{:else}
@@ -594,9 +623,9 @@
 				<!-- Cash Flow Distribution (Sankey) -->
 				{#if getSankeyNodes(groupId).length > 0 && getSankeyLinks(groupId).length > 0}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
-						<header class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} Distribution <span class="text-muted">[6MO MEDIAN]</span></header>
-						<div class="h-[350px]">
-							<Sankey nodes={getSankeyNodes(groupId)} links={getSankeyLinks(groupId)} {colorScheme} />
+						<h2 class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} Distribution <span class="text-muted">[6MO MEDIAN]</span></h2>
+						<div style:height={isMobile ? '280px' : '350px'}>
+							<Sankey nodes={getSankeyNodes(groupId)} links={getSankeyLinks(groupId)} {colorScheme} compact={isMobile} />
 						</div>
 					</article>
 				{/if}
@@ -604,9 +633,9 @@
 				<!-- Expense Breakdown (Treemap) -->
 				{#if getTreemapData(groupId).length > 0}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
-						<header class="font-normal text-sm uppercase tracking-widest">Expense Breakdown <span class="text-muted">[6MO MEDIAN]</span></header>
-						<div class="h-[350px]">
-							<Treemap data={getTreemapData(groupId)} {colorScheme} />
+						<h2 class="font-normal text-sm uppercase tracking-widest">Expense Breakdown <span class="text-muted">[6MO MEDIAN]</span></h2>
+						<div style:height={isMobile ? '280px' : '350px'}>
+							<Treemap data={getTreemapData(groupId)} {colorScheme} compact={isMobile} />
 						</div>
 					</article>
 				{/if}
@@ -625,33 +654,3 @@
 		{/each}
 	</section>
 </main>
-
-<style>
-	@media (max-width: 1699px) {
-		section[data-active-group] > section[data-group] {
-			display: none;
-		}
-
-		section[data-active-group='personal'] > section[data-group='personal'] {
-			display: flex;
-		}
-
-		section[data-active-group='business'] > section[data-group='business'] {
-			display: flex;
-		}
-
-		section[data-active-group='joint'] > section[data-group='joint'] {
-			display: flex;
-		}
-
-		section[data-active-group] > div[data-group] {
-			display: none;
-		}
-
-		section[data-active-group='business'] > div[data-group='business'],
-		section[data-active-group='personal'] > div[data-group='personal'],
-		section[data-active-group='joint'] > div[data-group='joint'] {
-			display: flex;
-		}
-	}
-</style>

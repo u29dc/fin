@@ -7,7 +7,7 @@ const STORAGE_KEY = 'theme';
 
 function getSystemPreference(): ResolvedTheme {
 	if (!browser) {
-		return 'dark';
+		return 'light';
 	}
 	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
@@ -16,9 +16,13 @@ function getInitialSetting(): ThemeSetting {
 	if (!browser) {
 		return 'system';
 	}
-	const stored = localStorage.getItem(STORAGE_KEY);
-	if (stored === 'light' || stored === 'dark' || stored === 'system') {
-		return stored;
+	try {
+		const stored = localStorage.getItem(STORAGE_KEY);
+		if (stored === 'light' || stored === 'dark' || stored === 'system') {
+			return stored;
+		}
+	} catch {
+		return 'system';
 	}
 	return 'system';
 }
@@ -55,10 +59,14 @@ if (browser) {
 	// Sync setting to localStorage and HTML class
 	$effect.root(() => {
 		$effect(() => {
-			if (setting === 'system') {
-				localStorage.removeItem(STORAGE_KEY);
-			} else {
-				localStorage.setItem(STORAGE_KEY, setting);
+			try {
+				if (setting === 'system') {
+					localStorage.removeItem(STORAGE_KEY);
+				} else {
+					localStorage.setItem(STORAGE_KEY, setting);
+				}
+			} catch {
+				// Ignore storage failures (e.g., private browsing)
 			}
 
 			const resolved = setting === 'system' ? systemPreference : setting;

@@ -84,20 +84,54 @@
 	const lowProjectionMap = $derived(toDateMap(lowProjection));
 	const highProjection = $derived(projectInvestmentSeries(currentContributionData, returns.high));
 	const highProjectionMap = $derived(toDateMap(highProjection));
+
+	function handleAccountTabKeydown(event: KeyboardEvent, currentIndex: number) {
+		let newIndex = currentIndex;
+
+		switch (event.key) {
+			case 'ArrowLeft':
+				newIndex = currentIndex > 0 ? currentIndex - 1 : accounts.length - 1;
+				break;
+			case 'ArrowRight':
+				newIndex = currentIndex < accounts.length - 1 ? currentIndex + 1 : 0;
+				break;
+			case 'Home':
+				newIndex = 0;
+				break;
+			case 'End':
+				newIndex = accounts.length - 1;
+				break;
+			default:
+				return;
+		}
+
+		event.preventDefault();
+		const newAccount = accounts[newIndex];
+		if (newAccount) {
+			selectedAccountId = newAccount.id;
+			// Focus the newly selected tab
+			const tablist = (event.target as HTMLElement).closest('[role="tablist"]');
+			const tabs = tablist?.querySelectorAll('[role="tab"]');
+			(tabs?.[newIndex] as HTMLElement)?.focus();
+		}
+	}
 </script>
 
 <article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
+	<h3 class="sr-only">{label}</h3>
 	<header class="flex items-center justify-between gap-2.5">
-		<div class="flex gap-1">
-			{#each accounts as account (account.id)}
+		<div class="flex gap-1" role="tablist" aria-label="{label} accounts">
+			{#each accounts as account, index (account.id)}
+				{@const isSelected = selectedAccountId === account.id}
 				<button
 					type="button"
+					role="tab"
 					class="min-h-[44px] px-2 pb-0.5 border-b text-[12px] uppercase tracking-widest cursor-pointer
-						   {selectedAccountId === account.id
-						? 'border-text text-text'
-						: 'border-transparent text-muted hover:text-text hover:border-text/50'}"
-					aria-pressed={selectedAccountId === account.id}
+						   {isSelected ? 'border-text text-text' : 'border-transparent text-muted hover:text-text hover:border-text/50'}"
+					aria-selected={isSelected}
+					tabindex={isSelected ? 0 : -1}
 					onclick={() => (selectedAccountId = account.id)}
+					onkeydown={(e) => handleAccountTabKeydown(e, index)}
 				>
 					{account.label}
 				</button>

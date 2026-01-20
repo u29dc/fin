@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 
 	import Header from '$lib/Header.svelte';
 
@@ -28,20 +30,39 @@
 	// Available groups from server config
 	const availableGroups = $derived(data.availableGroups);
 	const groupMetadata = $derived(data.groupMetadata ?? {});
+	const transactionCounts = $derived(data.transactionCounts ?? {});
+	const transactionLimit = $derived(data.transactionLimit ?? null);
 
 	// All transactions pre-fetched for each group (use $derived to maintain reactivity)
 	const allTransactions = $derived(data.transactions as Record<string, Transaction[]>);
 
-	// Default to first available group
+	// Initialize with defaults - set via effect to avoid state-referenced-locally warning
 	let group: GroupId = $state('');
 	let sortColumn: SortColumn = $state('postedAt');
-
-	$effect(() => {
-		if (!group) {
-			group = data.availableGroups[0] ?? '';
-		}
-	});
 	let sortDirection: SortDirection = $state('desc');
+	let _initialized = $state(false);
+
+	// Set initial values from URL or server data (runs once)
+	$effect.pre(() => {
+		if (_initialized) return;
+		_initialized = true;
+		const urlGroup = page.url.searchParams.get('group');
+		const urlSort = page.url.searchParams.get('sort') as SortColumn | null;
+		const urlDir = page.url.searchParams.get('dir') as SortDirection | null;
+
+		group = urlGroup ?? data.initialGroup ?? data.availableGroups[0] ?? '';
+		sortColumn = urlSort ?? data.initialSort ?? 'postedAt';
+		sortDirection = urlDir ?? data.initialDir ?? 'desc';
+	});
+
+	// Update URL when state changes
+	function updateUrl() {
+		const url = new URL(page.url);
+		url.searchParams.set('group', group);
+		url.searchParams.set('sort', sortColumn);
+		url.searchParams.set('dir', sortDirection);
+		goto(url.toString(), { replaceState: true, noScroll: true });
+	}
 
 	// Virtual scrolling state
 	let scrollContainer: HTMLElement | null = $state(null);
@@ -50,6 +71,8 @@
 
 	// Get transactions for current group
 	const transactions = $derived(allTransactions[group] ?? []);
+	const totalCount = $derived(transactionCounts[group] ?? 0);
+	const showingCount = $derived(transactions.length);
 
 	const sortedTransactions = $derived.by(() => {
 		const sorted = [...transactions];
@@ -96,6 +119,7 @@
 			scrollContainer.scrollTop = 0;
 			scrollTop = 0;
 		}
+		updateUrl();
 	}
 
 	function formatMoney(minor: number): string {
@@ -119,6 +143,7 @@
 			scrollContainer.scrollTop = 0;
 			scrollTop = 0;
 		}
+		updateUrl();
 	}
 
 	onMount(() => {
@@ -144,62 +169,58 @@
 </svelte:head>
 
 <main class="h-svh overflow-hidden box-border px-2.5 pb-2.5 flex flex-col gap-2">
+	<h1 class="sr-only">Transactions</h1>
 	<Header activePage="transactions" activeGroup={group} onGroupChange={handleGroupChange} availableGroups={availableGroups} {groupMetadata} loading={false} error={null} />
 
-	<section class="border border-border bg-panel flex-1 flex flex-col min-h-0 fade-in">
-		<!-- Fixed header -->
-		<div class="border-b border-border bg-panel flex-shrink-0">
-			<div class="flex text-sm">
-				<div
-					class="w-28 flex-shrink-0 text-left p-2 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors select-none"
-					onclick={() => handleSort('postedAt')}
-					onkeydown={(e) => e.key === 'Enter' && handleSort('postedAt')}
-					role="button"
-					tabindex="0"
-				>
-					Date
-					{#if sortColumn === 'postedAt'}
-						<span class="ml-1">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
-					{/if}
-				</div>
-				<div
-					class="flex-1 min-w-0 text-left p-2 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors select-none"
-					onclick={() => handleSort('cleanDescription')}
-					onkeydown={(e) => e.key === 'Enter' && handleSort('cleanDescription')}
-					role="button"
-					tabindex="0"
-				>
-					Title
-					{#if sortColumn === 'cleanDescription'}
-						<span class="ml-1">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
-					{/if}
-				</div>
-				<div
-					class="flex-1 min-w-0 text-left p-2 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors select-none"
-					onclick={() => handleSort('pairAccountId')}
-					onkeydown={(e) => e.key === 'Enter' && handleSort('pairAccountId')}
-					role="button"
-					tabindex="0"
-				>
-					Pair
-					{#if sortColumn === 'pairAccountId'}
-						<span class="ml-1">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
-					{/if}
-				</div>
-				<div
-					class="w-28 flex-shrink-0 text-right p-2 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors select-none"
-					onclick={() => handleSort('amountMinor')}
-					onkeydown={(e) => e.key === 'Enter' && handleSort('amountMinor')}
-					role="button"
-					tabindex="0"
-				>
-					Amount
-					{#if sortColumn === 'amountMinor'}
-						<span class="ml-1">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
-					{/if}
+		<section class="border border-border bg-panel flex-1 flex flex-col min-h-0 fade-in">
+			<h2 class="px-2 py-1 text-2xs uppercase tracking-widest text-muted border-b border-border">
+				Showing {showingCount} of {totalCount} transactions{transactionLimit ? ` (limit ${transactionLimit.toLocaleString('en-GB')})` : ''}
+			</h2>
+			<!-- Fixed header -->
+			<div class="border-b border-border bg-panel flex-shrink-0">
+				<div class="flex text-sm">
+					<button
+						type="button"
+						class="min-h-[44px] w-28 flex-shrink-0 text-left p-2 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors bg-transparent border-0 appearance-none"
+						onclick={() => handleSort('postedAt')}
+					>
+						Date
+						{#if sortColumn === 'postedAt'}
+							<span class="ml-1">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="min-h-[44px] flex-1 min-w-0 text-left p-2 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors bg-transparent border-0 appearance-none"
+						onclick={() => handleSort('cleanDescription')}
+					>
+						Title
+						{#if sortColumn === 'cleanDescription'}
+							<span class="ml-1">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="min-h-[44px] flex-1 min-w-0 text-left p-2 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors bg-transparent border-0 appearance-none"
+						onclick={() => handleSort('pairAccountId')}
+					>
+						Pair
+						{#if sortColumn === 'pairAccountId'}
+							<span class="ml-1">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="min-h-[44px] w-28 flex-shrink-0 text-right p-2 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors bg-transparent border-0 appearance-none"
+						onclick={() => handleSort('amountMinor')}
+					>
+						Amount
+						{#if sortColumn === 'amountMinor'}
+							<span class="ml-1">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
+						{/if}
+					</button>
 				</div>
 			</div>
-		</div>
 
 		<!-- Virtual scrolling body -->
 		<div
@@ -216,7 +237,7 @@
 					<div style="position: absolute; top: {offsetTop}px; left: 0; right: 0;">
 						{#each visibleTransactions as txn (`${txn.id}-${txn.chartAccountId}`)}
 							<div
-								class="flex text-sm border-b border-border-subtle hover:bg-active-bg transition-colors"
+								class="flex text-sm border-b border-border-subtle"
 								style="height: {ROW_HEIGHT}px;"
 							>
 								<div class="w-28 flex-shrink-0 p-2 text-muted tabular-nums whitespace-nowrap flex items-center">
@@ -225,8 +246,8 @@
 								<div class="flex-1 min-w-0 p-2 text-text truncate flex items-center">
 									{txn.cleanDescription}
 								</div>
-								<div class="flex-1 min-w-0 p-2 text-muted truncate flex items-center" title={txn.pairAccountId}>
-									{txn.pairAccountId}
+								<div class="flex-1 min-w-0 p-2 text-muted truncate flex items-center" title={txn.pairAccountId || '—'}>
+									{txn.pairAccountId || '—'}
 								</div>
 								<div
 									class="w-28 flex-shrink-0 p-2 text-right tabular-nums whitespace-nowrap flex items-center justify-end"

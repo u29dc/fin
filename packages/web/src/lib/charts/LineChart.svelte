@@ -20,7 +20,6 @@
 		height?: number;
 		compact?: boolean;
 		lineColor?: string;
-		downsample?: boolean;
 		curve?: boolean;
 		showRawOverlay?: boolean;
 	};
@@ -34,7 +33,6 @@
 		height = 220,
 		compact = false,
 		lineColor = '#e6e6e8',
-		downsample = true,
 		curve = true,
 		showRawOverlay = true,
 	}: Props = $props();

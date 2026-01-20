@@ -81,36 +81,36 @@ export const CHART_COLORS = {
 	},
 } as const;
 
-// Semantic colors for income/expense visualizations (matches CSS variables)
+// Semantic colors for income/expense visualizations (color-blind safe: teal/orange)
 export const SEMANTIC_COLORS = {
 	light: {
-		income: '#16a34a', // green-600
-		incomeMuted: 'rgba(22, 163, 74, 0.6)',
-		incomeFill: 'rgba(22, 163, 74, 0.28)',
-		incomeFillFaint: 'rgba(22, 163, 74, 0.04)',
-		incomeFillMuted: 'rgba(22, 163, 74, 0.12)',
-		incomeFillMutedFaint: 'rgba(22, 163, 74, 0.02)',
-		expense: '#dc2626', // red-600
-		expenseMuted: 'rgba(220, 38, 38, 0.6)',
-		expenseFill: 'rgba(220, 38, 38, 0.28)',
-		expenseFillFaint: 'rgba(220, 38, 38, 0.04)',
-		expenseFillMuted: 'rgba(220, 38, 38, 0.12)',
-		expenseFillMutedFaint: 'rgba(220, 38, 38, 0.02)',
+		income: '#0d9488', // teal-600
+		incomeMuted: 'rgba(13, 148, 136, 0.6)',
+		incomeFill: 'rgba(13, 148, 136, 0.28)',
+		incomeFillFaint: 'rgba(13, 148, 136, 0.04)',
+		incomeFillMuted: 'rgba(13, 148, 136, 0.12)',
+		incomeFillMutedFaint: 'rgba(13, 148, 136, 0.02)',
+		expense: '#ea580c', // orange-600
+		expenseMuted: 'rgba(234, 88, 12, 0.6)',
+		expenseFill: 'rgba(234, 88, 12, 0.28)',
+		expenseFillFaint: 'rgba(234, 88, 12, 0.04)',
+		expenseFillMuted: 'rgba(234, 88, 12, 0.12)',
+		expenseFillMutedFaint: 'rgba(234, 88, 12, 0.02)',
 		warning: 'rgba(217, 119, 6, 0.8)', // amber-700
 	},
 	dark: {
-		income: '#4ade80', // green-400
-		incomeMuted: 'rgba(74, 222, 128, 0.6)',
-		incomeFill: 'rgba(74, 222, 128, 0.28)',
-		incomeFillFaint: 'rgba(74, 222, 128, 0.04)',
-		incomeFillMuted: 'rgba(74, 222, 128, 0.12)',
-		incomeFillMutedFaint: 'rgba(74, 222, 128, 0.02)',
-		expense: '#ff6b6b', // coral red (matches CSS --error)
-		expenseMuted: 'rgba(255, 107, 107, 0.6)',
-		expenseFill: 'rgba(255, 107, 107, 0.28)',
-		expenseFillFaint: 'rgba(255, 107, 107, 0.04)',
-		expenseFillMuted: 'rgba(255, 107, 107, 0.12)',
-		expenseFillMutedFaint: 'rgba(255, 107, 107, 0.02)',
+		income: '#2dd4bf', // teal-400
+		incomeMuted: 'rgba(45, 212, 191, 0.6)',
+		incomeFill: 'rgba(45, 212, 191, 0.28)',
+		incomeFillFaint: 'rgba(45, 212, 191, 0.04)',
+		incomeFillMuted: 'rgba(45, 212, 191, 0.12)',
+		incomeFillMutedFaint: 'rgba(45, 212, 191, 0.02)',
+		expense: '#fb923c', // orange-400
+		expenseMuted: 'rgba(251, 146, 60, 0.6)',
+		expenseFill: 'rgba(251, 146, 60, 0.28)',
+		expenseFillFaint: 'rgba(251, 146, 60, 0.04)',
+		expenseFillMuted: 'rgba(251, 146, 60, 0.12)',
+		expenseFillMutedFaint: 'rgba(251, 146, 60, 0.02)',
 		warning: 'rgba(240, 180, 41, 0.8)', // amber-400
 	},
 } as const;
