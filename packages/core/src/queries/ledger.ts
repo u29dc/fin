@@ -1691,6 +1691,126 @@ export function getCashFlowDataMedian(db: Database, chartAccountIds: string[], o
 }
 
 // ============================================
+// PURE EXPENSES CASHFLOW (QUERIES EXPENSE/INCOME ACCOUNTS DIRECTLY)
+// ============================================
+
+/**
+ * Get monthly cashflow by querying expense/income account postings directly.
+ * This gives "true" expenses/income by looking at actual Expenses:* and Income:* postings,
+ * rather than inferring from asset account flows.
+ *
+ * This excludes:
+ * - Internal transfers (Personal → Joint, Business → Personal)
+ * - Dividend payments (recorded as Equity/Income, not Expense)
+ * - Round-ups and savings allocations (Equity:Transfers)
+ * - Investment transfers (Asset → Asset)
+ *
+ * Filters to entries that have a posting to one of the specified asset accounts (for group filtering).
+ */
+export function getPureMonthlyCashflowSeries(db: Database, chartAccountIds: string[], options: LedgerCashflowSeriesOptions = {}): LedgerMonthlyCashflowPoint[] {
+	if (chartAccountIds.length === 0) {
+		return [];
+	}
+
+	const { from, to, limit = 120 } = options;
+
+	// Build OR conditions for matching controlled asset accounts
+	const orConditions: string[] = [];
+	const matchParams: string[] = [];
+	for (const accountId of chartAccountIds) {
+		orConditions.push('(asset_p.account_id = ? OR asset_p.account_id LIKE ?)');
+		matchParams.push(accountId, `${accountId}:%`);
+	}
+
+	// Build date conditions
+	const dateConditions: string[] = [];
+	const dateParams: string[] = [];
+	if (from) {
+		dateConditions.push('je.posted_at >= ?');
+		dateParams.push(`${from}T00:00:00`);
+	}
+	if (to) {
+		dateConditions.push('je.posted_at <= ?');
+		dateParams.push(`${to}T23:59:59`);
+	}
+	const dateWhereClause = dateConditions.length > 0 ? `AND ${dateConditions.join(' AND ')}` : '';
+
+	// Query: Get monthly income/expense by looking at Income:*/Expense:* account postings
+	// Filter: entry must have a posting to one of the group's asset accounts
+	const sql = `
+		SELECT
+			strftime('%Y-%m', je.posted_at) AS month,
+			SUM(CASE WHEN coa.account_type = 'income' THEN -p.amount_minor ELSE 0 END) AS income_minor,
+			SUM(CASE WHEN coa.account_type = 'expense' THEN p.amount_minor ELSE 0 END) AS expense_minor
+		FROM postings p
+		JOIN journal_entries je ON p.journal_entry_id = je.id
+		JOIN chart_of_accounts coa ON p.account_id = coa.id
+		WHERE coa.account_type IN ('income', 'expense')
+			AND EXISTS (
+				SELECT 1 FROM postings asset_p
+				WHERE asset_p.journal_entry_id = p.journal_entry_id
+					AND (${orConditions.join(' OR ')})
+			)
+			${dateWhereClause}
+		GROUP BY month
+		ORDER BY month ASC
+		LIMIT ?
+	`;
+
+	const params: (string | number)[] = [...matchParams, ...dateParams, limit];
+
+	type RawRow = { month: string; income_minor: number; expense_minor: number };
+	const rows = db.query<RawRow, (string | number)[]>(sql).all(...params);
+
+	type BasePoint = {
+		month: string;
+		incomeMinor: number;
+		expenseMinor: number;
+		netMinor: number;
+		savingsRatePct: number | null;
+	};
+
+	// First pass: create base points
+	const basePoints: BasePoint[] = rows.map((row) => {
+		const netMinor = row.income_minor - row.expense_minor;
+		const savingsRatePct = row.income_minor > 0 ? Math.round((netMinor / row.income_minor) * 1000) / 10 : null;
+		return {
+			month: row.month,
+			incomeMinor: row.income_minor,
+			expenseMinor: row.expense_minor,
+			netMinor,
+			savingsRatePct,
+		};
+	});
+
+	// Second pass: calculate rolling 6-month median expense and deviation
+	const ROLLING_WINDOW = 6;
+	return basePoints.map((point, i) => {
+		const start = Math.max(0, i - ROLLING_WINDOW);
+		const prevExpenses = basePoints.slice(start, i).map((p) => p.expenseMinor);
+
+		let rollingMedianExpenseMinor: number | null = null;
+		let expenseDeviationRatio: number | null = null;
+
+		if (prevExpenses.length >= 3) {
+			const sorted = [...prevExpenses].sort((a, b) => a - b);
+			const mid = Math.floor(sorted.length / 2);
+			rollingMedianExpenseMinor = sorted.length % 2 === 1 ? (sorted[mid] ?? 0) : Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
+
+			if (rollingMedianExpenseMinor !== null && rollingMedianExpenseMinor > 0) {
+				expenseDeviationRatio = Math.round((point.expenseMinor / rollingMedianExpenseMinor) * 100) / 100;
+			}
+		}
+
+		return {
+			...point,
+			rollingMedianExpenseMinor,
+			expenseDeviationRatio,
+		};
+	});
+}
+
+// ============================================
 // CONSOLIDATED CASHFLOW (EXCLUDES INTERNAL TRANSFERS)
 // ============================================
 

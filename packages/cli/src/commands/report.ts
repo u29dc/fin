@@ -12,6 +12,7 @@ import {
 	getGroupDailyReserveBreakdownSeries,
 	getGroupDailyRunwaySeries,
 	getGroupMonthlyCashflowSeries,
+	getGroupPureMonthlyCashflowSeries,
 	isGroupId,
 } from 'core';
 
@@ -75,6 +76,7 @@ const cashflow = defineCommand({
 		group: groupArg,
 		months: { type: 'string', description: 'Number of months', default: '12' },
 		from: { type: 'string', description: 'Start month (YYYY-MM)' },
+		expenses: { type: 'boolean', description: 'Show true expenses only (exclude transfers, dividends, round-ups)', default: false },
 		format: formatArg,
 		db: dbArg,
 	},
@@ -84,11 +86,13 @@ const cashflow = defineCommand({
 		const months = Number.parseInt(args.months ?? '12', 10);
 		const from = args.from;
 		const dbPath = args.db;
+		const pureExpenses = args.expenses;
 
 		const db = getReadonlyDb(dbPath ? { options: new Map([['db', dbPath]]) } : undefined);
 		const options: { from?: string; limit: number } = { limit: months };
 		if (from) options.from = from;
-		const series = getGroupMonthlyCashflowSeries(db, args.group, options);
+
+		const series = pureExpenses ? getGroupPureMonthlyCashflowSeries(db, args.group, options) : getGroupMonthlyCashflowSeries(db, args.group, options);
 
 		const rows: CashflowRow[] = series.map((p) => ({
 			month: p.month,
@@ -102,7 +106,8 @@ const cashflow = defineCommand({
 		const totalIncome = rows.reduce((sum, r) => sum + r.income, 0);
 		const totalExpenses = rows.reduce((sum, r) => sum + r.expenses, 0);
 		const totalNet = totalIncome - totalExpenses;
-		const summaryText = `${formatCount(rows.length, 'month')} | Net: ${formatAmount(totalNet)}`;
+		const modeLabel = pureExpenses ? ' (pure expenses)' : '';
+		const summaryText = `${formatCount(rows.length, 'month')}${modeLabel} | Net: ${formatAmount(totalNet)}`;
 
 		renderOutput(rows, CASHFLOW_COLUMNS, format, summaryText);
 	},

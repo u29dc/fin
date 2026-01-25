@@ -16,6 +16,7 @@ import {
 	getLedgerDailyBalanceSeries,
 	getLedgerLatestBalances,
 	getLedgerMonthlyCashflowSeries,
+	getPureMonthlyCashflowSeries,
 	type SankeyFlowData,
 } from './ledger';
 import { applyScenarioToCashflowSeries, getScenarioMonthlyFlows, type ScenarioConfig, type ScenarioToggles } from './metrics';
@@ -206,6 +207,25 @@ export function getGroupMonthlyCashflowSeriesWithScenario(
 
 	const flows = getScenarioMonthlyFlows(db, scenarioConfig);
 	return applyScenarioToCashflowSeries(base, groupId, scenario, flows);
+}
+
+/**
+ * Get "pure" monthly cashflow by querying Expense/Income accounts directly.
+ * This excludes internal transfers, dividend payments, round-ups, and investment transfers.
+ * Shows only money that actually left/entered the system as real expenses/income.
+ */
+export function getGroupPureMonthlyCashflowSeries(db: Database, groupId: GroupId, options: CashflowSeriesOptions = {}): MonthlyCashflowPoint[] {
+	const { from, to, limit = 120 } = options;
+	const chartAccountIds = getGroupChartAccountIds(groupId);
+
+	if (chartAccountIds.length === 0) {
+		return [];
+	}
+
+	const ledgerOptions: { from?: string; to?: string; limit?: number } = { limit };
+	if (from) ledgerOptions.from = from;
+	if (to) ledgerOptions.to = to;
+	return getPureMonthlyCashflowSeries(db, chartAccountIds, ledgerOptions);
 }
 
 // ============================================
