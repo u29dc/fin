@@ -33,42 +33,10 @@ function generateId(prefix: string): string {
 	return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
-function isValidTransferCandidate(txn: CanonicalTransaction, matched: Set<string>): boolean {
-	if (matched.has(txn.id)) return false;
-	// Only consider significant amounts (>= 1 GBP = 100 pence)
-	if (Math.abs(txn.amountMinor) < 100) return false;
-	return true;
-}
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-function isMatchingTransfer(txn: CanonicalTransaction, candidate: CanonicalTransaction, matched: Set<string>, maxDays: number): boolean {
-	if (matched.has(candidate.id)) return false;
-	if (txn.amountMinor + candidate.amountMinor !== 0) return false;
-	if (txn.chartAccountId === candidate.chartAccountId) return false;
-
-	const txnDate = new Date(txn.postedAt);
-	const candidateDate = new Date(candidate.postedAt);
-	const daysDiff = Math.abs(txnDate.getTime() - candidateDate.getTime()) / (1000 * 60 * 60 * 24);
-	return daysDiff <= maxDays;
-}
-
-function findMatchingTransfer(txn: CanonicalTransaction, candidates: CanonicalTransaction[], startIndex: number, matched: Set<string>, maxDays: number): CanonicalTransaction | null {
-	for (let j = startIndex; j < candidates.length; j++) {
-		const candidate = candidates[j];
-		if (candidate && isMatchingTransfer(txn, candidate, matched, maxDays)) {
-			return candidate;
-		}
-	}
-	return null;
-}
-
-function findOppositeAmountTransaction(txn: CanonicalTransaction, candidates: CanonicalTransaction[], matched: Set<string>): CanonicalTransaction | null {
-	for (const candidate of candidates) {
-		if (matched.has(candidate.id)) continue;
-		if (txn.amountMinor + candidate.amountMinor !== 0) continue;
-		if (txn.chartAccountId === candidate.chartAccountId) continue;
-		return candidate;
-	}
-	return null;
+function daysBetween(date1: string, date2: string): number {
+	return Math.abs(new Date(date1).getTime() - new Date(date2).getTime()) / MS_PER_DAY;
 }
 
 function createTransferPair(txn: CanonicalTransaction, candidate: CanonicalTransaction): TransferPair {
@@ -78,28 +46,78 @@ function createTransferPair(txn: CanonicalTransaction, candidate: CanonicalTrans
 	};
 }
 
-function matchTransfersByTimeWindow(sorted: CanonicalTransaction[], matched: Set<string>, transfers: TransferPair[], maxDays: number): void {
-	for (let i = 0; i < sorted.length; i++) {
-		const txn = sorted[i];
-		if (!txn || !isValidTransferCandidate(txn, matched)) continue;
-		const candidate = findMatchingTransfer(txn, sorted, i + 1, matched, maxDays);
-		if (!candidate) continue;
-		transfers.push(createTransferPair(txn, candidate));
-		matched.add(txn.id);
-		matched.add(candidate.id);
+/**
+ * Build an index of transactions by amount for O(1) lookup of opposite amounts.
+ */
+function buildAmountIndex(transactions: CanonicalTransaction[]): Map<number, CanonicalTransaction[]> {
+	const index = new Map<number, CanonicalTransaction[]>();
+	for (const txn of transactions) {
+		if (Math.abs(txn.amountMinor) < 100) continue;
+		const bucket = index.get(txn.amountMinor);
+		if (bucket) {
+			bucket.push(txn);
+		} else {
+			index.set(txn.amountMinor, [txn]);
+		}
+	}
+	return index;
+}
+
+/**
+ * Check if candidate is a valid transfer match for txn.
+ */
+function isValidTransferMatch(txn: CanonicalTransaction, candidate: CanonicalTransaction, matched: Set<string>, maxDays: number | null): boolean {
+	if (matched.has(candidate.id)) return false;
+	if (txn.chartAccountId === candidate.chartAccountId) return false;
+	if (maxDays !== null) {
+		const days = daysBetween(txn.postedAt, candidate.postedAt);
+		if (!Number.isFinite(days) || days > maxDays) return false;
+	}
+	return true;
+}
+
+/**
+ * Find and record a matching transfer from candidates.
+ */
+function findAndRecordMatch(txn: CanonicalTransaction, candidates: CanonicalTransaction[], matched: Set<string>, transfers: TransferPair[], maxDays: number | null): boolean {
+	for (const candidate of candidates) {
+		if (isValidTransferMatch(txn, candidate, matched, maxDays)) {
+			transfers.push(createTransferPair(txn, candidate));
+			matched.add(txn.id);
+			matched.add(candidate.id);
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Match transfers using amount index to reduce scanning for typical distributions.
+ * Average case improves from O(n^2) to O(n*k) where k = bucket size.
+ */
+function matchTransfersByTimeWindowWithIndex(sorted: CanonicalTransaction[], matched: Set<string>, transfers: TransferPair[], maxDays: number, amountIndex: Map<number, CanonicalTransaction[]>): void {
+	for (const txn of sorted) {
+		if (matched.has(txn.id) || Math.abs(txn.amountMinor) < 100) continue;
+		const candidates = amountIndex.get(-txn.amountMinor);
+		if (candidates) {
+			findAndRecordMatch(txn, candidates, matched, transfers, maxDays);
+		}
 	}
 }
 
-function matchTransfersByCategoryFallback(sorted: CanonicalTransaction[], matched: Set<string>, transfers: TransferPair[]): void {
+/**
+ * Fallback matching for transactions explicitly categorized as transfers.
+ */
+function matchTransfersByCategoryFallback(sorted: CanonicalTransaction[], matched: Set<string>, transfers: TransferPair[], amountIndex: Map<number, CanonicalTransaction[]>): void {
 	for (const txn of sorted) {
 		if (matched.has(txn.id)) continue;
-		if (!isValidTransferCandidate(txn, matched)) continue;
+		if (Math.abs(txn.amountMinor) < 100) continue;
 		if (txn.category?.toLowerCase() !== 'transfer') continue;
-		const candidate = findOppositeAmountTransaction(txn, sorted, matched);
-		if (!candidate) continue;
-		transfers.push(createTransferPair(txn, candidate));
-		matched.add(txn.id);
-		matched.add(candidate.id);
+
+		const candidates = amountIndex.get(-txn.amountMinor);
+		if (candidates) {
+			findAndRecordMatch(txn, candidates, matched, transfers, null);
+		}
 	}
 }
 
@@ -113,10 +131,11 @@ function detectTransferPairsInBatch(
 	const transfers: TransferPair[] = [];
 	const matched = new Set<string>();
 	const sorted = [...transactions].sort((a, b) => a.postedAt.localeCompare(b.postedAt));
+	const amountIndex = buildAmountIndex(sorted);
 
-	matchTransfersByTimeWindow(sorted, matched, transfers, options.maxTransferDaysDifference);
+	matchTransfersByTimeWindowWithIndex(sorted, matched, transfers, options.maxTransferDaysDifference, amountIndex);
 	if (options.enableCategoryFallback) {
-		matchTransfersByCategoryFallback(sorted, matched, transfers);
+		matchTransfersByCategoryFallback(sorted, matched, transfers, amountIndex);
 	}
 
 	const nonTransfers = sorted.filter((t) => !matched.has(t.id));

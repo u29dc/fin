@@ -3,6 +3,12 @@
  * All amounts are stored as minor units (pence) and displayed as GBP.
  */
 
+// Cached formatter - created once, reused for all calls
+const gbpFormatter = new Intl.NumberFormat('en-GB', {
+	minimumFractionDigits: 2,
+	maximumFractionDigits: 2,
+});
+
 /**
  * Format a minor unit amount (pence) as GBP string.
  * Examples: 123456 -> "1,234.56", -50000 -> "-500.00"
@@ -12,10 +18,7 @@ export function formatAmount(minor: number | null | undefined): string {
 
 	const pounds = minor / 100;
 	const abs = Math.abs(pounds);
-	const formatted = abs.toLocaleString('en-GB', {
-		minimumFractionDigits: 2,
-		maximumFractionDigits: 2,
-	});
+	const formatted = gbpFormatter.format(abs);
 
 	return pounds < 0 ? `-${formatted}` : formatted;
 }
@@ -29,10 +32,7 @@ export function formatAmountWithSymbol(minor: number | null | undefined): string
 
 	const pounds = minor / 100;
 	const abs = Math.abs(pounds);
-	const formatted = abs.toLocaleString('en-GB', {
-		minimumFractionDigits: 2,
-		maximumFractionDigits: 2,
-	});
+	const formatted = gbpFormatter.format(abs);
 
 	return pounds < 0 ? `-£${formatted}` : `£${formatted}`;
 }
