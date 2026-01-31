@@ -1,0 +1,36 @@
+package.json
+  785ec2ca4b46680d 35-37,39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.40",
+  "base_commit_sha": "3e4d7728a714c4190dfa839fb0a3e9ed74a1fceb",
+  "prompts": {
+    "785ec2ca4b46680d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5160f1a5-172b-4a1b-b7fe-e2a7fc18d54d",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 2,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    },
+    "91473ba6da27e0ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3aadb3e7-242a-4cf9-ad98-6f21fdbd2f62",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 48,
+      "total_deletions": 44,
+      "accepted_lines": 48,
+      "overriden_lines": 0
+    }
+  }
+}
