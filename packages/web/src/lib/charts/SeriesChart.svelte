@@ -86,7 +86,7 @@
 					color: asRgba(def.color, 0.16),
 					lineWidth: 1,
 					smooth: false,
-					lineStyle: def.lineStyle,
+					...(def.lineStyle !== undefined ? { lineStyle: def.lineStyle } : {}),
 					showSymbol: false,
 				});
 			}
@@ -98,7 +98,7 @@
 				color: def.color,
 				lineWidth: def.lineWidth ?? (compact ? 1 : 2),
 				smooth: curve,
-				lineStyle: def.lineStyle,
+				...(def.lineStyle !== undefined ? { lineStyle: def.lineStyle } : {}),
 				showSymbol: false,
 			});
 		}
@@ -106,7 +106,7 @@
 		// Convert thresholds to markLines
 		const markLines: MarkLineItem[] = thresholds.map((t) => ({
 			yAxis: t.value,
-			name: t.label,
+			...(t.label !== undefined ? { name: t.label } : {}),
 			label: {
 				formatter: t.label ?? '',
 				position: 'end' as const,

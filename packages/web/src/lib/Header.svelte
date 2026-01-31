@@ -127,11 +127,12 @@
 
 	<!-- Center: Group Tabs -->
 	<nav class="absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5" aria-label="Account group">
-		<div role="tablist" aria-label="Account groups" class="flex items-center gap-0.5">
+		<div role="tablist" tabindex="0" aria-label="Account groups" class="flex items-center gap-0.5">
 			{#each availableGroups as groupId, index (groupId)}
-				{@const isActive = allGroupsActive || activeGroup === groupId}
-				{@const Icon = getGroupIcon(groupId)}
-				{@const label = getGroupLabel(groupId)}
+				{@const gid = groupId!}
+				{@const isActive = allGroupsActive || activeGroup === gid}
+				{@const Icon = getGroupIcon(gid)}
+				{@const label = getGroupLabel(gid)}
 				<button
 					type="button"
 					role="tab"
@@ -144,7 +145,7 @@
 					aria-selected={isActive}
 					tabindex={isActive ? 0 : -1}
 					aria-label={label}
-					onclick={() => onGroupChange(groupId)}
+					onclick={() => onGroupChange(gid)}
 					onkeydown={(e) => handleGroupTabKeydown(e, index)}
 				>
 					<Icon class="size-4 md:hidden" aria-hidden="true" />

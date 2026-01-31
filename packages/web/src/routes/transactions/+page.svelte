@@ -235,26 +235,27 @@
 				<div style="height: {totalHeight}px; position: relative;">
 					<!-- Visible rows positioned absolutely -->
 					<div style="position: absolute; top: {offsetTop}px; left: 0; right: 0;">
-						{#each visibleTransactions as txn (`${txn.id}-${txn.chartAccountId}`)}
+						{#each visibleTransactions as txn (`${txn?.id}-${txn?.chartAccountId}`)}
+							{@const t = txn!}
 							<div
 								class="flex text-sm border-b border-border-subtle"
 								style="height: {ROW_HEIGHT}px;"
 							>
 								<div class="w-28 flex-shrink-0 p-2 text-muted tabular-nums whitespace-nowrap flex items-center">
-									{formatDate(txn.postedAt)}
+									{formatDate(t.postedAt)}
 								</div>
 								<div class="flex-1 min-w-0 p-2 text-text truncate flex items-center">
-									{txn.cleanDescription}
+									{t.cleanDescription}
 								</div>
-								<div class="flex-1 min-w-0 p-2 text-muted truncate flex items-center" title={txn.pairAccountId || '—'}>
-									{txn.pairAccountId || '—'}
+								<div class="flex-1 min-w-0 p-2 text-muted truncate flex items-center" title={t.pairAccountId || '—'}>
+									{t.pairAccountId || '—'}
 								</div>
 								<div
 									class="w-28 flex-shrink-0 p-2 text-right tabular-nums whitespace-nowrap flex items-center justify-end"
-									class:text-success={txn.amountMinor > 0}
-									class:text-error={txn.amountMinor < 0}
+									class:text-success={t.amountMinor > 0}
+									class:text-error={t.amountMinor < 0}
 								>
-									{formatMoney(txn.amountMinor)}
+									{formatMoney(t.amountMinor)}
 								</div>
 							</div>
 						{/each}

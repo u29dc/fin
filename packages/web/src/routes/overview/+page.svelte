@@ -127,7 +127,7 @@
 		<div class="flex-1 min-h-0 overflow-hidden" bind:clientHeight={overviewChartHeight}>
 			<SeriesChart
 				data={mergedSeries}
-				getDate={(p) => p.date}
+				getDate={(p: CashAssetsPoint) => p.date}
 				series={seriesDefinitions}
 				formatHover={formatHover}
 				height={overviewChartHeight}
@@ -155,8 +155,8 @@
 			<ProjectionChart
 				currentBurn={currentBurnProjection}
 				minimumBurn={minimumBurnProjection}
-				threshold={projection.thresholdMajor}
-				warningLine={projection.warningLineMajor}
+				{...(projection.thresholdMajor !== undefined ? { threshold: projection.thresholdMajor } : {})}
+				{...(projection.warningLineMajor !== undefined ? { warningLine: projection.warningLineMajor } : {})}
 				height={projectionChartHeight}
 				compact={isMobile}
 			/>

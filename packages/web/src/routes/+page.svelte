@@ -188,7 +188,7 @@
 		if (!series || series.length < 2) {
 			return null;
 		}
-		return series[series.length - 2].netMinor;
+		return series[series.length - 2]!.netMinor;
 	}
 
 	function get3MonthTrendPositive(groupId: GroupId): boolean | null {
@@ -200,7 +200,7 @@
 		if (last3.length === 0) {
 			return null;
 		}
-		const avgNet = last3.reduce((sum, p) => sum + p.netMinor, 0) / last3.length;
+		const avgNet = last3.reduce((sum: number, p: CashflowPoint) => sum + p.netMinor, 0) / last3.length;
 		return avgNet > 0;
 	}
 
@@ -268,7 +268,7 @@
 		return {
 			name: node.name,
 			value: node.totalMinor,
-			children: node.children.length > 0 ? node.children.map(nodeToTreemapItem) : undefined,
+			...(node.children.length > 0 ? { children: node.children.map(nodeToTreemapItem) } : {}),
 		};
 	}
 
@@ -446,8 +446,9 @@
 							{/if}
 						</div>
 					</article>
-				{:else if groupReserveBreakdown[groupId].length > 0}
-					{@const latestReserve = groupReserveBreakdown[groupId][groupReserveBreakdown[groupId].length - 1]}
+				{:else if (groupReserveBreakdown[groupId]?.length ?? 0) > 0}
+					{@const breakdown = groupReserveBreakdown[groupId]!}
+					{@const latestReserve = breakdown[breakdown.length - 1]}
 					{@const totalBalance = latestReserve?.balanceMinor ?? 0}
 					{@const taxReserve = latestReserve?.taxReserveMinor ?? 0}
 					{@const expReserve = latestReserve?.expenseReserveMinor ?? 0}
@@ -570,26 +571,26 @@
 						<div class="overflow-hidden" style:height={isMobile ? '220px' : '325px'}>
 							<SeriesChart
 								data={groupCashflowSeries[groupId] ?? []}
-								getDate={(p) => `${p.month}-01`}
+								getDate={(p: CashflowPoint) => `${p.month}-01`}
 								series={[
 									{
 										key: 'income',
 										color: SEMANTIC_COLORS[colorScheme].income,
-										getValue: (p) => p.incomeMinor / 100,
+										getValue: (p: CashflowPoint) => p.incomeMinor / 100,
 									},
 									{
 										key: 'expense',
 										color: SEMANTIC_COLORS[colorScheme].expense,
 										lineStyle: 'dashed',
-										getValue: (p) => p.expenseMinor / 100,
+										getValue: (p: CashflowPoint) => p.expenseMinor / 100,
 									},
 									{
 										key: 'net',
 										color: lineColors.primary,
-										getValue: (p) => p.netMinor / 100,
+										getValue: (p: CashflowPoint) => p.netMinor / 100,
 									},
 								]}
-								formatHover={(p) => {
+								formatHover={(p: CashflowPoint) => {
 									const parts = [];
 									parts.push(`In ${moneyFormatter.format(p.incomeMinor / 100)}`);
 									parts.push(`Out ${moneyFormatter.format(p.expenseMinor / 100)}`);

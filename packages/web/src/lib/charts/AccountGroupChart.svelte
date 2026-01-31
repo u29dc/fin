@@ -120,9 +120,10 @@
 <article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 	<h3 class="sr-only">{label}</h3>
 	<header class="flex items-center justify-between gap-2.5">
-		<div class="flex gap-1" role="tablist" aria-label="{label} accounts">
-			{#each accounts as account, index (account.id)}
-				{@const isSelected = selectedAccountId === account.id}
+		<div class="flex gap-1" role="tablist" tabindex="0" aria-label="{label} accounts">
+			{#each accounts as account, index (account!.id)}
+				{@const acc = account!}
+				{@const isSelected = selectedAccountId === acc.id}
 				<button
 					type="button"
 					role="tab"
@@ -130,10 +131,10 @@
 						   {isSelected ? 'border-text text-text' : 'border-transparent text-muted hover:text-text hover:border-text/50'}"
 					aria-selected={isSelected}
 					tabindex={isSelected ? 0 : -1}
-					onclick={() => (selectedAccountId = account.id)}
+					onclick={() => (selectedAccountId = acc.id)}
 					onkeydown={(e) => handleAccountTabKeydown(e, index)}
 				>
-					{account.label}
+					{acc.label}
 				</button>
 			{/each}
 		</div>
@@ -145,21 +146,21 @@
 		<div class="overflow-hidden" style:height="{height}px">
 			<SeriesChart
 				data={currentContributionData}
-				getDate={(p) => p.date}
+				getDate={(p: InvestmentPoint) => p.date}
 				series={[
 					{
 						key: 'contributions',
 						color: lineColors.muted,
 						lineStyle: 'dotted',
 						lineWidth: 1,
-						getValue: (p) => p.contributionsMinor / 100,
+						getValue: (p: InvestmentPoint) => p.contributionsMinor / 100,
 						lastValueVisible: false,
 						priceLineVisible: false,
 					},
 					{
 						key: 'value',
 						color: lineColors.primary,
-						getValue: (p) => {
+						getValue: (p: InvestmentPoint) => {
 							const match = valuesMap.get(p.date);
 							return match ? match.valueMinor / 100 : p.contributionsMinor / 100;
 						},
@@ -169,7 +170,7 @@
 						color: lineColors.faint,
 						lineStyle: 'dashed',
 						lineWidth: 1,
-						getValue: (p) => {
+						getValue: (p: InvestmentPoint) => {
 							const match = lowProjectionMap.get(p.date);
 							return match ? match.valueMinor / 100 : 0;
 						},
@@ -182,7 +183,7 @@
 						color: lineColors.faint,
 						lineStyle: 'dashed',
 						lineWidth: 1,
-						getValue: (p) => {
+						getValue: (p: InvestmentPoint) => {
 							const match = highProjectionMap.get(p.date);
 							return match ? match.valueMinor / 100 : 0;
 						},
@@ -191,7 +192,7 @@
 						crosshairMarkerVisible: false,
 					},
 				]}
-				formatHover={(p) => {
+				formatHover={(p: InvestmentPoint) => {
 					const parts = [];
 					const valueMatch = valuesMap.get(p.date);
 					if (valueMatch) {
@@ -209,9 +210,9 @@
 		<div class="overflow-hidden" style:height="{height}px">
 			<LineChart
 				data={currentBalanceData}
-				getValue={(p) => p.balanceMinor / 100}
-				getDate={(p) => p.date}
-				formatValue={(v) => moneyFormatter.format(v)}
+				getValue={(p: BalancePoint) => p.balanceMinor / 100}
+				getDate={(p: BalancePoint) => p.date}
+				formatValue={(v: number) => moneyFormatter.format(v)}
 				lineColor={lineColors.primary}
 				{height}
 				compact

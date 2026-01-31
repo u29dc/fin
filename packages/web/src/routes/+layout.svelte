@@ -16,5 +16,5 @@
 </a>
 
 <div id="main">
-	{@render children()}
+	{#if children}{@render children()}{/if}
 </div>
