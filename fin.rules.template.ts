@@ -55,14 +55,22 @@ export const NAME_MAPPING_CONFIG: NameMappingConfig = {
 		{ patterns: ['Sent money to Your Name'], target: 'Internal Transfer' },
 
 		// =============================================================================
-		// BILLS & DIRECT DEBITS
+		// DIRECT DEBITS & BILLS
+		// Rules match both description AND counterparty automatically.
+		// For DDs where description is an opaque reference (e.g. "G5ATC88"),
+		// the system falls back to matching against the counterparty name.
 		// =============================================================================
-		{ patterns: ['LOCAL COUNCIL'], target: 'Council Tax', category: 'Bills' },
+		// { patterns: ['OVO', 'SCOTTISH POWER', 'BRITISH GAS'], target: 'Energy', category: 'Energy' },
+		// { patterns: ['THAMES WATER', 'SOUTH EAST WATER'], target: 'Water', category: 'Water' },
+		// { patterns: ['BOROUGH COUNCIL', 'CITY COUNCIL'], target: 'Council Tax', category: 'CouncilTax' },
+		// { patterns: ['VIRGIN MEDIA', 'THREE'], target: 'Internet', category: 'Internet' },
+		// { patterns: ['HMRC'], target: 'HMRC', category: 'HmrcTax' },
+		{ patterns: ['LOCAL COUNCIL'], target: 'Council Tax', category: 'CouncilTax' },
 		{ patterns: ['LANDLORD NAME'], target: 'Rent', category: 'Rent' },
 
 		// =============================================================================
 		// DIRECT DEBIT REFERENCES
-		// Replace these with your actual direct debit reference numbers
+		// You can also match opaque DD references directly if preferred
 		// =============================================================================
 		// { patterns: ['12345678'], target: 'Description', category: 'Bills' },
 	],
