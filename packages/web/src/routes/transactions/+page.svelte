@@ -38,8 +38,8 @@
 
 	// Initialize with defaults - set via effect to avoid state-referenced-locally warning
 	let group: GroupId = $state('');
-	let sortColumn: SortColumn = $state('postedAt');
-	let sortDirection: SortDirection = $state('desc');
+	let sortColumn = $state<SortColumn>('postedAt');
+	let sortDirection = $state<SortDirection>('desc');
 	let _initialized = $state(false);
 
 	// Set initial values from URL or server data (runs once)
