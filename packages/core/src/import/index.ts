@@ -6,7 +6,7 @@ import { migrateToLatest } from '../db/migrate';
 import { loadRules, resetRulesCache } from '../sanitize/rules-loader';
 
 import { ArchiveManager } from './archive-manager';
-import { createJournalEntriesFromTransactions } from './journal-entry-creator';
+import { createJournalEntriesFromTransactions } from './journal';
 import { parseMonzoCsv, parseVanguardCsv, parseVanguardPdf, parseWiseCsv } from './parsers';
 import { scanInbox } from './scanner';
 import type { CanonicalizationResult } from './transactions';

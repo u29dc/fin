@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite';
 
 import { getAccountIdsByGroup, getFirstAccountIdByGroup } from '../config';
-import type { AssetAccountId } from '../types/chart-account-ids';
+import type { AssetAccountId } from '../types/accounts';
 import type { BalanceSeriesOptions, GroupId, MonthlyCashflowPoint } from './groups';
 import {
 	type ConsolidatedRunwayOptions,

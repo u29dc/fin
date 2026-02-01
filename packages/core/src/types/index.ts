@@ -1,2 +1,2 @@
-export * from './chart-account-ids';
+export * from './accounts';
 export * from './ledger';

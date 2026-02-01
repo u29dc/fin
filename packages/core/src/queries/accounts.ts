@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 
-import { type AssetAccountId, getAssetAccountIds, isAssetAccountId } from '../types/chart-account-ids';
+import { type AssetAccountId, getAssetAccountIds, isAssetAccountId } from '../types/accounts';
 
 export type ChartAccountInfo = {
 	id: string;

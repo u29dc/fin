@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 
-import { mapCategoryToAccount } from '../db/category-mapping';
+import { mapCategoryToAccount } from '../db/categories';
 
 import type { CanonicalTransaction } from './transactions';
 

@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
 import { SCHEMA_SQL } from '../../src/db/schema';
 import { loadTransferRows } from '../../src/queries/metrics';
-import type { AssetAccountId } from '../../src/types/chart-account-ids';
+import type { AssetAccountId } from '../../src/types/accounts';
 
 function createTestDb(): Database {
 	const db = new Database(':memory:');

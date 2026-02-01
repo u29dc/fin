@@ -1,4 +1,4 @@
-import type { AssetAccountId } from '../types/chart-account-ids';
+import type { AssetAccountId } from '../types/accounts';
 
 export type NameMappingRule = {
 	patterns: string[];

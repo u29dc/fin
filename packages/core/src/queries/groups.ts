@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite';
 
-import type { AssetAccountId, GroupId } from '../types/chart-account-ids';
-import { getGroupChartAccounts, isGroupId } from '../types/chart-account-ids';
+import type { AssetAccountId, GroupId } from '../types/accounts';
+import { getGroupChartAccounts, isGroupId } from '../types/accounts';
 import type { ExpenseNode } from '../types/ledger';
 import {
 	getCashFlowData,
@@ -26,7 +26,7 @@ import { applyScenarioToCashflowSeries, getScenarioMonthlyFlows, type ScenarioCo
 // ============================================
 
 export { isGroupId };
-export type { GroupId } from '../types/chart-account-ids';
+export type { GroupId } from '../types/accounts';
 
 export function getGroupChartAccountIds(groupId: string): AssetAccountId[] {
 	return getGroupChartAccounts()[groupId] ?? [];

@@ -1,5 +1,7 @@
-export type { AssetAccountId } from '../types/chart-account-ids';
-export { getAssetAccountIds, getInboxFolderToChartId, isAssetAccountId } from '../types/chart-account-ids';
+import type { AssetAccountId } from '../types/accounts';
+
+export type { AssetAccountId };
+export { getAssetAccountIds, getInboxFolderToChartId, isAssetAccountId } from '../types/accounts';
 
 export type DetectedProvider = 'monzo' | 'wise' | 'vanguard' | 'freeagent';
 
@@ -14,8 +16,6 @@ export type ArchiveFile = {
 	provider: DetectedProvider;
 	chartAccountId: AssetAccountId;
 };
-
-import type { AssetAccountId } from '../types/chart-account-ids';
 
 export type ParsedTransaction = {
 	chartAccountId: AssetAccountId;

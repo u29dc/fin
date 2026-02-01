@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
 import { SCHEMA_SQL } from '../../src/db/schema';
 import { loadTransferRows, matchTransferPairs } from '../../src/queries/metrics';
-import type { AssetAccountId } from '../../src/types/chart-account-ids';
+import type { AssetAccountId } from '../../src/types/accounts';
 
 /**
  * Integration tests for transfer detection pipeline:

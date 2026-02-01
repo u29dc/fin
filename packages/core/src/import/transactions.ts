@@ -26,7 +26,15 @@ export function canonicalize(parsed: ParsedTransaction[], config: NameMappingCon
 	const unmappedSet = new Set<string>();
 
 	const transactions = parsed.map((txn) => {
-		const sanitized = sanitizeDescription(txn.rawDescription, config);
+		let sanitized = sanitizeDescription(txn.rawDescription, config);
+
+		// Fall back to counterparty matching for opaque descriptions (e.g. DD references)
+		if (sanitized.matchedRule === null && txn.counterparty) {
+			const fromCounterparty = sanitizeDescription(txn.counterparty, config);
+			if (fromCounterparty.matchedRule !== null) {
+				sanitized = fromCounterparty;
+			}
+		}
 
 		if (sanitized.matchedRule === null && config.warnOnUnmapped) {
 			unmappedSet.add(txn.rawDescription);

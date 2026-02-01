@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { matchTransferPairs, matchTransferPairsForAmountGroup, type TransferRow } from '../../src/queries/metrics';
-import type { AssetAccountId } from '../../src/types/chart-account-ids';
+import type { AssetAccountId } from '../../src/types/accounts';
 
 const FROM_ACCOUNTS = new Set<AssetAccountId>(['Assets:Business:Wise', 'Assets:Business:Monzo']);
 const TO_ACCOUNTS = new Set<AssetAccountId>(['Assets:Personal:Monzo']);

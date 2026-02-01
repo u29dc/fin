@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 
-import { mapToExpenseAccount } from '../db/category-mapping';
+import { mapToExpenseAccount } from '../db/categories';
 import { sanitizeDescription } from './matcher';
 import type { MigrationCandidate, MigrationPlan, MigrationResult, NameMappingConfig, RecategorizeCandidate, RecategorizePlan, RecategorizeResult } from './types';
 
@@ -8,6 +8,7 @@ type JournalEntryRow = {
 	id: string;
 	raw_description: string;
 	clean_description: string;
+	counterparty: string | null;
 };
 
 type UncategorizedPostingRow = {
@@ -15,6 +16,7 @@ type UncategorizedPostingRow = {
 	journal_entry_id: string;
 	description: string;
 	raw_description: string | null;
+	counterparty: string | null;
 	current_account_id: string;
 };
 
@@ -28,7 +30,7 @@ type UncategorizedPostingRow = {
  */
 export function planMigration(db: Database, config: NameMappingConfig): MigrationPlan {
 	const stmt = db.prepare(`
-		SELECT id, raw_description, clean_description
+		SELECT id, raw_description, clean_description, counterparty
 		FROM journal_entries
 		WHERE raw_description IS NOT NULL
 	`);
@@ -40,7 +42,15 @@ export function planMigration(db: Database, config: NameMappingConfig): Migratio
 	let noMatch = 0;
 
 	for (const row of rows) {
-		const result = sanitizeDescription(row.raw_description, config);
+		let result = sanitizeDescription(row.raw_description, config);
+
+		// Fall back to counterparty matching for opaque descriptions (e.g. DD references)
+		if (result.matchedRule === null && row.counterparty) {
+			const fromCounterparty = sanitizeDescription(row.counterparty, config);
+			if (fromCounterparty.matchedRule !== null) {
+				result = fromCounterparty;
+			}
+		}
 
 		if (result.matchedRule === null) {
 			// No matching rule for this description
@@ -124,10 +134,11 @@ export function planRecategorize(db: Database, config: NameMappingConfig): Recat
 			p.journal_entry_id,
 			p.account_id as current_account_id,
 			je.description,
-			je.raw_description
+			je.raw_description,
+			je.counterparty
 		FROM postings p
 		JOIN journal_entries je ON p.journal_entry_id = je.id
-		WHERE p.account_id = 'Expenses:Uncategorized'
+		WHERE p.account_id IN ('Expenses:Uncategorized', 'Expenses:Bills:DirectDebits')
 	`);
 
 	const rows = stmt.all() as UncategorizedPostingRow[];
@@ -141,19 +152,28 @@ export function planRecategorize(db: Database, config: NameMappingConfig): Recat
 		const descriptionToMatch = row.raw_description ?? row.description;
 
 		// Get the sanitize result to find the category
-		const result = sanitizeDescription(descriptionToMatch, config);
+		let result = sanitizeDescription(descriptionToMatch, config);
+
+		// Fall back to counterparty matching for opaque descriptions (e.g. DD references)
+		if (result.matchedRule === null && row.counterparty) {
+			const fromCounterparty = sanitizeDescription(row.counterparty, config);
+			if (fromCounterparty.matchedRule !== null) {
+				result = fromCounterparty;
+			}
+		}
+
 		const category = result.category;
 
 		// Map category to expense account
-		const proposedAccountId = mapToExpenseAccount(category, descriptionToMatch);
+		const proposedAccountId = mapToExpenseAccount(category);
 
-		// Skip if no better category found (still maps to Uncategorized)
-		if (proposedAccountId === 'Expenses:Uncategorized') {
+		// Skip if no better category found (still maps to Uncategorized or still the DirectDebits catch-all)
+		if (proposedAccountId === 'Expenses:Uncategorized' || proposedAccountId === 'Expenses:Bills:DirectDebits') {
 			noMatch++;
 			continue;
 		}
 
-		// Skip if already categorized correctly (shouldn't happen, but safety check)
+		// Skip if already categorized correctly
 		if (proposedAccountId === row.current_account_id) {
 			alreadyCategorized++;
 			continue;

@@ -147,6 +147,11 @@ const STATIC_SEEDS: ChartAccountSeed[] = [
 	{ id: 'Expenses:Taxes:VAT', name: 'VAT', type: 'expense', parent: 'Expenses:Taxes', placeholder: false },
 
 	{ id: 'Expenses:Bills', name: 'Bills', type: 'expense', parent: 'Expenses', placeholder: true },
+	{ id: 'Expenses:Bills:Energy', name: 'Energy', type: 'expense', parent: 'Expenses:Bills', placeholder: false },
+	{ id: 'Expenses:Bills:Water', name: 'Water', type: 'expense', parent: 'Expenses:Bills', placeholder: false },
+	{ id: 'Expenses:Bills:CouncilTax', name: 'Council Tax', type: 'expense', parent: 'Expenses:Bills', placeholder: false },
+	{ id: 'Expenses:Bills:Internet', name: 'Internet', type: 'expense', parent: 'Expenses:Bills', placeholder: false },
+	{ id: 'Expenses:Bills:Insurance', name: 'Insurance', type: 'expense', parent: 'Expenses:Bills', placeholder: false },
 	{ id: 'Expenses:Bills:DirectDebits', name: 'Direct Debits', type: 'expense', parent: 'Expenses:Bills', placeholder: false },
 
 	{ id: 'Expenses:Uncategorized', name: 'Uncategorized', type: 'expense', parent: 'Expenses', placeholder: false },

@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 
-import { type AssetAccountId, getGroupChartAccounts } from '../types/chart-account-ids';
+import { type AssetAccountId, getGroupChartAccounts } from '../types/accounts';
 
 // ============================================
 // TRANSACTION TYPES
