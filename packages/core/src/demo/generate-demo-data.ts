@@ -138,8 +138,8 @@ class DemoDataGenerator {
 		}
 
 		this.journalStmt = db.prepare(`
-			INSERT INTO journal_entries (id, posted_at, description, raw_description, counterparty, source_file)
-			VALUES (?, ?, ?, ?, ?, ?)
+			INSERT INTO journal_entries (id, posted_at, posted_date, description, raw_description, counterparty, source_file)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
 		`);
 
 		this.postingStmt = db.prepare(`
@@ -379,7 +379,7 @@ class DemoDataGenerator {
 				const balance = runningBalances[txn.accountId] ?? 0;
 				const counterparty = txn.description.split(' - ')[0] ?? txn.description;
 
-				this.journalStmt.run(txn.journalId, txn.postedAt, txn.description, txn.description, counterparty, 'demo-generator');
+				this.journalStmt.run(txn.journalId, txn.postedAt, txn.postedAt.slice(0, 10), txn.description, txn.description, counterparty, 'demo-generator');
 				this.postingStmt.run(txn.postingId, txn.journalId, txn.accountId, txn.amount, 'GBP', txn.providerTxnId, balance);
 				this.postingStmt.run(randomId(), txn.journalId, txn.counterAccountId, -txn.amount, 'GBP', null, null);
 			}

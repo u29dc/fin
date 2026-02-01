@@ -16,6 +16,7 @@ function createTestDb(): Database {
 		CREATE TABLE journal_entries (
 			id TEXT PRIMARY KEY,
 			posted_at TEXT NOT NULL DEFAULT (datetime('now')),
+			posted_date TEXT NOT NULL DEFAULT (date('now')),
 			description TEXT NOT NULL,
 			raw_description TEXT,
 			clean_description TEXT,

@@ -17,7 +17,7 @@ function insertAccount(db: Database, id: string, type: AccountType): void {
 }
 
 function insertEntry(db: Database, id: string, postedAt: string, assetAccountId: string, expenseAccountId: string, amountMinor: number): void {
-	db.prepare('INSERT INTO journal_entries (id, posted_at, description) VALUES (?, ?, ?)').run(id, postedAt, 'Test');
+	db.prepare('INSERT INTO journal_entries (id, posted_at, posted_date, description) VALUES (?, ?, ?, ?)').run(id, postedAt, postedAt.slice(0, 10), 'Test');
 	db.prepare('INSERT INTO postings (id, journal_entry_id, account_id, amount_minor) VALUES (?, ?, ?, ?)').run(`${id}_asset`, id, assetAccountId, -amountMinor);
 	db.prepare('INSERT INTO postings (id, journal_entry_id, account_id, amount_minor) VALUES (?, ?, ?, ?)').run(`${id}_expense`, id, expenseAccountId, amountMinor);
 }

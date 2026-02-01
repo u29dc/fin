@@ -33,6 +33,10 @@ function generateId(prefix: string): string {
 	return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
+function toPostedDate(postedAt: string): string {
+	return postedAt.slice(0, 10);
+}
+
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 function daysBetween(date1: string, date2: string): number {
@@ -147,9 +151,47 @@ function tableExists(db: Database, tableName: string): boolean {
 	return result !== null;
 }
 
-function providerTxnIdExists(db: Database, providerTxnId: string, accountId: string): boolean {
-	const result = db.query<{ count: number }, [string, string]>(`SELECT COUNT(*) as count FROM postings WHERE provider_txn_id = ? AND account_id = ?`).get(providerTxnId, accountId);
-	return (result?.count ?? 0) > 0;
+type ProviderTxnPair = {
+	provider_txn_id: string;
+	account_id: string;
+};
+
+const PROVIDER_TXN_CHUNK_SIZE = 800;
+
+function loadExistingProviderTxnPairs(db: Database, pairs: ProviderTxnPair[]): Set<string> {
+	if (pairs.length === 0) {
+		return new Set();
+	}
+
+	const providerTxnIds = Array.from(new Set(pairs.map((p) => p.provider_txn_id)));
+	const accountIds = Array.from(new Set(pairs.map((p) => p.account_id)));
+
+	if (providerTxnIds.length === 0 || accountIds.length === 0) {
+		return new Set();
+	}
+
+	const existing = new Set<string>();
+	const accountPlaceholders = accountIds.map(() => '?').join(', ');
+	const accountParams = accountIds;
+
+	for (let i = 0; i < providerTxnIds.length; i += PROVIDER_TXN_CHUNK_SIZE) {
+		const chunk = providerTxnIds.slice(i, i + PROVIDER_TXN_CHUNK_SIZE);
+		const placeholders = chunk.map(() => '?').join(', ');
+		const rows = db
+			.query<ProviderTxnPair, string[]>(
+				`SELECT provider_txn_id, account_id
+				FROM postings
+				WHERE provider_txn_id IN (${placeholders})
+					AND account_id IN (${accountPlaceholders})`,
+			)
+			.all(...chunk, ...accountParams);
+
+		for (const row of rows) {
+			existing.add(`${row.provider_txn_id}::${row.account_id}`);
+		}
+	}
+
+	return existing;
 }
 
 type PreparedStatements = {
@@ -182,9 +224,10 @@ function createSavepointRunner(db: Database): (fn: () => void) => void {
 function createTransferEntry(pair: TransferPair, stmts: PreparedStatements): void {
 	const journalId = generateId('je');
 	const postedAt = pair.from.postedAt < pair.to.postedAt ? pair.from.postedAt : pair.to.postedAt;
+	const postedDate = toPostedDate(postedAt);
 	const description = pair.from.cleanDescription || pair.from.rawDescription || 'Transfer';
 
-	stmts.insertJournal.run(journalId, postedAt, description, pair.from.rawDescription, pair.from.cleanDescription, pair.from.counterparty, pair.from.sourceFile);
+	stmts.insertJournal.run(journalId, postedAt, postedDate, description, pair.from.rawDescription, pair.from.cleanDescription, pair.from.counterparty, pair.from.sourceFile);
 	stmts.insertPosting.run(generateId('p'), journalId, pair.from.chartAccountId, pair.from.amountMinor, pair.from.currency, null, pair.from.providerTxnId, pair.from.balanceMinor);
 	stmts.insertPosting.run(generateId('p'), journalId, pair.to.chartAccountId, pair.to.amountMinor, pair.to.currency, null, pair.to.providerTxnId, pair.to.balanceMinor);
 }
@@ -207,11 +250,12 @@ function insertTransfers(transfers: TransferPair[], stmts: PreparedStatements, w
 
 function createNonTransferEntry(txn: CanonicalTransaction, stmts: PreparedStatements): void {
 	const journalId = generateId('je');
+	const postedDate = toPostedDate(txn.postedAt);
 
 	const isInflow = txn.amountMinor > 0;
 	const counterAccountId = mapCategoryToAccount(txn.category, txn.cleanDescription || txn.rawDescription, isInflow);
 
-	stmts.insertJournal.run(journalId, txn.postedAt, txn.cleanDescription || txn.rawDescription, txn.rawDescription, txn.cleanDescription, txn.counterparty, txn.sourceFile);
+	stmts.insertJournal.run(journalId, txn.postedAt, postedDate, txn.cleanDescription || txn.rawDescription, txn.rawDescription, txn.cleanDescription, txn.counterparty, txn.sourceFile);
 	stmts.insertPosting.run(generateId('p'), journalId, txn.chartAccountId, txn.amountMinor, txn.currency, null, txn.providerTxnId, txn.balanceMinor);
 	stmts.insertPosting.run(generateId('p'), journalId, counterAccountId, -txn.amountMinor, txn.currency, null, null, null);
 }
@@ -234,6 +278,7 @@ function insertNonTransfers(nonTransfers: CanonicalTransaction[], stmts: Prepare
 function filterNewTransactions(db: Database, transactions: CanonicalTransaction[]): { newTransactions: CanonicalTransaction[]; duplicateCount: number } {
 	const seenBatchTxnIds = new Set<string>();
 	const newTransactions: CanonicalTransaction[] = [];
+	const candidates: CanonicalTransaction[] = [];
 	let duplicateCount = 0;
 
 	for (const txn of transactions) {
@@ -244,13 +289,25 @@ function filterNewTransactions(db: Database, transactions: CanonicalTransaction[
 				continue;
 			}
 			seenBatchTxnIds.add(key);
-		}
-
-		if (txn.providerTxnId && providerTxnIdExists(db, txn.providerTxnId, txn.chartAccountId)) {
-			duplicateCount++;
+			candidates.push(txn);
 			continue;
 		}
 
+		newTransactions.push(txn);
+	}
+
+	const candidatePairs: ProviderTxnPair[] = candidates.map((txn) => ({
+		provider_txn_id: txn.providerTxnId ?? '',
+		account_id: txn.chartAccountId,
+	}));
+	const existingPairs = loadExistingProviderTxnPairs(db, candidatePairs);
+
+	for (const txn of candidates) {
+		const key = `${txn.providerTxnId ?? ''}::${txn.chartAccountId}`;
+		if (existingPairs.has(key)) {
+			duplicateCount++;
+			continue;
+		}
 		newTransactions.push(txn);
 	}
 
@@ -284,8 +341,8 @@ export function createJournalEntriesFromTransactions(db: Database, transactions:
 
 	const stmts: PreparedStatements = {
 		insertJournal: db.prepare(`
-			INSERT INTO journal_entries (id, posted_at, description, raw_description, clean_description, counterparty, source_file)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO journal_entries (id, posted_at, posted_date, description, raw_description, clean_description, counterparty, source_file)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		`),
 		insertPosting: db.prepare(`
 			INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency, memo, provider_txn_id, provider_balance_minor)

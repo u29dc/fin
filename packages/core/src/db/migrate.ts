@@ -18,6 +18,13 @@ function setUserVersion(db: Database, version: number): void {
 
 type CountRow = { count: number };
 
+type ColumnInfoRow = { name: string };
+
+function columnExists(db: Database, tableName: string, columnName: string): boolean {
+	const rows = db.query<ColumnInfoRow, []>(`PRAGMA table_info(${tableName})`).all();
+	return rows.some((row) => row.name === columnName);
+}
+
 function initializeFreshDb(db: Database): void {
 	db.exec(SCHEMA_SQL);
 
@@ -74,6 +81,16 @@ export function migrateToLatest(db: Database): void {
 			for (const account of billAccounts) {
 				insertStmt.run(account.id, account.name, account.parent);
 			}
+		}
+
+		if (currentVersion < 4) {
+			if (!columnExists(db, 'journal_entries', 'posted_date')) {
+				db.exec(`ALTER TABLE journal_entries ADD COLUMN posted_date TEXT NOT NULL DEFAULT ''`);
+			}
+			db.exec(`UPDATE journal_entries SET posted_date = date(posted_at) WHERE posted_date IS NULL OR posted_date = ''`);
+			db.exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_posted_date ON journal_entries(posted_date)`);
+			db.exec(`CREATE INDEX IF NOT EXISTS idx_postings_journal_entry_account ON postings(journal_entry_id, account_id)`);
+			db.exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_source_file ON journal_entries(source_file)`);
 		}
 
 		setUserVersion(db, SCHEMA_VERSION);
