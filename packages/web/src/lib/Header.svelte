@@ -127,7 +127,7 @@
 
 	<!-- Center: Group Tabs -->
 	<nav class="absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5" aria-label="Account group">
-		<div role="tablist" tabindex="0" aria-label="Account groups" class="flex items-center gap-0.5">
+		<div role="tablist" aria-label="Account groups" class="flex items-center gap-0.5">
 			{#each availableGroups as groupId, index (groupId)}
 				{@const gid = groupId!}
 				{@const isActive = allGroupsActive || activeGroup === gid}

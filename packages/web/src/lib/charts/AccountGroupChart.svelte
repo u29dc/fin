@@ -120,7 +120,7 @@
 <article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
 	<h3 class="sr-only">{label}</h3>
 	<header class="flex items-center justify-between gap-2.5">
-		<div class="flex gap-1" role="tablist" tabindex="0" aria-label="{label} accounts">
+		<div class="flex gap-1" role="tablist" aria-label="{label} accounts">
 			{#each accounts as account, index (account!.id)}
 				{@const acc = account!}
 				{@const isSelected = selectedAccountId === acc.id}
