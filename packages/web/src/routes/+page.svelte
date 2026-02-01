@@ -624,7 +624,7 @@
 				<!-- Cash Flow Distribution (Sankey) -->
 				{#if getSankeyNodes(groupId).length > 0 && getSankeyLinks(groupId).length > 0}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
-						<h2 class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} Distribution <span class="text-muted">[6MO MEDIAN]</span></h2>
+						<h2 class="font-normal text-sm uppercase tracking-widest">{GROUPS[groupId].label} Distribution <span class="text-muted">[6MO AVG]</span></h2>
 						<div style:height={isMobile ? '280px' : '350px'}>
 							<Sankey nodes={getSankeyNodes(groupId)} links={getSankeyLinks(groupId)} {colorScheme} compact={isMobile} />
 						</div>
@@ -634,7 +634,7 @@
 				<!-- Expense Breakdown (Treemap) -->
 				{#if getTreemapData(groupId).length > 0}
 					<article class="border border-border bg-panel p-2.5 flex flex-col gap-2">
-						<h2 class="font-normal text-sm uppercase tracking-widest">Expense Breakdown <span class="text-muted">[6MO MEDIAN]</span></h2>
+						<h2 class="font-normal text-sm uppercase tracking-widest">Expense Breakdown <span class="text-muted">[6MO AVG]</span></h2>
 						<div style:height={isMobile ? '280px' : '350px'}>
 							<Treemap data={getTreemapData(groupId)} {colorScheme} compact={isMobile} />
 						</div>

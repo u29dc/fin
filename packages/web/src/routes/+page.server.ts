@@ -88,14 +88,14 @@ export function load({ url }: { url: URL }) {
 		groupReserveBreakdown[groupId] = getGroupDailyReserveBreakdownSeries(db, groupId, { limit: 10_000 }, { expenseReserveMonths }, financeConfig.scenarioToggles, financeConfig.scenario);
 	}
 
-	// Fetch cash flow data for Sankey charts (6-month median)
+	// Fetch cash flow data for Sankey charts (6-month average)
 	const groupCashFlowData: Record<string, SankeyFlowData> = Object.fromEntries(groupIds.map((id) => [id, { nodes: [], links: [] }]));
 
 	for (const groupId of groupIds) {
 		groupCashFlowData[groupId] = getGroupCashFlowDataMedian(db, groupId, { months: 6 });
 	}
 
-	// Fetch expense hierarchy for Treemap charts (6-month median)
+	// Fetch expense hierarchy for Treemap charts (6-month average)
 	const groupExpenseHierarchy: Record<string, ExpenseNode[]> = Object.fromEntries(groupIds.map((id) => [id, []]));
 
 	for (const groupId of groupIds) {

@@ -1230,7 +1230,7 @@ export function getGroupExpenseHierarchy(db: Database, chartAccountIds: string[]
 }
 
 // ============================================
-// GROUP EXPENSE HIERARCHY (MEDIAN-BASED) FOR TREEMAP
+// GROUP EXPENSE HIERARCHY (AVERAGE-BASED) FOR TREEMAP
 // ============================================
 
 type MonthlyTotalRow = {
@@ -1239,7 +1239,7 @@ type MonthlyTotalRow = {
 	month_total: number;
 };
 
-function calculateMedianMap(monthlyTotals: MonthlyTotalRow[], months: number): Map<string, number> {
+function calculateMonthlyAverageMap(monthlyTotals: MonthlyTotalRow[], months: number): Map<string, number> {
 	// Group by account
 	const byAccount = new Map<string, number[]>();
 	for (const row of monthlyTotals) {
@@ -1251,23 +1251,23 @@ function calculateMedianMap(monthlyTotals: MonthlyTotalRow[], months: number): M
 
 	// Calculate monthly average for each account (total / months)
 	// This properly represents quarterly/infrequent payments as monthly costs
-	const medianMap = new Map<string, number>();
+	const averageMap = new Map<string, number>();
 	for (const [accountId, totals] of byAccount) {
 		const total = totals.reduce((sum, v) => sum + v, 0);
 		const monthlyAvg = Math.round(total / months);
-		medianMap.set(accountId, monthlyAvg);
+		averageMap.set(accountId, monthlyAvg);
 	}
-	return medianMap;
+	return averageMap;
 }
 
-type MedianAccountRow = {
+type ExpenseAccountRow = {
 	id: string;
 	name: string;
 	parent_id: string | null;
 	is_placeholder: number;
 };
 
-function buildMedianExpenseTree(accounts: MedianAccountRow[], medianMap: Map<string, number>): ExpenseNode[] {
+function buildAverageExpenseTree(accounts: ExpenseAccountRow[], averageMap: Map<string, number>): ExpenseNode[] {
 	const nodeMap = new Map<string, ExpenseNode>();
 	const rootNodes: ExpenseNode[] = [];
 
@@ -1276,7 +1276,7 @@ function buildMedianExpenseTree(accounts: MedianAccountRow[], medianMap: Map<str
 		nodeMap.set(acc.id, {
 			accountId: acc.id,
 			name: acc.name,
-			totalMinor: medianMap.get(acc.id) ?? 0,
+			totalMinor: averageMap.get(acc.id) ?? 0,
 			children: [],
 		});
 	}
@@ -1347,10 +1347,10 @@ export function getGroupExpenseHierarchyMedian(db: Database, chartAccountIds: st
 	`;
 
 	const monthlyTotals = db.query<MonthlyTotalRow, (string | number)[]>(sql).all(months, ...matchParams);
-	const medianMap = calculateMedianMap(monthlyTotals, months);
+	const averageMap = calculateMonthlyAverageMap(monthlyTotals, months);
 
 	const accounts = db
-		.query<MedianAccountRow, []>(
+		.query<ExpenseAccountRow, []>(
 			`
 		SELECT id, name, parent_id, is_placeholder
 		FROM chart_of_accounts
@@ -1360,7 +1360,7 @@ export function getGroupExpenseHierarchyMedian(db: Database, chartAccountIds: st
 		)
 		.all();
 
-	const expenseTree = buildMedianExpenseTree(accounts, medianMap);
+	const expenseTree = buildAverageExpenseTree(accounts, averageMap);
 
 	// Query asset-to-asset transfers (outbound from this group's accounts)
 	const orConditionsFrom = chartAccountIds.flatMap(() => ['p_from.account_id = ?', 'p_from.account_id LIKE ?']);
@@ -1588,7 +1588,7 @@ type MonthlyFlowRow = {
 	month_flow: number;
 };
 
-function calculateMedianFlows(monthlyFlows: MonthlyFlowRow[], months: number): FlowRow[] {
+function calculateAverageFlows(monthlyFlows: MonthlyFlowRow[], months: number): FlowRow[] {
 	// Group by source/target pair
 	const byPair = new Map<string, { source_id: string; source_name: string; target_id: string; target_name: string; flows: number[] }>();
 	for (const row of monthlyFlows) {
@@ -1663,7 +1663,7 @@ export function getCashFlowDataMedian(db: Database, chartAccountIds: string[], o
 	`;
 
 	const incomeToAssetMonthly = db.query<MonthlyFlowRow, (string | number)[]>(incomeToAssetSql).all(months, ...matchParams);
-	const incomeToAsset = calculateMedianFlows(incomeToAssetMonthly, months);
+	const incomeToAsset = calculateAverageFlows(incomeToAssetMonthly, months);
 
 	// Asset to Expense monthly flows
 	const assetToExpenseSql = `
@@ -1689,7 +1689,7 @@ export function getCashFlowDataMedian(db: Database, chartAccountIds: string[], o
 	`;
 
 	const assetToExpenseMonthly = db.query<MonthlyFlowRow, (string | number)[]>(assetToExpenseSql).all(months, ...matchParams);
-	const assetToExpense = calculateMedianFlows(assetToExpenseMonthly, months);
+	const assetToExpense = calculateAverageFlows(assetToExpenseMonthly, months);
 
 	// Asset to Asset monthly flows (transfers between accounts)
 	// Build OR conditions for source asset matching (where money leaves)
@@ -1719,7 +1719,7 @@ export function getCashFlowDataMedian(db: Database, chartAccountIds: string[], o
 	`;
 
 	const assetToAssetMonthly = db.query<MonthlyFlowRow, (string | number)[]>(assetToAssetSql).all(months, ...matchParams);
-	const assetToAsset = calculateMedianFlows(assetToAssetMonthly, months);
+	const assetToAsset = calculateAverageFlows(assetToAssetMonthly, months);
 
 	// Build nodes map
 	const nodeMap: SankeyNodeMap = new Map();
