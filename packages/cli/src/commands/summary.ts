@@ -7,7 +7,6 @@
 
 import { writeFileSync } from 'node:fs';
 
-import { defineCommand } from 'citty';
 import {
 	type ExpenseNode,
 	type GroupId,
@@ -22,8 +21,9 @@ import {
 	getLatestBalances,
 	isGroupId,
 	type SankeyFlowData,
-} from 'core';
-import { getAccountIdsByGroup, getAccountsByGroup, getBurnRateExcludeAccounts, getGroupIds, getGroupMetadata, getLiquidAccountIds } from 'core/config';
+} from '@fin/core';
+import { getAccountIdsByGroup, getAccountsByGroup, getBurnRateExcludeAccounts, getGroupIds, getGroupMetadata, getLiquidAccountIds } from '@fin/core/config';
+import { defineCommand } from 'citty';
 
 import { getReadonlyDb } from '../db';
 import { formatAmount, formatMonths, formatPercentRaw } from '../format';

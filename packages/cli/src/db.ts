@@ -8,8 +8,8 @@
 import type { Database } from 'bun:sqlite';
 import { resolve } from 'node:path';
 
-import { openDatabase } from 'core';
-import { getConfigDir } from 'core/config';
+import { openDatabase } from '@fin/core';
+import { getConfigDir } from '@fin/core/config';
 
 const DEFAULT_DB_PATH = 'data/fin.db';
 

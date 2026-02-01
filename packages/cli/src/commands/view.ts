@@ -2,9 +2,9 @@
  * view - View accounts, transactions, ledger, and balance sheet.
  */
 
+import type { GroupId } from '@fin/core';
+import { type AssetAccountId, getAssetAccounts, getBalanceSheet, getGroupChartAccountIds, getJournalEntries, getJournalEntryCount, getLatestBalances, getTransactions, isGroupId } from '@fin/core';
 import { defineCommand } from 'citty';
-import type { GroupId } from 'core';
-import { type AssetAccountId, getAssetAccounts, getBalanceSheet, getGroupChartAccountIds, getJournalEntries, getJournalEntryCount, getLatestBalances, getTransactions, isGroupId } from 'core';
 
 import { getReadonlyDb } from '../db';
 import { formatAmount, formatCount, formatDate } from '../format';

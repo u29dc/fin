@@ -9,8 +9,8 @@
  *   sanitize  Discover and apply description mappings
  */
 
+import { initConfig } from '@fin/core/config';
 import { defineCommand, runMain } from 'citty';
-import { initConfig } from 'core/config';
 
 import { help } from './commands/help';
 import { importCmd } from './commands/import';

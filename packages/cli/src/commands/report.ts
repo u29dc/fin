@@ -2,7 +2,6 @@
  * report - Financial analytics and reports.
  */
 
-import { defineCommand } from 'citty';
 import {
 	type GroupId,
 	getConsolidatedDailyRunwaySeries,
@@ -15,8 +14,9 @@ import {
 	getGroupMonthlyCashflowSeries,
 	getGroupPureMonthlyCashflowSeries,
 	isGroupId,
-} from 'core';
-import { getAccountIdsByGroup } from 'core/config';
+} from '@fin/core';
+import { getAccountIdsByGroup } from '@fin/core/config';
+import { defineCommand } from 'citty';
 
 import { getReadonlyDb } from '../db';
 import { formatAmount, formatCount, formatDate, formatMonth, formatMonths, formatPercentRaw } from '../format';

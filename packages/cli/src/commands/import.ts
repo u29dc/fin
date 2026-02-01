@@ -2,10 +2,10 @@
  * import - Run import pipeline.
  */
 
+import type { ImportResult } from '@fin/core';
+import { importInbox } from '@fin/core';
+import { initConfig } from '@fin/core/config';
 import { defineCommand } from 'citty';
-import type { ImportResult } from 'core';
-import { importInbox } from 'core';
-import { initConfig } from 'core/config';
 
 import { resolveDbPath } from '../db';
 import { json, log } from '../logger';

@@ -2,10 +2,10 @@
  * sanitize - Discover and migrate descriptions.
  */
 
+import type { AssetAccountId, MigrationPlan, NameMappingConfig, RecategorizePlan } from '@fin/core';
+import { discoverDescriptions, discoverUnmappedDescriptions, executeMigration, executeRecategorize, isAssetAccountId, loadRules, planMigration, planRecategorize } from '@fin/core';
+import { initConfig } from '@fin/core/config';
 import { defineCommand } from 'citty';
-import type { AssetAccountId, MigrationPlan, NameMappingConfig, RecategorizePlan } from 'core';
-import { discoverDescriptions, discoverUnmappedDescriptions, executeMigration, executeRecategorize, isAssetAccountId, loadRules, planMigration, planRecategorize } from 'core';
-import { initConfig } from 'core/config';
 
 import { getDiscoverDb, getWritableDb } from '../db';
 import { formatAmount } from '../format';
