@@ -157,36 +157,104 @@ type PreparedStatements = {
 	insertPosting: ReturnType<Database['prepare']>;
 };
 
-function createTransferEntry(pair: TransferPair, stmts: PreparedStatements, result: JournalEntryResult): void {
+type InsertResult = {
+	created: number;
+	transferPairsCreated: number;
+	errors: string[];
+};
+
+function createSavepointRunner(db: Database): (fn: () => void) => void {
+	let savepointIndex = 0;
+	return (fn: () => void) => {
+		const name = `sp_${savepointIndex++}`;
+		db.exec(`SAVEPOINT ${name}`);
+		try {
+			fn();
+			db.exec(`RELEASE ${name}`);
+		} catch (error) {
+			db.exec(`ROLLBACK TO ${name}`);
+			db.exec(`RELEASE ${name}`);
+			throw error;
+		}
+	};
+}
+
+function createTransferEntry(pair: TransferPair, stmts: PreparedStatements): void {
 	const journalId = generateId('je');
 	const postedAt = pair.from.postedAt < pair.to.postedAt ? pair.from.postedAt : pair.to.postedAt;
 	const description = pair.from.cleanDescription || pair.from.rawDescription || 'Transfer';
 
-	try {
-		stmts.insertJournal.run(journalId, postedAt, description, pair.from.rawDescription, pair.from.cleanDescription, pair.from.counterparty, pair.from.sourceFile);
-		stmts.insertPosting.run(generateId('p'), journalId, pair.from.chartAccountId, pair.from.amountMinor, pair.from.currency, null, pair.from.providerTxnId, pair.from.balanceMinor);
-		stmts.insertPosting.run(generateId('p'), journalId, pair.to.chartAccountId, pair.to.amountMinor, pair.to.currency, null, pair.to.providerTxnId, pair.to.balanceMinor);
-		result.journalEntriesCreated++;
-		result.transferPairsCreated++;
-	} catch (error) {
-		result.errors.push(`Transfer ${pair.from.id} <-> ${pair.to.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-	}
+	stmts.insertJournal.run(journalId, postedAt, description, pair.from.rawDescription, pair.from.cleanDescription, pair.from.counterparty, pair.from.sourceFile);
+	stmts.insertPosting.run(generateId('p'), journalId, pair.from.chartAccountId, pair.from.amountMinor, pair.from.currency, null, pair.from.providerTxnId, pair.from.balanceMinor);
+	stmts.insertPosting.run(generateId('p'), journalId, pair.to.chartAccountId, pair.to.amountMinor, pair.to.currency, null, pair.to.providerTxnId, pair.to.balanceMinor);
 }
 
-function createNonTransferEntry(txn: CanonicalTransaction, stmts: PreparedStatements, result: JournalEntryResult): void {
+function insertTransfers(transfers: TransferPair[], stmts: PreparedStatements, withSavepoint: (fn: () => void) => void): InsertResult {
+	const result: InsertResult = { created: 0, transferPairsCreated: 0, errors: [] };
+
+	for (const pair of transfers) {
+		try {
+			withSavepoint(() => createTransferEntry(pair, stmts));
+			result.created++;
+			result.transferPairsCreated++;
+		} catch (error) {
+			result.errors.push(`Transfer ${pair.from.id} <-> ${pair.to.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}
+
+	return result;
+}
+
+function createNonTransferEntry(txn: CanonicalTransaction, stmts: PreparedStatements): void {
 	const journalId = generateId('je');
 
-	try {
-		const isInflow = txn.amountMinor > 0;
-		const counterAccountId = mapCategoryToAccount(txn.category, txn.cleanDescription || txn.rawDescription, isInflow);
+	const isInflow = txn.amountMinor > 0;
+	const counterAccountId = mapCategoryToAccount(txn.category, txn.cleanDescription || txn.rawDescription, isInflow);
 
-		stmts.insertJournal.run(journalId, txn.postedAt, txn.cleanDescription || txn.rawDescription, txn.rawDescription, txn.cleanDescription, txn.counterparty, txn.sourceFile);
-		stmts.insertPosting.run(generateId('p'), journalId, txn.chartAccountId, txn.amountMinor, txn.currency, null, txn.providerTxnId, txn.balanceMinor);
-		stmts.insertPosting.run(generateId('p'), journalId, counterAccountId, -txn.amountMinor, txn.currency, null, null, null);
-		result.journalEntriesCreated++;
-	} catch (error) {
-		result.errors.push(`Transaction ${txn.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+	stmts.insertJournal.run(journalId, txn.postedAt, txn.cleanDescription || txn.rawDescription, txn.rawDescription, txn.cleanDescription, txn.counterparty, txn.sourceFile);
+	stmts.insertPosting.run(generateId('p'), journalId, txn.chartAccountId, txn.amountMinor, txn.currency, null, txn.providerTxnId, txn.balanceMinor);
+	stmts.insertPosting.run(generateId('p'), journalId, counterAccountId, -txn.amountMinor, txn.currency, null, null, null);
+}
+
+function insertNonTransfers(nonTransfers: CanonicalTransaction[], stmts: PreparedStatements, withSavepoint: (fn: () => void) => void): InsertResult {
+	const result: InsertResult = { created: 0, transferPairsCreated: 0, errors: [] };
+
+	for (const txn of nonTransfers) {
+		try {
+			withSavepoint(() => createNonTransferEntry(txn, stmts));
+			result.created++;
+		} catch (error) {
+			result.errors.push(`Transaction ${txn.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
 	}
+
+	return result;
+}
+
+function filterNewTransactions(db: Database, transactions: CanonicalTransaction[]): { newTransactions: CanonicalTransaction[]; duplicateCount: number } {
+	const seenBatchTxnIds = new Set<string>();
+	const newTransactions: CanonicalTransaction[] = [];
+	let duplicateCount = 0;
+
+	for (const txn of transactions) {
+		if (txn.providerTxnId) {
+			const key = `${txn.providerTxnId}::${txn.chartAccountId}`;
+			if (seenBatchTxnIds.has(key)) {
+				duplicateCount++;
+				continue;
+			}
+			seenBatchTxnIds.add(key);
+		}
+
+		if (txn.providerTxnId && providerTxnIdExists(db, txn.providerTxnId, txn.chartAccountId)) {
+			duplicateCount++;
+			continue;
+		}
+
+		newTransactions.push(txn);
+	}
+
+	return { newTransactions, duplicateCount };
 }
 
 export function createJournalEntriesFromTransactions(db: Database, transactions: CanonicalTransaction[], options?: TransferDetectionOptions): JournalEntryResult {
@@ -206,14 +274,9 @@ export function createJournalEntriesFromTransactions(db: Database, transactions:
 		return result;
 	}
 
-	const newTransactions = transactions.filter((txn) => {
-		if (txn.providerTxnId && providerTxnIdExists(db, txn.providerTxnId, txn.chartAccountId)) {
-			return false;
-		}
-		return true;
-	});
+	const { newTransactions, duplicateCount } = filterNewTransactions(db, transactions);
 	result.uniqueTransactions = newTransactions.length;
-	result.duplicateTransactions = totalTransactions - newTransactions.length;
+	result.duplicateTransactions = duplicateCount;
 
 	if (newTransactions.length === 0) {
 		return result;
@@ -234,12 +297,13 @@ export function createJournalEntriesFromTransactions(db: Database, transactions:
 	result.entriesAttempted = transfers.length + nonTransfers.length;
 
 	db.transaction(() => {
-		for (const pair of transfers) {
-			createTransferEntry(pair, stmts, result);
-		}
-		for (const txn of nonTransfers) {
-			createNonTransferEntry(txn, stmts, result);
-		}
+		const withSavepoint = createSavepointRunner(db);
+		const transferResult = insertTransfers(transfers, stmts, withSavepoint);
+		const nonTransferResult = insertNonTransfers(nonTransfers, stmts, withSavepoint);
+
+		result.journalEntriesCreated += transferResult.created + nonTransferResult.created;
+		result.transferPairsCreated += transferResult.transferPairsCreated;
+		result.errors.push(...transferResult.errors, ...nonTransferResult.errors);
 	})();
 
 	return result;

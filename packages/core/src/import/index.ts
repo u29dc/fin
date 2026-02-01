@@ -110,6 +110,9 @@ async function commitWithArchive(
 	try {
 		await archiveManager.prepareArchive(processedFiles, archiveDir);
 		const journalResult = createJournalEntriesFromTransactions(db, canonResult.transactions);
+		if (journalResult.errors.length > 0) {
+			return { journalResult, archivedFiles: [] };
+		}
 		const archivedFiles = await archiveManager.commitArchive();
 		return { journalResult, archivedFiles };
 	} catch (error) {
