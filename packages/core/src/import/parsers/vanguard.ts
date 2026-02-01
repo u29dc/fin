@@ -145,7 +145,7 @@ export async function parseVanguardCsv(filePath: string, chartAccountId: AssetAc
 
 	const transactions: ParsedTransaction[] = [];
 
-	for (const row of result.data) {
+	for (const [index, row] of result.data.entries()) {
 		// Use config-defined column names
 		const datePart = row[cols.date]?.trim();
 		const details = row[cols.description]?.trim() || '';
@@ -159,8 +159,8 @@ export async function parseVanguardCsv(filePath: string, chartAccountId: AssetAc
 			continue;
 		}
 
-		// Generate stable ID for deduplication: date-description-amount
-		const providerTxnId = `vanguard-csv-${datePart}-${details.toLowerCase().replace(/\s+/g, '-').slice(0, 50)}-${amountRaw}`;
+		// Include row index to avoid collisions on identical same-day transactions.
+		const providerTxnId = `vanguard-csv-${index + 1}-${datePart}-${details.toLowerCase().replace(/\s+/g, '-').slice(0, 50)}-${amountRaw}`;
 
 		transactions.push({
 			chartAccountId,
