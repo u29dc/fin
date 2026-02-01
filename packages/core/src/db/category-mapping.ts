@@ -18,25 +18,51 @@ export const EXACT_CATEGORY_TO_ACCOUNT: Record<string, string> = {
 	utilities: 'Expenses:Housing:Utilities',
 	rent: 'Expenses:Housing:Rent',
 	subscriptions: 'Expenses:Entertainment:Subscriptions',
+	businesssubs: 'Expenses:Business:Subscriptions',
 	software: 'Expenses:Business:Software',
 
 	// Business expenses
 	tax: 'Expenses:Taxes:VAT',
 	government: 'Expenses:Taxes:VAT',
+	hmrctax: 'Expenses:Taxes:HMRC',
 	insurance: 'Expenses:Business:Insurance',
 	office: 'Expenses:Business:Equipment',
 	vehicle: 'Expenses:Transport:Vehicle',
+	professional: 'Expenses:Business:Services',
+	contractors: 'Expenses:Business:Contractors',
 
 	// Personal expenses
+	fitness: 'Expenses:Health:Fitness',
 	healthinsurance: 'Expenses:Health:Insurance',
 	supplements: 'Expenses:Food:Supplements',
 	health: 'Expenses:Health:Medical',
 	shopping: 'Expenses:Shopping:Home',
 	entertainment: 'Expenses:Entertainment:Leisure',
+	travel: 'Expenses:Transport:Travel',
+	charity: 'Expenses:Shopping:Charity',
+	cafe: 'Expenses:Food:Restaurants',
+	parking: 'Expenses:Transport:Parking',
+	fuel: 'Expenses:Transport:Vehicle',
 
 	// Unknown direct debits (catch-all for unidentified recurring payments)
 	bills: 'Expenses:Bills:DirectDebits',
 	directdebit: 'Expenses:Bills:DirectDebits',
+
+	// Card verification holds (zero-value, not real expenses)
+	cardcheck: 'Equity:Transfers',
+	'card check': 'Equity:Transfers',
+
+	// Services
+	services: 'Expenses:Business:Services',
+
+	// Investments (transfers to investment accounts)
+	investment: 'Equity:Investments',
+
+	// Unclear/miscellaneous
+	unclear: 'Expenses:Other',
+
+	// Catch-all for unmapped transactions
+	other: 'Expenses:Other',
 };
 
 export const DESCRIPTION_PATTERNS: Array<{ pattern: RegExp; accountId: string }> = [
@@ -149,6 +175,7 @@ const EXPENSE_CATEGORIES = new Set([
 	'food',
 	'transport',
 	'subscriptions',
+	'businesssubs',
 	'software',
 	'utilities',
 	'health',
@@ -157,12 +184,21 @@ const EXPENSE_CATEGORIES = new Set([
 	'travel',
 	'bills',
 	'directdebit',
+	'fitness',
 	'healthinsurance',
 	'supplements',
 	'insurance',
 	'vehicle',
 	'tax',
 	'government',
+	'hmrctax',
+	'professional',
+	'contractors',
+	'charity',
+	'cafe',
+	'parking',
+	'fuel',
+	'other',
 ]);
 
 export function mapCategoryToAccount(category: string | null, description: string, isInflow: boolean): string {
