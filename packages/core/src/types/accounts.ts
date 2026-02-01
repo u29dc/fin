@@ -1,4 +1,11 @@
-import { getAllAccountIds, getAssetAccountIds as getAssetIds, getGroupChartAccounts as getGroupAccounts, getInboxFolderToChartId as getInboxMappings, isConfigInitialized } from '../config/index';
+import {
+	getAllAccountIds,
+	getAssetAccountIds as getAssetIds,
+	getGroupChartAccounts as getGroupAccounts,
+	getGroupIds,
+	getInboxFolderToChartId as getInboxMappings,
+	isConfigInitialized,
+} from '../config/index';
 
 // String type for runtime flexibility
 export type AssetAccountId = string;
@@ -14,8 +21,10 @@ export function isAssetAccountId(value: string): value is AssetAccountId {
 export type GroupId = string;
 
 export function isGroupId(value: string): value is GroupId {
-	// All strings are valid group IDs; config validation happens elsewhere
-	return typeof value === 'string' && value.length > 0;
+	if (!isConfigInitialized()) {
+		return typeof value === 'string' && value.length > 0;
+	}
+	return getGroupIds().includes(value);
 }
 
 // Dynamic accessor functions

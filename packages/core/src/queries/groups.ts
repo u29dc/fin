@@ -6,7 +6,7 @@ import type { ExpenseNode } from '../types/ledger';
 import {
 	getCashFlowData,
 	getCashFlowDataMedian,
-	getExpensesByCategory,
+	getExpensesByCategoryForAccounts,
 	getGroupExpenseHierarchy,
 	getGroupExpenseHierarchyMedian,
 	getLedgerAccountsDailyBalanceSeries,
@@ -243,10 +243,11 @@ export type CategoryBreakdownOptions = {
 	limit?: number;
 };
 
-export function getGroupCategoryBreakdown(db: Database, _groupId: GroupId, options: CategoryBreakdownOptions = {}): CategoryBreakdownPoint[] {
+export function getGroupCategoryBreakdown(db: Database, groupId: GroupId, options: CategoryBreakdownOptions = {}): CategoryBreakdownPoint[] {
 	const { months = 3, limit = 10 } = options;
 
-	const results = getExpensesByCategory(db, months);
+	const chartAccountIds = getGroupChartAccountIds(groupId);
+	const results = getExpensesByCategoryForAccounts(db, chartAccountIds, months);
 
 	return results.slice(0, limit).map((r) => ({
 		category: r.categoryName,

@@ -177,6 +177,50 @@ export function getExpensesByCategory(db: Database, months = 3): CategoryBreakdo
 	}));
 }
 
+/**
+ * Get expenses by category filtered to entries involving specified asset accounts.
+ * Useful for group-scoped category breakdowns.
+ */
+export function getExpensesByCategoryForAccounts(db: Database, chartAccountIds: string[], months = 3): CategoryBreakdown[] {
+	if (chartAccountIds.length === 0) {
+		return [];
+	}
+
+	const orConditions = chartAccountIds.flatMap(() => ['asset_posting.account_id = ?', 'asset_posting.account_id LIKE ?']);
+	const matchParams = chartAccountIds.flatMap((id) => [id, `${id}:%`]);
+
+	const rows = db
+		.query<CategoryRow, (string | number)[]>(
+			`
+		SELECT
+			p.account_id,
+			coa.name as category_name,
+			SUM(p.amount_minor) as total_minor,
+			COUNT(*) as transaction_count
+		FROM postings p
+		JOIN journal_entries je ON p.journal_entry_id = je.id
+		JOIN chart_of_accounts coa ON p.account_id = coa.id
+		WHERE coa.account_type = 'expense'
+			AND je.posted_at >= date('now', '-' || ? || ' months')
+			AND EXISTS (
+				SELECT 1 FROM postings asset_posting
+				WHERE asset_posting.journal_entry_id = p.journal_entry_id
+					AND (${orConditions.join(' OR ')})
+			)
+		GROUP BY p.account_id
+		ORDER BY total_minor DESC
+	`,
+		)
+		.all(months, ...matchParams);
+
+	return rows.map((row: CategoryRow) => ({
+		accountId: row.account_id,
+		categoryName: row.category_name,
+		totalMinor: row.total_minor,
+		transactionCount: row.transaction_count,
+	}));
+}
+
 export function getExpenseHierarchy(db: Database, months = 3): ExpenseNode[] {
 	type TotalRow = {
 		account_id: string;
