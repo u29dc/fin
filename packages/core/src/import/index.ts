@@ -71,7 +71,12 @@ type FileProcessResult = {
 	accountsTouched: AssetAccountId[];
 };
 
-async function processDetectedFiles(detected: DetectedFile[]): Promise<FileProcessResult> {
+function loadImportedSourceFiles(db: Database): Set<string> {
+	const rows = db.query<{ source_file: string }, []>('SELECT DISTINCT source_file FROM journal_entries WHERE source_file IS NOT NULL').all();
+	return new Set(rows.map((row) => row.source_file));
+}
+
+async function processDetectedFiles(detected: DetectedFile[], importedSources: Set<string>): Promise<FileProcessResult> {
 	const processedFiles: ArchiveFile[] = [];
 	const skippedFiles: { path: string; reason: string }[] = [];
 	const parsedTransactions: ParsedTransaction[] = [];
@@ -80,6 +85,10 @@ async function processDetectedFiles(detected: DetectedFile[]): Promise<FileProce
 	for (const file of detected) {
 		if (!file.chartAccountId) {
 			skippedFiles.push({ path: file.path, reason: 'Account folder not recognized for this file.' });
+			continue;
+		}
+		if (importedSources.has(file.path)) {
+			skippedFiles.push({ path: file.path, reason: 'File already imported.' });
 			continue;
 		}
 
@@ -135,7 +144,8 @@ export async function importInbox(options: ImportInboxOptions = {}): Promise<Imp
 	}
 
 	const detected = await scanInbox(inboxDir);
-	const { processedFiles, skippedFiles, parsedTransactions, accountsTouched } = await processDetectedFiles(detected);
+	const importedSources = loadImportedSourceFiles(db);
+	const { processedFiles, skippedFiles, parsedTransactions, accountsTouched } = await processDetectedFiles(detected, importedSources);
 
 	resetRulesCache();
 	const rulesConfig = await loadRules();
