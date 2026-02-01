@@ -1,0 +1,154 @@
+packages/core/src/db/category-mapping.ts
+  dc6ba198c3798fe6 27,31-32,41-45,50-65,194-201
+  39d3875cdbc00e1a 21,35,178,187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.40",
+  "base_commit_sha": "88de0db4b42cbf4dd813a39b34fb5f03749537d7",
+  "prompts": {
+    "0d45dff368c93861": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e35194a-6f10-4ece-b8df-7274268819f3",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 152,
+      "total_deletions": 0,
+      "accepted_lines": 152,
+      "overriden_lines": 0
+    },
+    "22c82ba77a4f85eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "997e3205-17e0-4b1d-9f64-4c2f6512f15d",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    },
+    "39d3875cdbc00e1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b106d012-7318-41bd-8700-fa4625a2bf4d",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 63,
+      "total_deletions": 16,
+      "accepted_lines": 63,
+      "overriden_lines": 0
+    },
+    "3df3edc5c88bc3f3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13f14859-27d8-4689-b6d0-8bc9c1246293",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "8531690a15a1ed2a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "572059a8-fcec-4a93-8027-8f01269824bc",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 25,
+      "total_deletions": 5,
+      "accepted_lines": 23,
+      "overriden_lines": 0
+    },
+    "8e8468448283036b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d33b97c-4598-4728-983d-b532a0ee7865",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 92,
+      "total_deletions": 9,
+      "accepted_lines": 73,
+      "overriden_lines": 0
+    },
+    "9f285c2afc1b9867": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5ccba1a7-901d-4254-91ef-b892d83ac957",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 7,
+      "total_deletions": 0,
+      "accepted_lines": 7,
+      "overriden_lines": 0
+    },
+    "9f5632719fdcad8f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b8505ad-65b3-46a5-8c7b-70559a9c71d6",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 177,
+      "total_deletions": 83,
+      "accepted_lines": 116,
+      "overriden_lines": 0
+    },
+    "c2d281184e233515": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e601358a-2852-40ce-ba9d-d0131b0fd55c",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 100,
+      "total_deletions": 52,
+      "accepted_lines": 70,
+      "overriden_lines": 2
+    },
+    "dc6ba198c3798fe6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5bf0de0c-0484-4bc2-a69f-e94ae1ac419c",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 32,
+      "total_deletions": 0,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    },
+    "fb1cc17bff410e1c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f0787b5-27d7-45a1-a8ac-6ac7a8ffa08e",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 316,
+      "total_deletions": 62,
+      "accepted_lines": 205,
+      "overriden_lines": 2
+    }
+  }
+}
