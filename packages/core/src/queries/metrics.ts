@@ -278,22 +278,15 @@ export function loadTransferRows(db: Database, chartAccountIds: AssetAccountId[]
 	// 3. At least one posting is to a requested account
 	// 4. Entry is after fromDate
 	const sql = `
-		WITH two_posting_entries AS (
-			SELECT journal_entry_id
-			FROM postings
-			GROUP BY journal_entry_id
-			HAVING COUNT(*) = 2
-		),
-		transfer_entries AS (
-			SELECT tpe.journal_entry_id AS journal_id
-			FROM two_posting_entries tpe
-			INNER JOIN postings p ON p.journal_entry_id = tpe.journal_entry_id
+		WITH transfer_entries AS (
+			SELECT p.journal_entry_id
+			FROM journal_entries je
+			INNER JOIN postings p ON p.journal_entry_id = je.id
 			INNER JOIN chart_of_accounts coa ON p.account_id = coa.id
-			INNER JOIN journal_entries je ON je.id = tpe.journal_entry_id
-			WHERE coa.account_type = 'asset'
-			  AND je.posted_at >= ?
-			GROUP BY tpe.journal_entry_id
+			WHERE je.posted_at >= ?
+			GROUP BY p.journal_entry_id
 			HAVING COUNT(*) = 2
+				AND SUM(CASE WHEN coa.account_type = 'asset' THEN 1 ELSE 0 END) = 2
 		)
 		SELECT
 			p.id,
@@ -301,7 +294,7 @@ export function loadTransferRows(db: Database, chartAccountIds: AssetAccountId[]
 			je.posted_at,
 			p.amount_minor
 		FROM transfer_entries te
-		INNER JOIN journal_entries je ON te.journal_id = je.id
+		INNER JOIN journal_entries je ON te.journal_entry_id = je.id
 		INNER JOIN postings p ON p.journal_entry_id = je.id
 		WHERE p.account_id IN (${placeholders})
 	`;

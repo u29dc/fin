@@ -35,6 +35,8 @@ export type TransactionQueryOptions = {
 	chartAccountIds?: string[];
 	from?: string;
 	to?: string;
+	afterPostedAt?: string;
+	afterId?: string;
 	limit?: number;
 };
 
@@ -64,6 +66,15 @@ export function getTransactions(db: Database, options: TransactionQueryOptions =
 	if (to) {
 		where.push('je.posted_at <= ?');
 		params.push(`${to}T23:59:59.999`);
+	}
+	if (options.afterPostedAt) {
+		if (options.afterId) {
+			where.push('(je.posted_at < ? OR (je.posted_at = ? AND je.id < ?))');
+			params.push(options.afterPostedAt, options.afterPostedAt, options.afterId);
+		} else {
+			where.push('je.posted_at < ?');
+			params.push(options.afterPostedAt);
+		}
 	}
 
 	const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';

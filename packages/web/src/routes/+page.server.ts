@@ -12,7 +12,7 @@ import {
 	getGroupDailyReserveBreakdownSeries,
 	getGroupDailyRunwaySeries,
 	getGroupExpenseTreeMedian,
-	getGroupMonthlyCashflowSeriesWithScenario,
+	getGroupMonthlyCashflowSeriesWithScenarioBatch,
 	getLatestBalances,
 	type MonthlyCashflowPoint,
 	type SankeyFlowData,
@@ -101,11 +101,13 @@ export function load({ url }: { url: URL }) {
 	}
 
 	// Fetch cashflow series for all groups
-	const groupCashflowSeries: Record<string, MonthlyCashflowPoint[]> = Object.fromEntries(groupIds.map((id) => [id, []]));
-
-	for (const groupId of groupIds) {
-		groupCashflowSeries[groupId] = getGroupMonthlyCashflowSeriesWithScenario(db, groupId, { limit: 240 }, financeConfig.scenarioToggles, financeConfig.scenario);
-	}
+	const groupCashflowSeries: Record<string, MonthlyCashflowPoint[]> = getGroupMonthlyCashflowSeriesWithScenarioBatch(
+		db,
+		groupIds,
+		{ limit: 240 },
+		financeConfig.scenarioToggles,
+		financeConfig.scenario,
+	);
 
 	// Fetch runway for all groups (just the latest point)
 	const groupRunway: Record<string, GroupRunwayPoint | null> = Object.fromEntries(groupIds.map((id) => [id, null]));

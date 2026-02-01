@@ -16,6 +16,7 @@ import {
 	getLedgerDailyBalanceSeries,
 	getLedgerLatestBalances,
 	getLedgerMonthlyCashflowSeries,
+	getLedgerMonthlyCashflowSeriesByGroup,
 	getPureMonthlyCashflowSeries,
 	type SankeyFlowData,
 } from './ledger';
@@ -207,6 +208,39 @@ export function getGroupMonthlyCashflowSeriesWithScenario(
 
 	const flows = getScenarioMonthlyFlows(db, scenarioConfig);
 	return applyScenarioToCashflowSeries(base, groupId, scenario, flows);
+}
+
+export function getGroupMonthlyCashflowSeriesWithScenarioBatch(
+	db: Database,
+	groupIds: GroupId[],
+	options: CashflowSeriesOptions = {},
+	scenario: ScenarioToggles,
+	scenarioConfig: Partial<ScenarioConfig> = {},
+): Record<string, MonthlyCashflowPoint[]> {
+	const { from, to, limit = 120 } = options;
+	const groupAccounts = getGroupChartAccounts();
+
+	const ledgerOptions: { from?: string; to?: string; limit?: number } = { limit };
+	if (from) ledgerOptions.from = from;
+	if (to) ledgerOptions.to = to;
+
+	const groupAccountMap: Record<string, string[]> = {};
+	for (const groupId of groupIds) {
+		groupAccountMap[groupId] = groupAccounts[groupId] ?? [];
+	}
+
+	const baseByGroup = getLedgerMonthlyCashflowSeriesByGroup(db, groupAccountMap, ledgerOptions);
+	if (!scenario.includeDividends && !scenario.includeSalary && !scenario.includeJointExpenses) {
+		return baseByGroup;
+	}
+
+	const flows = getScenarioMonthlyFlows(db, scenarioConfig);
+	const result: Record<string, MonthlyCashflowPoint[]> = {};
+	for (const groupId of groupIds) {
+		result[groupId] = applyScenarioToCashflowSeries(baseByGroup[groupId] ?? [], groupId, scenario, flows);
+	}
+
+	return result;
 }
 
 /**

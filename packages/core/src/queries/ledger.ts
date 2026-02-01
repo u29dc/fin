@@ -353,11 +353,13 @@ export type GetJournalEntriesOptions = {
 	accountId?: string;
 	startDate?: string;
 	endDate?: string;
+	afterPostedAt?: string;
+	afterId?: string;
 	limit?: number;
 	offset?: number;
 };
 
-export function getJournalEntries(db: Database, options: GetJournalEntriesOptions = {}): JournalEntryWithPostings[] {
+function buildJournalEntryFilters(options: GetJournalEntriesOptions): { conditions: string[]; params: (string | number)[] } {
 	const conditions: string[] = [];
 	const params: (string | number)[] = [];
 
@@ -378,11 +380,37 @@ export function getJournalEntries(db: Database, options: GetJournalEntriesOption
 		params.push(options.endDate);
 	}
 
-	const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+	if (options.afterPostedAt) {
+		if (options.afterId) {
+			conditions.push('(je.posted_at < ? OR (je.posted_at = ? AND je.id < ?))');
+			params.push(options.afterPostedAt, options.afterPostedAt, options.afterId);
+		} else {
+			conditions.push('je.posted_at < ?');
+			params.push(options.afterPostedAt);
+		}
+	}
+
+	return { conditions, params };
+}
+
+function buildJournalEntryPagination(options: GetJournalEntriesOptions): { clause: string; params: (string | number)[]; useKeyset: boolean } {
 	const limit = options.limit ?? 100;
 	const offset = options.offset ?? 0;
+	const useKeyset = options.afterPostedAt !== undefined;
 
-	params.push(limit, offset);
+	const params: (string | number)[] = [limit];
+	let clause = 'LIMIT ?';
+	if (!useKeyset) {
+		params.push(offset);
+		clause += ' OFFSET ?';
+	}
+
+	return { clause, params, useKeyset };
+}
+
+export function getJournalEntries(db: Database, options: GetJournalEntriesOptions = {}): JournalEntryWithPostings[] {
+	const { conditions, params } = buildJournalEntryFilters(options);
+	const { clause, params: paginationParams } = buildJournalEntryPagination(options);
 
 	// First query: get the journal entry IDs we want (with limit/offset)
 	const entryIds = db
@@ -390,12 +418,12 @@ export function getJournalEntries(db: Database, options: GetJournalEntriesOption
 			`
 		SELECT je.id
 		FROM journal_entries je
-		${whereClause}
+		${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
 		ORDER BY je.posted_at DESC
-		LIMIT ? OFFSET ?
+		${clause}
 	`,
 		)
-		.all(...params)
+		.all(...params, ...paginationParams)
 		.map((row: { id: string }) => row.id);
 
 	if (entryIds.length === 0) {
@@ -561,22 +589,22 @@ export function getLedgerDailyBalanceSeries(db: Database, chartAccountId: string
 	const params: (string | number)[] = [chartAccountId, `${chartAccountId}:%`];
 
 	if (from) {
-		conditions.push('DATE(je.posted_at) >= ?');
+		conditions.push('je.posted_date >= ?');
 		params.push(from);
 	}
 	if (to) {
-		conditions.push('DATE(je.posted_at) <= ?');
+		conditions.push('je.posted_date <= ?');
 		params.push(to);
 	}
 
 	const sql = `
 		SELECT
-			DATE(je.posted_at) AS date,
+			je.posted_date AS date,
 			SUM(p.amount_minor) AS daily_amount
 		FROM postings p
 		JOIN journal_entries je ON p.journal_entry_id = je.id
 		WHERE ${conditions.join(' AND ')}
-		GROUP BY DATE(je.posted_at)
+		GROUP BY je.posted_date
 		ORDER BY date ASC
 		LIMIT ?
 	`;
@@ -596,7 +624,7 @@ export function getLedgerDailyBalanceSeries(db: Database, chartAccountId: string
 			FROM postings p
 			JOIN journal_entries je ON p.journal_entry_id = je.id
 			WHERE (p.account_id = ? OR p.account_id LIKE ?)
-				AND DATE(je.posted_at) < ?
+				AND je.posted_date < ?
 		`,
 			)
 			.get(chartAccountId, `${chartAccountId}:%`, from);
@@ -640,6 +668,48 @@ function buildAccountMappingSQL(chartAccountIds: string[]): AccountMappingSQL {
 	};
 }
 
+type GroupAccountMappingSQL = {
+	caseClause: string;
+	orClause: string;
+	caseParams: (string | number)[];
+	orParams: (string | number)[];
+	groupIds: string[];
+};
+
+function buildGroupAccountMappingSQL(groupAccounts: Record<string, string[]>): GroupAccountMappingSQL {
+	const caseExpressions: string[] = [];
+	const caseParams: (string | number)[] = [];
+	const orConditions: string[] = [];
+	const orParams: (string | number)[] = [];
+	const groupIds: string[] = [];
+
+	for (const [groupId, accountIds] of Object.entries(groupAccounts)) {
+		if (!accountIds || accountIds.length === 0) {
+			continue;
+		}
+
+		const groupConditions: string[] = [];
+		for (const accountId of accountIds) {
+			groupConditions.push('(p.account_id = ? OR p.account_id LIKE ?)');
+			caseParams.push(accountId, `${accountId}:%`);
+			orConditions.push('(p.account_id = ? OR p.account_id LIKE ?)');
+			orParams.push(accountId, `${accountId}:%`);
+		}
+
+		caseExpressions.push(`WHEN ${groupConditions.join(' OR ')} THEN ?`);
+		caseParams.push(groupId);
+		groupIds.push(groupId);
+	}
+
+	return {
+		caseClause: caseExpressions.length > 0 ? `CASE ${caseExpressions.join(' ')} END` : 'NULL',
+		orClause: orConditions.join(' OR '),
+		caseParams,
+		orParams,
+		groupIds,
+	};
+}
+
 function fetchStartingBalances(db: Database, mapping: AccountMappingSQL, fromDate: string): Map<string, number> {
 	type StartBalanceRow = { chart_account_id: string; balance: number };
 	const params = [...mapping.caseParams, ...mapping.orParams, fromDate];
@@ -647,7 +717,7 @@ function fetchStartingBalances(db: Database, mapping: AccountMappingSQL, fromDat
 		.query<StartBalanceRow, (string | number)[]>(
 			`SELECT ${mapping.caseClause} as chart_account_id, COALESCE(SUM(p.amount_minor), 0) as balance
 			FROM postings p JOIN journal_entries je ON p.journal_entry_id = je.id
-			WHERE (${mapping.orClause}) AND DATE(je.posted_at) < ? GROUP BY chart_account_id`,
+			WHERE (${mapping.orClause}) AND je.posted_date < ? GROUP BY chart_account_id`,
 		)
 		.all(...params);
 
@@ -668,18 +738,18 @@ export function getLedgerAllAccountsDailyBalanceSeries(db: Database, chartAccoun
 	const params: (string | number)[] = [...mapping.caseParams, ...mapping.orParams];
 	const conditions = [`(${mapping.orClause})`];
 	if (from) {
-		conditions.push('DATE(je.posted_at) >= ?');
+		conditions.push('je.posted_date >= ?');
 		params.push(from);
 	}
 	if (to) {
-		conditions.push('DATE(je.posted_at) <= ?');
+		conditions.push('je.posted_date <= ?');
 		params.push(to);
 	}
 
 	type BatchedDailyRow = { chart_account_id: string; date: string; daily_amount: number };
-	const sql = `SELECT ${mapping.caseClause} as chart_account_id, DATE(je.posted_at) AS date, SUM(p.amount_minor) AS daily_amount
+	const sql = `SELECT ${mapping.caseClause} as chart_account_id, je.posted_date AS date, SUM(p.amount_minor) AS daily_amount
 		FROM postings p JOIN journal_entries je ON p.journal_entry_id = je.id
-		WHERE ${conditions.join(' AND ')} GROUP BY chart_account_id, DATE(je.posted_at) ORDER BY chart_account_id, date ASC`;
+		WHERE ${conditions.join(' AND ')} GROUP BY chart_account_id, je.posted_date ORDER BY chart_account_id, date ASC`;
 	const rows = db.query<BatchedDailyRow, (string | number)[]>(sql).all(...params);
 
 	// Get starting balances if 'from' filter is used
@@ -748,7 +818,7 @@ export function getLedgerLatestBalances(db: Database, chartAccountIds: string[])
 			`
 		SELECT
 			CASE ${caseExpressions.join(' ')} END as chart_account_id,
-			MAX(DATE(je.posted_at)) as max_date,
+			MAX(je.posted_date) as max_date,
 			COALESCE(SUM(p.amount_minor), 0) as balance
 		FROM postings p
 		JOIN journal_entries je ON p.journal_entry_id = je.id
@@ -800,22 +870,22 @@ export function getLedgerAccountsDailyBalanceSeries(db: Database, chartAccountId
 	const params: (string | number)[] = [...matchParams];
 
 	if (from) {
-		conditions.push('DATE(je.posted_at) >= ?');
+		conditions.push('je.posted_date >= ?');
 		params.push(from);
 	}
 	if (to) {
-		conditions.push('DATE(je.posted_at) <= ?');
+		conditions.push('je.posted_date <= ?');
 		params.push(to);
 	}
 
 	const sql = `
 		SELECT
-			DATE(je.posted_at) AS date,
+			je.posted_date AS date,
 			SUM(p.amount_minor) AS daily_amount
 		FROM postings p
 		JOIN journal_entries je ON p.journal_entry_id = je.id
 		WHERE ${conditions.join(' AND ')}
-		GROUP BY DATE(je.posted_at)
+		GROUP BY je.posted_date
 		ORDER BY date ASC
 		LIMIT ?
 	`;
@@ -828,7 +898,7 @@ export function getLedgerAccountsDailyBalanceSeries(db: Database, chartAccountId
 
 	// Get starting balance if we have a 'from' filter
 	if (from) {
-		const startConditions = [`(${orConditions.join(' OR ')})`, 'DATE(je.posted_at) < ?'];
+		const startConditions = [`(${orConditions.join(' OR ')})`, 'je.posted_date < ?'];
 		const startParams = [...matchParams, from];
 
 		const startBalance = db
@@ -858,6 +928,55 @@ type MonthlyCashflowFullRow = {
 	income_minor: number;
 	expense_minor: number;
 };
+
+function buildMonthlyCashflowSeries(rows: MonthlyCashflowFullRow[]): LedgerMonthlyCashflowPoint[] {
+	type BasePoint = {
+		month: string;
+		incomeMinor: number;
+		expenseMinor: number;
+		netMinor: number;
+		savingsRatePct: number | null;
+	};
+
+	// First pass: create base points
+	const basePoints: BasePoint[] = rows.map((row: MonthlyCashflowFullRow) => {
+		const netMinor = row.income_minor - row.expense_minor;
+		const savingsRatePct = row.income_minor > 0 ? Math.round((netMinor / row.income_minor) * 1000) / 10 : null;
+		return {
+			month: row.month,
+			incomeMinor: row.income_minor,
+			expenseMinor: row.expense_minor,
+			netMinor,
+			savingsRatePct,
+		};
+	});
+
+	// Second pass: calculate rolling 6-month median expense and deviation
+	const ROLLING_WINDOW = 6;
+	return basePoints.map((point: BasePoint, i: number) => {
+		const start = Math.max(0, i - ROLLING_WINDOW);
+		const prevExpenses = basePoints.slice(start, i).map((p: BasePoint) => p.expenseMinor);
+
+		let rollingMedianExpenseMinor: number | null = null;
+		let expenseDeviationRatio: number | null = null;
+
+		if (prevExpenses.length >= 3) {
+			const sorted = [...prevExpenses].sort((a, b) => a - b);
+			const mid = Math.floor(sorted.length / 2);
+			rollingMedianExpenseMinor = sorted.length % 2 === 1 ? (sorted[mid] ?? 0) : Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
+
+			if (rollingMedianExpenseMinor !== null && rollingMedianExpenseMinor > 0) {
+				expenseDeviationRatio = Math.round((point.expenseMinor / rollingMedianExpenseMinor) * 100) / 100;
+			}
+		}
+
+		return {
+			...point,
+			rollingMedianExpenseMinor,
+			expenseDeviationRatio,
+		};
+	});
+}
 
 /**
  * Get monthly cashflow series with rolling statistics.
@@ -923,53 +1042,85 @@ export function getLedgerMonthlyCashflowSeries(db: Database, chartAccountIds: st
 	params.push(String(limit));
 
 	const rows = db.query<MonthlyCashflowFullRow, string[]>(sql).all(...params);
+	return buildMonthlyCashflowSeries(rows);
+}
 
-	type BasePoint = {
-		month: string;
-		incomeMinor: number;
-		expenseMinor: number;
-		netMinor: number;
-		savingsRatePct: number | null;
-	};
+type GroupMonthlyCashflowRow = {
+	group_id: string;
+	month: string;
+	income_minor: number;
+	expense_minor: number;
+};
 
-	// First pass: create base points
-	const basePoints: BasePoint[] = rows.map((row: MonthlyCashflowFullRow) => {
-		const netMinor = row.income_minor - row.expense_minor;
-		const savingsRatePct = row.income_minor > 0 ? Math.round((netMinor / row.income_minor) * 1000) / 10 : null;
-		return {
-			month: row.month,
-			incomeMinor: row.income_minor,
-			expenseMinor: row.expense_minor,
-			netMinor,
-			savingsRatePct,
-		};
-	});
+export function getLedgerMonthlyCashflowSeriesByGroup(db: Database, groupAccounts: Record<string, string[]>, options: LedgerCashflowSeriesOptions = {}): Record<string, LedgerMonthlyCashflowPoint[]> {
+	const mapping = buildGroupAccountMappingSQL(groupAccounts);
+	const result: Record<string, LedgerMonthlyCashflowPoint[]> = {};
+	for (const groupId of Object.keys(groupAccounts)) {
+		result[groupId] = [];
+	}
 
-	// Second pass: calculate rolling 6-month median expense and deviation
-	const ROLLING_WINDOW = 6;
-	return basePoints.map((point: BasePoint, i: number) => {
-		const start = Math.max(0, i - ROLLING_WINDOW);
-		const prevExpenses = basePoints.slice(start, i).map((p: BasePoint) => p.expenseMinor);
+	if (mapping.orClause.length === 0) {
+		return result;
+	}
 
-		let rollingMedianExpenseMinor: number | null = null;
-		let expenseDeviationRatio: number | null = null;
+	const { from, to, limit = 120 } = options;
+	const params: (string | number)[] = [...mapping.caseParams, ...mapping.orParams];
 
-		if (prevExpenses.length >= 3) {
-			const sorted = [...prevExpenses].sort((a, b) => a - b);
-			const mid = Math.floor(sorted.length / 2);
-			rollingMedianExpenseMinor = sorted.length % 2 === 1 ? (sorted[mid] ?? 0) : Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
+	const conditions: string[] = [];
+	if (from) {
+		conditions.push('je.posted_at >= ?');
+		params.push(`${from}T00:00:00`);
+	}
+	if (to) {
+		conditions.push('je.posted_at <= ?');
+		params.push(`${to}T23:59:59`);
+	}
 
-			if (rollingMedianExpenseMinor !== null && rollingMedianExpenseMinor > 0) {
-				expenseDeviationRatio = Math.round((point.expenseMinor / rollingMedianExpenseMinor) * 100) / 100;
-			}
-		}
+	const whereClause = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
 
-		return {
-			...point,
-			rollingMedianExpenseMinor,
-			expenseDeviationRatio,
-		};
-	});
+	const sql = `
+		SELECT
+			p.group_id,
+			strftime('%Y-%m', je.posted_at) AS month,
+			SUM(CASE WHEN p.amount_minor > 0 AND NOT p.is_transfer THEN p.amount_minor ELSE 0 END) AS income_minor,
+			SUM(CASE WHEN p.amount_minor < 0 AND NOT p.is_transfer THEN -p.amount_minor ELSE 0 END) AS expense_minor
+		FROM (
+			SELECT
+				p.journal_entry_id,
+				p.amount_minor,
+				${mapping.caseClause} as group_id,
+				EXISTS (
+					SELECT 1 FROM postings p2
+					WHERE p2.journal_entry_id = p.journal_entry_id
+						AND p2.id != p.id
+						AND p2.account_id LIKE 'Assets:%'
+				) AS is_transfer
+			FROM postings p
+			WHERE ${mapping.orClause}
+		) p
+		JOIN journal_entries je ON p.journal_entry_id = je.id
+		WHERE p.group_id IS NOT NULL
+			${whereClause}
+		GROUP BY p.group_id, month
+		ORDER BY p.group_id, month ASC
+	`;
+
+	const rows = db.query<GroupMonthlyCashflowRow, (string | number)[]>(sql).all(...params);
+	const byGroup = new Map<string, MonthlyCashflowFullRow[]>();
+
+	for (const row of rows) {
+		const list = byGroup.get(row.group_id) ?? [];
+		list.push({ month: row.month, income_minor: row.income_minor, expense_minor: row.expense_minor });
+		byGroup.set(row.group_id, list);
+	}
+
+	for (const [groupId, groupRows] of byGroup) {
+		groupRows.sort((a, b) => a.month.localeCompare(b.month));
+		const series = buildMonthlyCashflowSeries(groupRows);
+		result[groupId] = limit !== undefined ? series.slice(-limit) : series;
+	}
+
+	return result;
 }
 
 type ContributionPostingRow = {
