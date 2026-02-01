@@ -6,6 +6,16 @@ import type { NameMappingConfig } from './types';
 
 let mergedRules: NameMappingConfig | null = null;
 let externalRulesLoaded = false;
+let externalRulesError: string | null = null;
+
+function warnExternalRules(resolvedPath: string, error: unknown): void {
+	if (externalRulesError) {
+		return;
+	}
+	const message = error instanceof Error ? error.message : String(error);
+	externalRulesError = message;
+	process.emitWarning(`Failed to load rules file at ${resolvedPath}: ${message}`, { code: 'FIN_RULES_LOAD_FAILED' });
+}
 
 /**
  * Load external rules from the configured path (data/fin.rules.ts).
@@ -34,9 +44,10 @@ async function loadExternalRules(): Promise<NameMappingConfig | null> {
 		if (externalModule.NAME_MAPPING_CONFIG) {
 			return externalModule.NAME_MAPPING_CONFIG;
 		}
+		warnExternalRules(resolvedPath, 'Missing NAME_MAPPING_CONFIG export');
 		return null;
-	} catch {
-		// Silently return null if rules file is invalid
+	} catch (error) {
+		warnExternalRules(resolvedPath, error);
 		return null;
 	}
 }
@@ -82,6 +93,7 @@ export function getRules(): NameMappingConfig {
 export function resetRulesCache(): void {
 	mergedRules = null;
 	externalRulesLoaded = false;
+	externalRulesError = null;
 }
 
 /**

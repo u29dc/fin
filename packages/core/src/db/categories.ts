@@ -127,7 +127,6 @@ const EXPENSE_CATEGORIES = new Set([
 	'cafe',
 	'parking',
 	'fuel',
-	'other',
 ]);
 
 export function mapCategoryToAccount(category: string | null, description: string, isInflow: boolean): string {
