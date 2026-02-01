@@ -1,0 +1,27 @@
+packages/web/src/lib/Header.svelte
+  409940c243678cd7 130
+packages/web/src/routes/transactions/+page.svelte
+  409940c243678cd7 41-42
+packages/web/src/lib/charts/AccountGroupChart.svelte
+  409940c243678cd7 123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.40",
+  "base_commit_sha": "ad8da904441810c248e2c14077181b2a8cb55d73",
+  "prompts": {
+    "409940c243678cd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3ccceaca-d72f-4222-8e50-5b545d33374e",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 4,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}
