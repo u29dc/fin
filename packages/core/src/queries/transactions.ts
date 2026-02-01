@@ -91,17 +91,7 @@ export function getTransactions(db: Database, options: TransactionQueryOptions =
 
 	const rows = db.query<JournalEntryRow, (string | number)[]>(sql).all(...params);
 
-	return rows.map((row: JournalEntryRow) => ({
-		id: row.id,
-		chartAccountId: row.chart_account_id,
-		pairAccountId: row.pair_account_id ?? '',
-		postedAt: row.posted_at,
-		amountMinor: row.amount_minor,
-		currency: row.currency,
-		rawDescription: row.raw_description,
-		cleanDescription: row.clean_description,
-		counterparty: row.counterparty,
-	}));
+	return rows.map(mapRowToTransaction);
 }
 
 // ============================================
@@ -111,16 +101,6 @@ export function getTransactions(db: Database, options: TransactionQueryOptions =
 export type AllTransactionsOptions = {
 	limit?: number;
 };
-
-function buildChartAccountToGroupMap(groupIds: string[], groupAccounts: Record<string, string[]>): Map<string, string> {
-	const map = new Map<string, string>();
-	for (const gid of groupIds) {
-		for (const chartAccountId of groupAccounts[gid] ?? []) {
-			map.set(chartAccountId, gid);
-		}
-	}
-	return map;
-}
 
 function mapRowToTransaction(row: JournalEntryRow): Transaction {
 	return {
@@ -151,42 +131,14 @@ function initEmptyGroupResult(groupIds: string[]): Record<string, Transaction[]>
 export function getAllTransactions(db: Database, groupIds: string[], options: AllTransactionsOptions = {}): Record<string, Transaction[]> {
 	const { limit = 10_000 } = options;
 	const groupAccounts = getGroupChartAccounts();
-	const allChartAccountIds = groupIds.flatMap((gid) => groupAccounts[gid] ?? []);
-
-	if (allChartAccountIds.length === 0) {
-		return initEmptyGroupResult(groupIds);
-	}
-
-	const placeholders = allChartAccountIds.map(() => '?').join(', ');
-	const sql = `
-		SELECT
-			je.id,
-			p.account_id as chart_account_id,
-			GROUP_CONCAT(DISTINCT p2.account_id) as pair_account_id,
-			je.posted_at,
-			p.amount_minor,
-			p.currency,
-			COALESCE(je.raw_description, je.description) as raw_description,
-			COALESCE(je.clean_description, je.description) as clean_description,
-			je.counterparty
-		FROM journal_entries je
-		JOIN postings p ON p.journal_entry_id = je.id
-		LEFT JOIN postings p2 ON p2.journal_entry_id = je.id AND p2.id != p.id
-		WHERE p.account_id IN (${placeholders})
-		GROUP BY je.id, p.id
-		ORDER BY je.posted_at DESC
-		LIMIT ?;
-	`;
-
-	const rows = db.query<JournalEntryRow, (string | number)[]>(sql).all(...allChartAccountIds, limit);
-	const chartAccountToGroup = buildChartAccountToGroupMap(groupIds, groupAccounts);
 	const result = initEmptyGroupResult(groupIds);
 
-	for (const row of rows) {
-		const groupId = chartAccountToGroup.get(row.chart_account_id);
-		if (groupId) {
-			result[groupId]?.push(mapRowToTransaction(row));
+	for (const gid of groupIds) {
+		const chartAccountIds = groupAccounts[gid] ?? [];
+		if (chartAccountIds.length === 0) {
+			continue;
 		}
+		result[gid] = getTransactions(db, { chartAccountIds, limit });
 	}
 
 	return result;
