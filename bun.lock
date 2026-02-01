@@ -678,7 +678,7 @@
 
     "svelte-adapter-bun": ["svelte-adapter-bun@1.0.1", "", { "dependencies": { "rolldown": "^1.0.0-beta.38" }, "peerDependencies": { "@sveltejs/kit": "^2.4.0", "typescript": "^5" } }, "sha512-tNOvfm8BGgG+rmEA7hkmqtq07v7zoo4skLQc+hIoQ79J+1fkEMpJEA2RzCIe3aPc8JdrsMJkv3mpiZPMsgahjA=="],
 
-    "svelte-check-rs": ["svelte-check-rs@0.7.2", "", { "dependencies": { "axios": "^1.13.2", "axios-proxy-builder": "^0.1.2", "console.table": "^0.10.0", "detect-libc": "^2.1.2", "rimraf": "^6.1.2" }, "bin": { "svelte-check-rs": "run-svelte-check-rs.js" } }, "sha512-v33nyKFgCKf2OMYIqQYdg0/U3MRGbU0zg3lsiww0ck8YgKzPfT1FYkH3PIhV7UdlVA8bS5QgGSND/6hIw6i/lw=="],
+    "svelte-check-rs": ["svelte-check-rs@0.7.4", "", { "dependencies": { "axios": "^1.13.2", "axios-proxy-builder": "^0.1.2", "console.table": "^0.10.0", "detect-libc": "^2.1.2", "rimraf": "^6.1.2" }, "bin": { "svelte-check-rs": "run-svelte-check-rs.js" } }, "sha512-1KUbBVxnqX74RQyIXyjXfQvA8+D1xUf7FQ6Eqf5F7AIjd0bHyYygmCPlPPDX6UEJ16WIsnzVneyCDWGOoDVxnQ=="],
 
     "tailwindcss": ["tailwindcss@4.1.18", "", {}, "sha512-4+Z+0yiYyEtUVCScyfHCxOYP06L5Ne+JiHhY2IjR2KWMIWhJOYZKLSGZaP5HkZ8+bY0cxfzwDE5uOmzFXyIwxw=="],
 
