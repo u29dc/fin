@@ -166,6 +166,16 @@ export function getFinancialConfig() {
 	return getConfig().financial;
 }
 
+// Burn rate exclusion accounts
+export function getBurnRateExcludeAccounts(): string[] {
+	return getFinancialConfig().burn_rate_exclude_accounts ?? [];
+}
+
+// Burn rate method (mean or median)
+export function getBurnRateMethod(): 'mean' | 'median' {
+	return getFinancialConfig().burn_rate_method ?? 'median';
+}
+
 // Provider mapping from account
 export function getProviderForAccount(chartAccountId: string): string | null {
 	const account = getAccountById(chartAccountId);

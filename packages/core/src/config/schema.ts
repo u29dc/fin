@@ -81,6 +81,8 @@ const FinancialSchema = z.object({
 	investment_projection_annual_returns: InvestmentProjectionSchema,
 	runway_threshold_minor: positiveIntSchema.optional(),
 	runway_warning_minor: positiveIntSchema.optional(),
+	burn_rate_exclude_accounts: z.array(z.string()).optional().default([]),
+	burn_rate_method: z.enum(['mean', 'median']).optional().default('median'),
 });
 
 // Sanitization config schema

@@ -1811,6 +1811,85 @@ export function getPureMonthlyCashflowSeries(db: Database, chartAccountIds: stri
 }
 
 // ============================================
+// EXPENSE ACCOUNT PAYEE BREAKDOWN
+// ============================================
+
+export type ExpensePayeeBreakdownPoint = {
+	payee: string;
+	totalMinor: number;
+	monthlyAvgMinor: number;
+	transactionCount: number;
+	sampleAccount: string;
+	lastDate: string;
+};
+
+export type ExpensePayeeBreakdownOptions = {
+	months?: number;
+	chartAccountIds?: string[];
+};
+
+type PayeeBreakdownRow = {
+	payee: string;
+	total_minor: number;
+	transaction_count: number;
+	sample_account: string;
+	last_date: string;
+};
+
+/**
+ * Get payee breakdown for a specific expense account prefix.
+ * Aggregates by counterparty/description to show who is being paid under an expense category.
+ * Optionally scoped to entries involving specific asset accounts (group filtering).
+ */
+export function getExpenseAccountPayeeBreakdown(db: Database, expenseAccountPrefix: string, options: ExpensePayeeBreakdownOptions = {}): ExpensePayeeBreakdownPoint[] {
+	const { months = 12, chartAccountIds } = options;
+
+	const conditions: string[] = ['(p.account_id = ? OR p.account_id LIKE ?)', "je.posted_at >= date('now', '-' || ? || ' months')"];
+	const params: (string | number)[] = [expenseAccountPrefix, `${expenseAccountPrefix}:%`, months];
+
+	// Optional group scoping via asset account IDs
+	if (chartAccountIds && chartAccountIds.length > 0) {
+		const assetConditions: string[] = [];
+		for (const accountId of chartAccountIds) {
+			assetConditions.push('(asset_p.account_id = ? OR asset_p.account_id LIKE ?)');
+			params.push(accountId, `${accountId}:%`);
+		}
+		conditions.push(`EXISTS (
+			SELECT 1 FROM postings asset_p
+			WHERE asset_p.journal_entry_id = p.journal_entry_id
+				AND (${assetConditions.join(' OR ')})
+		)`);
+	}
+
+	const sql = `
+		SELECT
+			COALESCE(je.counterparty, je.clean_description, je.description) AS payee,
+			SUM(p.amount_minor) AS total_minor,
+			COUNT(*) AS transaction_count,
+			MIN(p.account_id) AS sample_account,
+			MAX(je.posted_at) AS last_date
+		FROM postings p
+		JOIN journal_entries je ON p.journal_entry_id = je.id
+		JOIN chart_of_accounts coa ON p.account_id = coa.id
+		WHERE coa.account_type = 'expense'
+			AND ${conditions.join(' AND ')}
+		GROUP BY COALESCE(je.counterparty, je.clean_description, je.description)
+		ORDER BY total_minor DESC
+	`;
+
+	const rows = db.query<PayeeBreakdownRow, (string | number)[]>(sql).all(...params);
+
+	return rows.map((row) => ({
+		payee: row.payee,
+		totalMinor: row.total_minor,
+		monthlyAvgMinor: Math.round(row.total_minor / months),
+		transactionCount: row.transaction_count,
+		sampleAccount: row.sample_account,
+		lastDate: row.last_date.slice(0, 10),
+	}));
+}
+
+// ============================================
 // CONSOLIDATED CASHFLOW (EXCLUDES INTERNAL TRANSFERS)
 // ============================================
 
@@ -1827,7 +1906,12 @@ export type ConsolidatedMonthlyCashflowPoint = {
  * accounts within the specified chart account set. These are excluded from the
  * expense calculation because money didn't leave the controlled system.
  */
-export function getConsolidatedMonthlyCashflow(db: Database, chartAccountIds: string[], options: LedgerCashflowSeriesOptions = {}): ConsolidatedMonthlyCashflowPoint[] {
+export function getConsolidatedMonthlyCashflow(
+	db: Database,
+	chartAccountIds: string[],
+	options: LedgerCashflowSeriesOptions = {},
+	excludeExpenseAccountPrefixes: string[] = [],
+): ConsolidatedMonthlyCashflowPoint[] {
 	if (chartAccountIds.length === 0) {
 		return [];
 	}
@@ -1859,6 +1943,15 @@ export function getConsolidatedMonthlyCashflow(db: Database, chartAccountIds: st
 	// An internal transfer is a journal entry where ALL postings go to controlled accounts
 	const controlledAccountsCheck = orConditions.join(' OR ');
 
+	// Build expense exclusion conditions for pass-through accounts (e.g., VAT)
+	const excludeConditions: string[] = [];
+	const excludeParams: string[] = [];
+	for (const prefix of excludeExpenseAccountPrefixes) {
+		excludeConditions.push('AND p.account_id != ? AND p.account_id NOT LIKE ?');
+		excludeParams.push(prefix, `${prefix}:%`);
+	}
+	const excludeClause = excludeConditions.join(' ');
+
 	// Query: Get monthly income/expense excluding internal transfers
 	// Internal transfer = journal entry where both postings are to asset accounts
 	// within the controlled set (money just moved between controlled accounts)
@@ -1883,6 +1976,7 @@ export function getConsolidatedMonthlyCashflow(db: Database, chartAccountIds: st
 			END) AS income_minor,
 			SUM(CASE
 				WHEN coa.account_type = 'expense' AND je.id NOT IN (SELECT journal_entry_id FROM internal_entries)
+				${excludeClause}
 				THEN p.amount_minor
 				ELSE 0
 			END) AS expense_minor
@@ -1902,7 +1996,8 @@ export function getConsolidatedMonthlyCashflow(db: Database, chartAccountIds: st
 	`;
 
 	// Build params: controlledAccountsCheck appears 3 times in the SQL (as p1, p2, and p2 again)
-	const params: (string | number)[] = [...matchParams, ...matchParams, ...matchParams, ...dateParams, limit];
+	// excludeParams are injected into the expense CASE clause
+	const params: (string | number)[] = [...matchParams, ...matchParams, ...excludeParams, ...matchParams, ...dateParams, limit];
 
 	type RawRow = { month: string; income_minor: number; expense_minor: number };
 	const rows = db.query<RawRow, (string | number)[]>(sql).all(...params);

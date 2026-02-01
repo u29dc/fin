@@ -48,6 +48,12 @@ high = 0.12
 runway_threshold_minor = 3000000
 runway_warning_minor = 6000000
 
+# Account ID prefixes excluded from burn rate / runway (pass-through expenses)
+burn_rate_exclude_accounts = ["Expenses:Taxes:VAT", "Expenses:Taxes:HMRC", "Expenses:Business:Contractors"]
+
+# Burn rate calculation method: "mean" (trailing average) or "median" (resists spiky one-offs)
+burn_rate_method = "median"
+
 # =============================================================================
 # GROUPS
 # =============================================================================

@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { getFinanceConfig } from '../config';
-import { getGroupChartAccounts, getGroupMetadata, isConfigInitialized } from '../config/index';
+import { getBurnRateExcludeAccounts, getBurnRateMethod, getGroupChartAccounts, getGroupMetadata, isConfigInitialized } from '../config/index';
 import { getConsolidatedMonthlyCashflow, getLedgerAccountsDailyBalanceSeries, getLedgerMonthlyCashflowSeries, type LedgerBalanceSeriesOptions, type LedgerMonthlyCashflowPoint } from './ledger';
 
 // ============================================
@@ -94,7 +94,7 @@ const DEFAULT_HEALTH_ASSUMPTIONS: LedgerHealthAssumptions = {
 };
 
 const DEFAULT_RUNWAY_ASSUMPTIONS: LedgerRunwayAssumptions = {
-	trailingOutflowWindowMonths: 3,
+	trailingOutflowWindowMonths: 6,
 	maxRunwayMonths: 120,
 };
 
@@ -398,6 +398,36 @@ function getMonthlyTrailingAverageOutflowMap(monthlyOutflow: MonthlyOutflowPoint
 	return map;
 }
 
+function getMonthlyTrailingMedianOutflowMap(monthlyOutflow: MonthlyOutflowPoint[], trailingMonths: number): Map<string, number> {
+	const map = new Map<string, number>();
+
+	for (let i = 0; i < monthlyOutflow.length; i++) {
+		const start = Math.max(0, i - trailingMonths + 1);
+		const values: number[] = [];
+		for (let j = start; j <= i; j++) {
+			const other = monthlyOutflow[j];
+			if (other) {
+				values.push(other.outflowMinor);
+			}
+		}
+
+		const med = median(values);
+		const month = monthlyOutflow[i]?.month;
+		if (month) {
+			map.set(month, med);
+		}
+	}
+
+	return map;
+}
+
+function getMonthlyTrailingOutflowMap(monthlyOutflow: MonthlyOutflowPoint[], trailingMonths: number, method: 'mean' | 'median'): Map<string, number> {
+	if (method === 'median') {
+		return getMonthlyTrailingMedianOutflowMap(monthlyOutflow, trailingMonths);
+	}
+	return getMonthlyTrailingAverageOutflowMap(monthlyOutflow, trailingMonths);
+}
+
 function clampNumber(value: number, min: number, max: number): number {
 	if (!Number.isFinite(value)) {
 		return min;
@@ -458,19 +488,20 @@ export function getLedgerGroupDailyRunwaySeries(
 	const baseMonthlyCashflow = getLedgerMonthlyCashflowSeries(db, expenseChartAccountIds, cashflowOptions);
 	const outflowDelta = computeScenarioOutflowDelta(groupId, scenario, mergedScenarioConfig);
 
+	const burnMethod = getBurnRateMethod();
 	const monthlyOutflow: MonthlyOutflowPoint[] = baseMonthlyCashflow.map((row) => ({
 		month: row.month,
 		outflowMinor: row.expenseMinor + outflowDelta,
 	}));
-	const avgOutflowByMonth = getMonthlyTrailingAverageOutflowMap(monthlyOutflow, trailingMonths);
-	const months = Array.from(avgOutflowByMonth.keys()).sort();
+	const outflowByMonth = getMonthlyTrailingOutflowMap(monthlyOutflow, trailingMonths, burnMethod);
+	const months = Array.from(outflowByMonth.keys()).sort();
 
 	// Median uses BASE expenses only (no salary/dividends) - shows operating costs
 	const last12Base = baseMonthlyCashflow.slice(-13, -1);
 	const medianExpenseMinor = median(last12Base.map((p) => p.expenseMinor));
 
 	let monthIndex = -1;
-	let currentAvgOutflowMinor: number | null = null;
+	let currentOutflowMinor: number | null = null;
 	const runway: LedgerGroupRunwayPoint[] = [];
 
 	for (const point of cashSeries) {
@@ -480,10 +511,10 @@ export function getLedgerGroupDailyRunwaySeries(
 			const nextMonth = months[monthIndex + 1];
 			if (!nextMonth || nextMonth > month) break;
 			monthIndex += 1;
-			currentAvgOutflowMinor = avgOutflowByMonth.get(nextMonth) ?? currentAvgOutflowMinor;
+			currentOutflowMinor = outflowByMonth.get(nextMonth) ?? currentOutflowMinor;
 		}
 
-		runway.push(computeRunwayPoint(point.date, point.balanceMinor, currentAvgOutflowMinor ?? 0, maxRunwayMonths, medianExpenseMinor));
+		runway.push(computeRunwayPoint(point.date, point.balanceMinor, currentOutflowMinor ?? 0, maxRunwayMonths, medianExpenseMinor));
 	}
 
 	return runway;
@@ -558,13 +589,15 @@ export function getLedgerConsolidatedDailyRunwaySeries(db: Database, options: Co
 	if (from) cashflowOptions.from = from;
 	if (to) cashflowOptions.to = to;
 
-	const monthlyCashflow = getConsolidatedMonthlyCashflow(db, allChartAccountIds, cashflowOptions);
+	const burnMethod = getBurnRateMethod();
+	const excludePrefixes = getBurnRateExcludeAccounts();
+	const monthlyCashflow = getConsolidatedMonthlyCashflow(db, allChartAccountIds, cashflowOptions, excludePrefixes);
 	const monthlyOutflow: MonthlyOutflowPoint[] = monthlyCashflow.map((row) => ({ month: row.month, outflowMinor: row.expenseMinor }));
-	const avgOutflowByMonth = getMonthlyTrailingAverageOutflowMap(monthlyOutflow, trailingMonths);
-	const months = Array.from(avgOutflowByMonth.keys()).sort();
+	const outflowByMonth = getMonthlyTrailingOutflowMap(monthlyOutflow, trailingMonths, burnMethod);
+	const months = Array.from(outflowByMonth.keys()).sort();
 
 	let monthIndex = -1;
-	let currentAvgOutflowMinor: number | null = null;
+	let currentOutflowMinor: number | null = null;
 	const runway: ConsolidatedRunwayPoint[] = [];
 
 	for (const point of cashSeries) {
@@ -572,10 +605,10 @@ export function getLedgerConsolidatedDailyRunwaySeries(db: Database, options: Co
 		let nextMonth = months[monthIndex + 1];
 		while (nextMonth !== undefined && nextMonth <= month) {
 			monthIndex += 1;
-			currentAvgOutflowMinor = avgOutflowByMonth.get(nextMonth) ?? currentAvgOutflowMinor;
+			currentOutflowMinor = outflowByMonth.get(nextMonth) ?? currentOutflowMinor;
 			nextMonth = months[monthIndex + 1];
 		}
-		runway.push(computeConsolidatedRunwayPoint(point.date, point.balanceMinor, currentAvgOutflowMinor ?? 0, maxRunwayMonths));
+		runway.push(computeConsolidatedRunwayPoint(point.date, point.balanceMinor, currentOutflowMinor ?? 0, maxRunwayMonths));
 	}
 
 	return runway;

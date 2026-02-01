@@ -33,6 +33,8 @@ export type FinanceConfig = {
 	};
 	runwayThresholdMinor?: number | undefined;
 	runwayWarningMinor?: number | undefined;
+	burnRateExcludeAccounts: string[];
+	burnRateMethod: 'mean' | 'median';
 };
 
 /**
@@ -70,5 +72,7 @@ export function getFinanceConfig(): FinanceConfig {
 		investmentProjectionAnnualReturns: cfg.investment_projection_annual_returns,
 		runwayThresholdMinor: cfg.runway_threshold_minor,
 		runwayWarningMinor: cfg.runway_warning_minor,
+		burnRateExcludeAccounts: cfg.burn_rate_exclude_accounts ?? [],
+		burnRateMethod: cfg.burn_rate_method ?? 'median',
 	};
 }

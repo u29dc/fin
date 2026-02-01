@@ -35,7 +35,7 @@ export function load() {
 	const latestBalances = getLatestBalances(db, LIQUID_CHART_ACCOUNT_IDS);
 	const currentLiquidMinor = latestBalances.reduce((sum, b) => sum + (b.balanceMinor ?? 0), 0);
 
-	const consolidatedRunway = getConsolidatedDailyRunwaySeries(db, { includeGroups: availableGroups }, { trailingOutflowWindowMonths: 3 });
+	const consolidatedRunway = getConsolidatedDailyRunwaySeries(db, { includeGroups: availableGroups });
 	const latestRunway = consolidatedRunway[consolidatedRunway.length - 1];
 	// Use actual median from data, or 0 if no data yet
 	const currentBurnMinor = latestRunway?.burnRateMinor ?? 0;
