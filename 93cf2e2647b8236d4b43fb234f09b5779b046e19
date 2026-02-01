@@ -1,0 +1,100 @@
+packages/core/src/types/index.ts
+  1799612194a6c437 1
+packages/core/src/queries/transactions.ts
+  1799612194a6c437 3
+packages/core/src/sanitize/migrator.ts
+  dea585a2a49a8a2e 19,137-138
+  1799612194a6c437 3
+  0dc63c667ecd7e74 141,170-171
+  91519ad66d266178 11,33,45-53,155-164
+packages/core/src/db/schema.ts
+  0dc63c667ecd7e74 1
+packages/core/src/sanitize/types.ts
+  1799612194a6c437 1
+packages/core/tests/queries/transfer-detection-integration.test.ts
+  1799612194a6c437 5
+packages/core/src/db/index.ts
+  1799612194a6c437 1,5
+packages/core/src/import/journal.ts
+  1799612194a6c437 3
+packages/core/tests/db/categories.test.ts
+  1799612194a6c437 3
+packages/core/tests/queries/transfer-pairs.test.ts
+  1799612194a6c437 3
+packages/core/src/db/migrate.ts
+  1799612194a6c437 4
+  0dc63c667ecd7e74 60-78
+packages/core/src/import/transactions.ts
+  91519ad66d266178 29-37
+packages/core/tests/queries/transfer-load.test.ts
+  1799612194a6c437 5
+packages/core/src/queries/accounts.ts
+  1799612194a6c437 3
+packages/core/src/import/types.ts
+  1799612194a6c437 1-4
+packages/core/src/queries/metrics.ts
+  1799612194a6c437 4
+packages/core/src/queries/groups.ts
+  1799612194a6c437 3-4,29
+packages/core/src/import/index.ts
+  1799612194a6c437 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.40",
+  "base_commit_sha": "93cf2e2647b8236d4b43fb234f09b5779b046e19",
+  "prompts": {
+    "0dc63c667ecd7e74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c8560116-7805-4f0d-b46b-d0334248733a",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 92,
+      "total_deletions": 17,
+      "accepted_lines": 28,
+      "overriden_lines": 0
+    },
+    "1799612194a6c437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89f6e9e7-9041-4e51-a7b0-55697b960fdb",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 23,
+      "total_deletions": 23,
+      "accepted_lines": 22,
+      "overriden_lines": 0
+    },
+    "91519ad66d266178": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5964c760-4220-46cf-a963-dde7ec96c0a4",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 99,
+      "total_deletions": 223,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    },
+    "dea585a2a49a8a2e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cee59a82-b718-47bd-a50b-d0d9ebea3343",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 92,
+      "total_deletions": 50,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    }
+  }
+}
