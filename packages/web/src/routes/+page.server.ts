@@ -19,7 +19,42 @@ import {
 } from '@fin/core';
 import { getAccountById, getAllGroupMetadata, getGroupChartAccounts, getGroupIds, getGroupMetadata } from '@fin/core/config';
 
+import { chooseDownsampleStepDays, downsampleByMinStep, toUtcMsFromIsoDate } from '$lib/charts/utils';
+
 import { db } from '$lib/server/db';
+
+const DAY_MS = 86_400_000;
+
+function toDayIndex(date: string): number | null {
+	const ms = toUtcMsFromIsoDate(date);
+	return ms === null ? null : Math.floor(ms / DAY_MS);
+}
+
+function downsampleDailySeries<T extends { date: string }>(series: T[]): T[] {
+	if (series.length <= 2) {
+		return series;
+	}
+
+	const first = series[0];
+	const last = series[series.length - 1];
+	if (!first || !last) {
+		return series;
+	}
+
+	const firstIndex = toDayIndex(first.date);
+	const lastIndex = toDayIndex(last.date);
+	if (firstIndex === null || lastIndex === null || lastIndex <= firstIndex) {
+		return series;
+	}
+
+	const spanDays = Math.max(1, lastIndex - firstIndex);
+	const step = chooseDownsampleStepDays(spanDays);
+	return downsampleByMinStep(series, (point) => toDayIndex(point.date), step);
+}
+
+function downsampleDailySeriesRecord<T extends { date: string }>(seriesById: Record<string, T[]>): Record<string, T[]> {
+	return Object.fromEntries(Object.entries(seriesById).map(([id, series]) => [id, downsampleDailySeries(series)]));
+}
 
 export function load({ url }: { url: URL }) {
 	const groupParam = url.searchParams.get('group');
@@ -53,14 +88,15 @@ export function load({ url }: { url: URL }) {
 	const allChartAccountIds = Array.from(new Set(groupIds.flatMap((id) => groupChartAccounts[id] ?? []))) as AssetAccountId[];
 
 	// Fetch all balance series in a single batched query
-	const accountBalanceSeries = getAllAccountsDailyBalanceSeries(db, allChartAccountIds, { limit: 10_000 });
+	const accountBalanceSeries = downsampleDailySeriesRecord(getAllAccountsDailyBalanceSeries(db, allChartAccountIds, { limit: 10_000 }));
 
 	// Fetch contribution series for investment accounts (Vanguard provider)
 	const accountContributionSeries: Record<string, ContributionPoint[]> = {};
 	for (const accountId of allChartAccountIds) {
 		const account = getAccountById(accountId);
 		if (account?.provider === 'vanguard') {
-			accountContributionSeries[accountId] = getAccountCumulativeContributionSeries(db, accountId as AssetAccountId, { limit: 10_000 });
+			const series = getAccountCumulativeContributionSeries(db, accountId as AssetAccountId, { limit: 10_000 });
+			accountContributionSeries[accountId] = downsampleDailySeries(series);
 		}
 	}
 
@@ -85,7 +121,8 @@ export function load({ url }: { url: URL }) {
 	for (const groupId of groupIds) {
 		const meta = getGroupMetadata(groupId);
 		const expenseReserveMonths = meta.expenseReserveMonths;
-		groupReserveBreakdown[groupId] = getGroupDailyReserveBreakdownSeries(db, groupId, { limit: 10_000 }, { expenseReserveMonths }, financeConfig.scenarioToggles, financeConfig.scenario);
+		const series = getGroupDailyReserveBreakdownSeries(db, groupId, { limit: 10_000 }, { expenseReserveMonths }, financeConfig.scenarioToggles, financeConfig.scenario);
+		groupReserveBreakdown[groupId] = downsampleDailySeries(series);
 	}
 
 	// Fetch cash flow data for Sankey charts (6-month average)
