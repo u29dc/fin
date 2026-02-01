@@ -55,7 +55,7 @@ function randomBetween(min: number, max: number): number {
 
 function formatDate(date: Date): string {
 	const datePart = date.toISOString().split('T')[0] ?? '';
-	return `${datePart}T12:00:00Z`;
+	return `${datePart}T12:00:00`;
 }
 
 function addDays(date: Date, days: number): Date {
