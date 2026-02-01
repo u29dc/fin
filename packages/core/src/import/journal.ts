@@ -227,7 +227,7 @@ function createTransferEntry(pair: TransferPair, stmts: PreparedStatements): voi
 	const postedDate = toPostedDate(postedAt);
 	const description = pair.from.cleanDescription || pair.from.rawDescription || 'Transfer';
 
-	stmts.insertJournal.run(journalId, postedAt, postedDate, description, pair.from.rawDescription, pair.from.cleanDescription, pair.from.counterparty, pair.from.sourceFile);
+	stmts.insertJournal.run(journalId, postedAt, postedDate, 1, description, pair.from.rawDescription, pair.from.cleanDescription, pair.from.counterparty, pair.from.sourceFile);
 	stmts.insertPosting.run(generateId('p'), journalId, pair.from.chartAccountId, pair.from.amountMinor, pair.from.currency, null, pair.from.providerTxnId, pair.from.balanceMinor);
 	stmts.insertPosting.run(generateId('p'), journalId, pair.to.chartAccountId, pair.to.amountMinor, pair.to.currency, null, pair.to.providerTxnId, pair.to.balanceMinor);
 }
@@ -255,7 +255,7 @@ function createNonTransferEntry(txn: CanonicalTransaction, stmts: PreparedStatem
 	const isInflow = txn.amountMinor > 0;
 	const counterAccountId = mapCategoryToAccount(txn.category, txn.cleanDescription || txn.rawDescription, isInflow);
 
-	stmts.insertJournal.run(journalId, txn.postedAt, postedDate, txn.cleanDescription || txn.rawDescription, txn.rawDescription, txn.cleanDescription, txn.counterparty, txn.sourceFile);
+	stmts.insertJournal.run(journalId, txn.postedAt, postedDate, 0, txn.cleanDescription || txn.rawDescription, txn.rawDescription, txn.cleanDescription, txn.counterparty, txn.sourceFile);
 	stmts.insertPosting.run(generateId('p'), journalId, txn.chartAccountId, txn.amountMinor, txn.currency, null, txn.providerTxnId, txn.balanceMinor);
 	stmts.insertPosting.run(generateId('p'), journalId, counterAccountId, -txn.amountMinor, txn.currency, null, null, null);
 }
@@ -341,8 +341,8 @@ export function createJournalEntriesFromTransactions(db: Database, transactions:
 
 	const stmts: PreparedStatements = {
 		insertJournal: db.prepare(`
-			INSERT INTO journal_entries (id, posted_at, posted_date, description, raw_description, clean_description, counterparty, source_file)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, description, raw_description, clean_description, counterparty, source_file)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`),
 		insertPosting: db.prepare(`
 			INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency, memo, provider_txn_id, provider_balance_minor)

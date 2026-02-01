@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const SCHEMA_SQL = `
 -- Chart of Accounts: hierarchical account structure
@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS journal_entries (
 	id TEXT PRIMARY KEY,
 	posted_at TEXT NOT NULL,
 	posted_date TEXT NOT NULL,
+	is_transfer INTEGER NOT NULL DEFAULT 0,
 	description TEXT NOT NULL,
 	raw_description TEXT,
 	clean_description TEXT,
@@ -46,6 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_postings_account ON postings(account_id);
 CREATE INDEX IF NOT EXISTS idx_postings_journal_entry_account ON postings(journal_entry_id, account_id);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_posted ON journal_entries(posted_at);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_posted_date ON journal_entries(posted_date);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_is_transfer_posted ON journal_entries(is_transfer, posted_at);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_source_file ON journal_entries(source_file);
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_type ON chart_of_accounts(account_type);
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_parent ON chart_of_accounts(parent_id);

@@ -1018,23 +1018,13 @@ export function getLedgerMonthlyCashflowSeries(db: Database, chartAccountIds: st
 	const sql = `
 		SELECT
 			strftime('%Y-%m', je.posted_at) AS month,
-			SUM(CASE WHEN p.amount_minor > 0 AND NOT is_transfer THEN p.amount_minor ELSE 0 END) AS income_minor,
-			SUM(CASE WHEN p.amount_minor < 0 AND NOT is_transfer THEN -p.amount_minor ELSE 0 END) AS expense_minor
-		FROM (
-			SELECT
-				p.journal_entry_id,
-				p.amount_minor,
-				EXISTS (
-					SELECT 1 FROM postings p2
-					WHERE p2.journal_entry_id = p.journal_entry_id
-						AND p2.id != p.id
-						AND p2.account_id LIKE 'Assets:%'
-				) AS is_transfer
-			FROM postings p
-			WHERE (${orConditions.join(' OR ')})
-		) p
+			SUM(CASE WHEN p.amount_minor > 0 THEN p.amount_minor ELSE 0 END) AS income_minor,
+			SUM(CASE WHEN p.amount_minor < 0 THEN -p.amount_minor ELSE 0 END) AS expense_minor
+		FROM postings p
 		JOIN journal_entries je ON p.journal_entry_id = je.id
-		WHERE 1=1 ${whereClause}
+		WHERE (${orConditions.join(' OR ')})
+			AND je.is_transfer = 0
+			${whereClause}
 		GROUP BY month
 		ORDER BY month ASC
 		LIMIT ?
@@ -1082,24 +1072,19 @@ export function getLedgerMonthlyCashflowSeriesByGroup(db: Database, groupAccount
 		SELECT
 			p.group_id,
 			strftime('%Y-%m', je.posted_at) AS month,
-			SUM(CASE WHEN p.amount_minor > 0 AND NOT p.is_transfer THEN p.amount_minor ELSE 0 END) AS income_minor,
-			SUM(CASE WHEN p.amount_minor < 0 AND NOT p.is_transfer THEN -p.amount_minor ELSE 0 END) AS expense_minor
+			SUM(CASE WHEN p.amount_minor > 0 THEN p.amount_minor ELSE 0 END) AS income_minor,
+			SUM(CASE WHEN p.amount_minor < 0 THEN -p.amount_minor ELSE 0 END) AS expense_minor
 		FROM (
 			SELECT
 				p.journal_entry_id,
 				p.amount_minor,
-				${mapping.caseClause} as group_id,
-				EXISTS (
-					SELECT 1 FROM postings p2
-					WHERE p2.journal_entry_id = p.journal_entry_id
-						AND p2.id != p.id
-						AND p2.account_id LIKE 'Assets:%'
-				) AS is_transfer
+				${mapping.caseClause} as group_id
 			FROM postings p
 			WHERE ${mapping.orClause}
 		) p
 		JOIN journal_entries je ON p.journal_entry_id = je.id
 		WHERE p.group_id IS NOT NULL
+			AND je.is_transfer = 0
 			${whereClause}
 		GROUP BY p.group_id, month
 		ORDER BY p.group_id, month ASC

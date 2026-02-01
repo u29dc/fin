@@ -28,7 +28,7 @@ function insertAccount(db: Database, id: string, type: 'asset' | 'expense' | 'in
 }
 
 function insertTransfer(db: Database, journalId: string, postedAt: string, fromAccount: string, toAccount: string, amountMinor: number): void {
-	db.prepare(`INSERT INTO journal_entries (id, posted_at, posted_date, description) VALUES (?, ?, ?, 'Transfer')`).run(journalId, postedAt, postedAt.slice(0, 10));
+	db.prepare(`INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, description) VALUES (?, ?, ?, 1, 'Transfer')`).run(journalId, postedAt, postedAt.slice(0, 10));
 	db.prepare(`INSERT INTO postings (id, journal_entry_id, account_id, amount_minor) VALUES (?, ?, ?, ?)`).run(`${journalId}_from`, journalId, fromAccount, -amountMinor);
 	db.prepare(`INSERT INTO postings (id, journal_entry_id, account_id, amount_minor) VALUES (?, ?, ?, ?)`).run(`${journalId}_to`, journalId, toAccount, amountMinor);
 }

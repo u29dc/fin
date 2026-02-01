@@ -272,31 +272,21 @@ export function loadTransferRows(db: Database, chartAccountIds: AssetAccountId[]
 
 	const placeholders = chartAccountIds.map(() => '?').join(', ');
 
-	// Query finds postings from journal entries where:
-	// 1. Entry has exactly 2 total postings
-	// 2. Both postings are to asset accounts
-	// 3. At least one posting is to a requested account
-	// 4. Entry is after fromDate
+	// Query loads postings from transfer-marked journal entries where:
+	// 1. Entry is flagged as transfer (asset-to-asset with 2 postings)
+	// 2. At least one posting is to a requested account
+	// 3. Entry is after fromDate
 	const sql = `
-		WITH transfer_entries AS (
-			SELECT p.journal_entry_id
-			FROM journal_entries je
-			INNER JOIN postings p ON p.journal_entry_id = je.id
-			INNER JOIN chart_of_accounts coa ON p.account_id = coa.id
-			WHERE je.posted_at >= ?
-			GROUP BY p.journal_entry_id
-			HAVING COUNT(*) = 2
-				AND SUM(CASE WHEN coa.account_type = 'asset' THEN 1 ELSE 0 END) = 2
-		)
 		SELECT
 			p.id,
 			p.account_id AS chart_account_id,
 			je.posted_at,
 			p.amount_minor
-		FROM transfer_entries te
-		INNER JOIN journal_entries je ON te.journal_entry_id = je.id
-		INNER JOIN postings p ON p.journal_entry_id = je.id
-		WHERE p.account_id IN (${placeholders})
+		FROM postings p
+		INNER JOIN journal_entries je ON p.journal_entry_id = je.id
+		WHERE je.is_transfer = 1
+			AND je.posted_at >= ?
+			AND p.account_id IN (${placeholders})
 	`;
 
 	const params = [fromDate, ...chartAccountIds];
