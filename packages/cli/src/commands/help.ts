@@ -124,6 +124,24 @@ const COMMAND_TREE: CategoryCommands[] = [
 					limit: { type: 'string', description: 'Max categories', default: '10' },
 				},
 			},
+			{
+				path: 'fin report audit',
+				description: 'Expense account payee breakdown',
+				args: {
+					account: { type: 'string', description: 'Expense account prefix', required: true },
+					months: { type: 'string', description: 'Number of months', default: '12' },
+					group: { type: 'string', description: 'Filter by group' },
+				},
+			},
+			{
+				path: 'fin report summary',
+				description: 'Comprehensive Markdown financial summary',
+				args: {
+					months: { type: 'string', description: 'Cashflow history depth', default: '12' },
+					group: { type: 'string', description: 'Filter to single group' },
+					output: { type: 'string', description: 'Write Markdown to file (default: stdout)' },
+				},
+			},
 		],
 	},
 	{
