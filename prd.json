@@ -525,7 +525,7 @@
 				"Quality gate passes"
 			],
 			"priority": 27,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-022"],
 			"notes": "Core void logic can live directly in the command file (thin: one SELECT + one INSERT). Use getWritableDb() for actual void, getReadonlyDb() for --dry-run reads. Insert pattern: packages/core/src/import/journal.ts:343-350 (prepared statements). ID generation: generateId(prefix) at journal.ts:32 (private -- inline the pattern: `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`). Journal entry columns: packages/core/src/db/schema.ts:17-30. Posting columns: packages/core/src/db/schema.ts:32-43."
 		},
