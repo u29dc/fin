@@ -9,7 +9,7 @@ import { defineCommand } from 'citty';
 import { configCommand } from './commands/config';
 import { healthCommand } from './commands/health';
 import { help } from './commands/help';
-import { importCmd } from './commands/import';
+import { importCommand } from './commands/import';
 import { reportCommand } from './commands/report';
 import { sanitize } from './commands/sanitize';
 import { toolsCommand } from './commands/tools';
@@ -31,7 +31,7 @@ export const main = defineCommand({
 		config: configCommand,
 		view: viewCommand,
 		report: reportCommand,
-		import: importCmd,
+		import: importCommand,
 		sanitize,
 	},
 });
