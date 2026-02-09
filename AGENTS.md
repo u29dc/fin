@@ -51,35 +51,66 @@
 
 ## 6. CLI
 
-Commands via `bun run fin <command>`:
+Agent-native toolbelt with JSON envelope contracts. Every command supports `--json` for structured output and text mode for human use. Use the `/fin` skill for autonomous financial analysis sessions.
+
+### Infrastructure Commands (2)
 
 ```
-fin help                       Show all commands and options
-
-fin view                       View stored data
-  fin view accounts            Account balances [--group]
-  fin view transactions        Transaction list [--account, --group, --from, --to, --limit]
-  fin view ledger              Journal entries [--account, --from, --to, --limit]
-  fin view balance             Balance sheet [--as-of]
-
-fin report                     Financial analytics
-  fin report cashflow          Monthly cashflow [--group*, --months, --from]
-  fin report health            Health metrics [--group*, --from, --to]
-  fin report runway            Runway projection [--group*, --from, --to]
-  fin report reserves          Reserve breakdown [--group*, --from, --to]
-  fin report categories        Category spending [--group*, --months, --limit]
-    breakdown                  Total by category (default)
-    median                     Monthly median
-
-fin import                     Import pipeline [--inbox]
-
-fin sanitize                   Data cleanup
-  fin sanitize discover        Find patterns [--unmapped, --min, --account]
-  fin sanitize migrate         Apply rules [--dry-run, --verbose]
-  fin sanitize recategorize    Recategorize [--dry-run, --verbose]
+fin tools                      Tool catalog and discovery [--json]
+fin tools <name>               Single tool detail [--json]
+fin health                     Prerequisite checks (config, DB, rules, inbox) [--json]
 ```
 
-Global flags: `--help`, `--db=PATH`, `--format=table|json|tsv`
+### Tool Commands (18)
+
+```
+fin config show                Show parsed configuration [--json]
+fin config validate            Validate config file [--json]
+
+fin view accounts              Account balances [--group, --json]
+fin view transactions          Transaction list [--account, --group, --from, --to, --search, --limit, --json]
+fin view ledger                Journal entries [--account, --from, --to, --limit, --json]
+fin view balance               Balance sheet [--as-of, --json]
+fin view void <id>             Void a journal entry [--dry-run, --json]
+
+fin report cashflow            Monthly cashflow [--group*, --months, --from, --expenses, --json]
+fin report health              Financial health metrics [--group*, --from, --to, --json]
+fin report runway              Runway projection [--group*, --from, --to, --consolidated, --include, --json]
+fin report reserves            Reserve breakdown [--group*, --from, --to, --json]
+fin report categories          Category spending [--group*, --months, --limit, --mode=breakdown|median, --json]
+fin report audit               Expense payee breakdown [--account*, --group, --months, --json]
+fin report summary             Comprehensive financial summary [--months, --group, --output, --json]
+
+fin import                     Import transactions from inbox [--inbox, --json]
+
+fin sanitize discover          Find description patterns [--unmapped, --min, --account, --json]
+fin sanitize migrate           Apply description mapping rules [--dry-run, --verbose, --json]
+fin sanitize recategorize      Recategorize transactions [--dry-run, --verbose, --json]
+```
+
+Global flags: `--json`, `--db=PATH`, `--format=table|json|tsv`
+
+### JSON Envelope Contract
+
+In `--json` mode, exactly one JSON line to stdout, nothing else. Logs/progress go to stderr.
+
+Success: `{ ok: true, data: T, meta: { tool, elapsed, count?, total?, hasMore? } }`
+
+Error: `{ ok: false, error: { code, message, hint }, meta: { tool, elapsed } }`
+
+Exit codes: 0 = success, 1 = runtime error, 2 = prerequisites blocked
+
+Error codes: `NO_CONFIG`, `INVALID_CONFIG`, `NO_DATABASE`, `DB_ERROR`, `SCHEMA_MISMATCH`, `NO_RULES`, `INVALID_GROUP`, `INVALID_ACCOUNT`, `INVALID_INPUT`, `NO_DATA`, `IMPORT_ERROR`
+
+### Agent Workflow
+
+```
+1. Orient:       fin tools --json -> fin health --json -> fin config show --json
+2. Understand:   fin report summary --json -> fin view accounts --json -> fin view balance --json
+3. Investigate:  fin report cashflow/runway/reserves/categories/audit --json -> fin view transactions --json
+4. Maintain:     fin import --json -> fin sanitize discover/migrate/recategorize --json
+5. Report:       Agent synthesizes findings and answers user's question
+```
 
 ## 7. Configuration
 

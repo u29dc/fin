@@ -1,5 +1,8 @@
 /**
- * summary - Comprehensive Markdown financial summary across all groups.
+ * `report summary` -- Comprehensive Markdown financial summary across all groups.
+ *
+ * Text mode: generates the same markdown output as the original summary.ts.
+ * JSON mode: returns structured financial data (implemented in ENG-013).
  *
  * Outputs balances, runway, health, cashflow, and expense categories
  * for each group (ordered per config), plus a consolidated section.
@@ -23,11 +26,16 @@ import {
 	type SankeyFlowData,
 } from '@fin/core';
 import { getAccountIdsByGroup, getAccountsByGroup, getBurnRateExcludeAccounts, getGroupIds, getGroupMetadata, getLiquidAccountIds } from '@fin/core/config';
-import { defineCommand } from 'citty';
 
-import { getReadonlyDb } from '../db';
-import { formatAmount, formatMonths, formatPercentRaw } from '../format';
-import { error, log } from '../logger';
+import { getReadonlyDb } from '../../db';
+import { fail, isJsonMode, ok, rethrowCapture } from '../../envelope';
+import { formatAmount, formatMonths, formatPercentRaw } from '../../format';
+import { log } from '../../logger';
+import { defineToolCommand } from '../../tool';
+
+// ---------------------------------------------------------------------------
+// Date helpers
+// ---------------------------------------------------------------------------
 
 function today(): string {
 	return new Date().toISOString().slice(0, 10);
@@ -38,6 +46,10 @@ function monthsAgo(n: number): string {
 	d.setMonth(d.getMonth() - n);
 	return d.toISOString().slice(0, 10);
 }
+
+// ---------------------------------------------------------------------------
+// Markdown helpers
+// ---------------------------------------------------------------------------
 
 function mdTable(headers: string[], alignments: ('left' | 'right')[], rows: string[][]): string[] {
 	const lines: string[] = [];
@@ -52,6 +64,10 @@ function mdTable(headers: string[], alignments: ('left' | 'right')[], rows: stri
 function last<T>(arr: T[]): T | undefined {
 	return arr.length > 0 ? arr[arr.length - 1] : undefined;
 }
+
+// ---------------------------------------------------------------------------
+// Expense tree helpers
+// ---------------------------------------------------------------------------
 
 function flattenExpenseTree(nodes: ExpenseNode[], depth = 0, excludePrefixes: string[] = []): Array<{ name: string; amount: number; depth: number; excluded: boolean }> {
 	const result: Array<{ name: string; amount: number; depth: number; excluded: boolean }> = [];
@@ -86,6 +102,10 @@ function renderExpenseBreakdown(expenseTree: ExpenseNode[], heading: string): st
 	lines.push('');
 	return lines;
 }
+
+// ---------------------------------------------------------------------------
+// Section renderers
+// ---------------------------------------------------------------------------
 
 function renderFlowSection(db: ReturnType<typeof getReadonlyDb>, groupId: GroupId, months: number): string[] {
 	const flowData: SankeyFlowData = getGroupCashFlowDataMedian(db, groupId, { months });
@@ -138,6 +158,10 @@ function renderBalanceSheetSection(db: ReturnType<typeof getReadonlyDb>): string
 
 	return lines;
 }
+
+// ---------------------------------------------------------------------------
+// Asset allocation helpers
+// ---------------------------------------------------------------------------
 
 type BalanceEntry = { chartAccountId: string; balanceMinor: number | null };
 type ReservePoint = { taxReserveMinor: number; expenseReserveMinor: number; availableMinor: number; balanceMinor: number };
@@ -197,6 +221,10 @@ function renderAssetAllocation(groupId: GroupId, balances: BalanceEntry[], media
 	return lines;
 }
 
+// ---------------------------------------------------------------------------
+// Last month / cashflow section
+// ---------------------------------------------------------------------------
+
 type CashflowPoint = { month: string; incomeMinor: number; expenseMinor: number; netMinor: number; savingsRatePct: number | null };
 
 function momChange(current: number, previous: number): number | null {
@@ -226,6 +254,10 @@ function renderLastMonth(current: CashflowPoint, previous: CashflowPoint | undef
 	return lines;
 }
 
+// ---------------------------------------------------------------------------
+// Group section renderer
+// ---------------------------------------------------------------------------
+
 function renderGroupSection(db: ReturnType<typeof getReadonlyDb>, groupId: GroupId, months: number): string[] {
 	const meta = getGroupMetadata(groupId);
 	const accountIds = getAccountIdsByGroup(groupId);
@@ -235,7 +267,6 @@ function renderGroupSection(db: ReturnType<typeof getReadonlyDb>, groupId: Group
 	lines.push(`## ${meta.label}`);
 	lines.push('');
 
-	// -- Balances --
 	const balances = getLatestBalances(db, accountIds);
 	let totalMinor = 0;
 	const balanceRows: string[][] = [];
@@ -244,13 +275,20 @@ function renderGroupSection(db: ReturnType<typeof getReadonlyDb>, groupId: Group
 		if (bal !== null) totalMinor += bal;
 		balanceRows.push([b.chartAccountId, bal !== null ? formatAmount(bal) : '-']);
 	}
-	balanceRows.push([`**Total**`, `**${formatAmount(totalMinor)}**`]);
+	balanceRows.push(['**Total**', `**${formatAmount(totalMinor)}**`]);
 
 	lines.push('### Balances');
 	lines.push(...mdTable(['Account', 'Balance'], ['left', 'right'], balanceRows));
 	lines.push('');
 
-	// -- Snapshot --
+	lines.push(...renderSnapshotSection(db, groupId, months, balances, totalMinor));
+
+	return lines;
+}
+
+function renderSnapshotSection(db: ReturnType<typeof getReadonlyDb>, groupId: GroupId, months: number, balances: BalanceEntry[], totalMinor: number): string[] {
+	const lines: string[] = [];
+
 	const runwaySeries = getGroupDailyRunwaySeries(db, groupId);
 	const reserveSeries = getGroupDailyReserveBreakdownSeries(db, groupId);
 
@@ -261,7 +299,6 @@ function renderGroupSection(db: ReturnType<typeof getReadonlyDb>, groupId: Group
 	const from = monthsAgo(months);
 	const cashflow = getGroupMonthlyCashflowSeries(db, groupId, { from });
 
-	// Last complete month = second-to-last entry (last is current partial month)
 	const lastCompleteMonth = cashflow.length >= 2 ? cashflow[cashflow.length - 2] : undefined;
 
 	const snapshotRows: string[][] = [];
@@ -274,11 +311,9 @@ function renderGroupSection(db: ReturnType<typeof getReadonlyDb>, groupId: Group
 	lines.push(...mdTable(['Metric', 'Value'], ['left', 'right'], snapshotRows));
 	lines.push('');
 
-	// -- Asset Allocation --
 	lines.push(...renderAssetAllocation(groupId, balances, medianExpense, latestReserve));
 	lines.push('');
 
-	// -- Last Month --
 	if (lastCompleteMonth) {
 		const prevMonth = cashflow.length >= 3 ? cashflow[cashflow.length - 3] : undefined;
 		lines.push(...renderLastMonth(lastCompleteMonth, prevMonth));
@@ -292,15 +327,17 @@ function renderGroupSection(db: ReturnType<typeof getReadonlyDb>, groupId: Group
 		lines.push('');
 	}
 
-	// -- Income & Expense Flows --
 	lines.push(...renderFlowSection(db, groupId, months));
 
-	// -- Expense Breakdown (hierarchical) --
 	const expenseTree = getGroupExpenseTreeMedian(db, groupId, { months });
 	lines.push(...renderExpenseBreakdown(expenseTree, '### Expense Breakdown (monthly avg)'));
 
 	return lines;
 }
+
+// ---------------------------------------------------------------------------
+// Consolidated section
+// ---------------------------------------------------------------------------
 
 function renderConsolidatedSection(db: ReturnType<typeof getReadonlyDb>, groupIds: GroupId[], groupTotals: Map<GroupId, number>, months: number): string[] {
 	const lines: string[] = [];
@@ -322,13 +359,16 @@ function renderConsolidatedSection(db: ReturnType<typeof getReadonlyDb>, groupId
 	lines.push(...mdTable(['Metric', 'Value'], ['left', 'right'], rows));
 	lines.push('');
 
-	// -- Consolidated Expense Breakdown --
 	const allLiquidAccountIds = getLiquidAccountIds();
 	const expenseTree = getGroupExpenseHierarchyMedian(db, allLiquidAccountIds, { months });
 	lines.push(...renderExpenseBreakdown(expenseTree, '### Expense Breakdown (monthly avg)'));
 
 	return lines;
 }
+
+// ---------------------------------------------------------------------------
+// Methodology section
+// ---------------------------------------------------------------------------
 
 function renderMethodology(groupIds: GroupId[]): string[] {
 	const accountLines: string[] = [];
@@ -373,10 +413,17 @@ function renderMethodology(groupIds: GroupId[]): string[] {
 	];
 }
 
-function resolveGroupIds(group: string | undefined): GroupId[] {
+// ---------------------------------------------------------------------------
+// Group resolution + totals
+// ---------------------------------------------------------------------------
+
+function resolveGroupIds(group: string | undefined, jsonMode: boolean, start: number): GroupId[] {
 	if (group) {
 		if (!isGroupId(group)) {
-			error(`Invalid group: ${group}`);
+			if (jsonMode) {
+				fail('report.summary', 'INVALID_GROUP', `Invalid group: ${group}`, 'Use --group=personal, --group=business, or --group=joint', start);
+			}
+			process.stderr.write(`Error: Invalid group: ${group}. Use: personal, business, joint\n`);
 			process.exit(1);
 		}
 		return [group];
@@ -398,6 +445,213 @@ function computeGroupTotals(db: ReturnType<typeof getReadonlyDb>, groupIds: Grou
 	}
 	return totals;
 }
+
+// ---------------------------------------------------------------------------
+// JSON data builders
+// ---------------------------------------------------------------------------
+
+function pctNum(value: number, total: number): number | null {
+	return total > 0 ? Math.round((value / total) * 100) : null;
+}
+
+function buildPersonalAllocation(groupId: GroupId, balances: BalanceEntry[], medianExpense: number | null): Array<{ segment: string; amount: number; pct: number | null }> {
+	const accounts = getAccountsByGroup(groupId);
+	const balanceMap = new Map<string, number>();
+	for (const b of balances) {
+		if (b.balanceMinor !== null) balanceMap.set(b.chartAccountId, b.balanceMinor);
+	}
+
+	let checkingTotal = 0;
+	let savingsTotal = 0;
+	let investmentTotal = 0;
+
+	for (const acc of accounts) {
+		const bal = balanceMap.get(acc.id) ?? 0;
+		if (acc.subtype === 'investment') investmentTotal += bal;
+		else if (acc.subtype === 'savings') savingsTotal += bal;
+		else checkingTotal += bal;
+	}
+
+	const expenseBuffer = medianExpense !== null ? medianExpense * 3 : 0;
+	const available = Math.max(0, checkingTotal - expenseBuffer);
+	const total = checkingTotal + savingsTotal + investmentTotal;
+
+	return [
+		{ segment: 'Available cash', amount: available, pct: pctNum(available, total) },
+		{ segment: 'Expense buffer', amount: expenseBuffer, pct: pctNum(expenseBuffer, total) },
+		{ segment: 'Emergency fund', amount: savingsTotal, pct: pctNum(savingsTotal, total) },
+		{ segment: 'Investment', amount: investmentTotal, pct: pctNum(investmentTotal, total) },
+	];
+}
+
+function buildReserveAllocation(reserve: ReservePoint): Array<{ segment: string; amount: number; pct: number | null }> {
+	const total = reserve.balanceMinor;
+	return [
+		{ segment: 'Available', amount: reserve.availableMinor, pct: pctNum(reserve.availableMinor, total) },
+		{ segment: 'Expense buffer', amount: reserve.expenseReserveMinor, pct: pctNum(reserve.expenseReserveMinor, total) },
+		{ segment: 'Tax reserve', amount: reserve.taxReserveMinor, pct: pctNum(reserve.taxReserveMinor, total) },
+	];
+}
+
+function buildAssetAllocation(
+	groupId: GroupId,
+	balances: BalanceEntry[],
+	medianExpense: number | null,
+	latestReserve: ReservePoint | undefined,
+): Array<{ segment: string; amount: number; pct: number | null }> {
+	const meta = getGroupMetadata(groupId);
+	if (meta.taxType === 'income') return buildPersonalAllocation(groupId, balances, medianExpense);
+	if (latestReserve) return buildReserveAllocation(latestReserve);
+	return [];
+}
+
+function buildFlowData(
+	db: ReturnType<typeof getReadonlyDb>,
+	groupId: GroupId,
+	months: number,
+): { incomeSources: Array<{ source: string; amount: number }>; expenseSinks: Array<{ category: string; amount: number }> } {
+	const flowData: SankeyFlowData = getGroupCashFlowDataMedian(db, groupId, { months });
+	const nodeCategories = new Map<string, string>();
+	for (const n of flowData.nodes) {
+		nodeCategories.set(n.name, n.category);
+	}
+
+	const incomeSources = flowData.links
+		.filter((l) => nodeCategories.get(l.source) === 'income')
+		.sort((a, b) => b.value - a.value)
+		.map((l) => ({ source: l.source, amount: l.value }));
+
+	const expenseSinks = flowData.links
+		.filter((l) => nodeCategories.get(l.target) === 'expense')
+		.sort((a, b) => b.value - a.value)
+		.map((l) => ({ category: l.target, amount: l.value }));
+
+	return { incomeSources, expenseSinks };
+}
+
+function flattenExpenseTreeJson(
+	nodes: ExpenseNode[],
+): Array<{ accountId: string; name: string; amount: number; children: Array<{ accountId: string; name: string; amount: number; children: unknown[] }> }> {
+	const sorted = [...nodes].sort((a, b) => b.totalMinor - a.totalMinor);
+	return sorted.map((node) => ({
+		accountId: node.accountId,
+		name: node.name,
+		amount: node.totalMinor,
+		children: node.children.length > 0 ? flattenExpenseTreeJson(node.children) : [],
+	}));
+}
+
+function buildLastMonth(cashflow: CashflowPoint[]): { income: number; expenses: number; net: number; momIncome: number | null; momExpenses: number | null } | null {
+	if (cashflow.length < 2) return null;
+	const current = cashflow[cashflow.length - 2] as CashflowPoint;
+	const previous = cashflow.length >= 3 ? (cashflow[cashflow.length - 3] as CashflowPoint) : undefined;
+	return {
+		income: current.incomeMinor,
+		expenses: current.expenseMinor,
+		net: current.netMinor,
+		momIncome: previous ? momChange(current.incomeMinor, previous.incomeMinor) : null,
+		momExpenses: previous ? momChange(current.expenseMinor, previous.expenseMinor) : null,
+	};
+}
+
+function buildGroupJson(db: ReturnType<typeof getReadonlyDb>, groupId: GroupId, months: number): Record<string, unknown> | null {
+	const meta = getGroupMetadata(groupId);
+	const accountIds = getAccountIdsByGroup(groupId);
+	if (accountIds.length === 0) return null;
+
+	const balances = getLatestBalances(db, accountIds);
+	const runwaySeries = getGroupDailyRunwaySeries(db, groupId);
+	const reserveSeries = getGroupDailyReserveBreakdownSeries(db, groupId);
+	const latestRunway = last(runwaySeries);
+	const latestReserve = last(reserveSeries);
+	const medianExpense = latestRunway?.medianExpenseMinor ?? null;
+
+	const from = monthsAgo(months);
+	const cashflow = getGroupMonthlyCashflowSeries(db, groupId, { from });
+	const lastCompleteMonth = cashflow.length >= 2 ? cashflow[cashflow.length - 2] : undefined;
+	const { incomeSources, expenseSinks } = buildFlowData(db, groupId, months);
+	const expenseTree = getGroupExpenseTreeMedian(db, groupId, { months });
+
+	let totalMinor = 0;
+	for (const b of balances) {
+		if (b.balanceMinor !== null) totalMinor += b.balanceMinor;
+	}
+
+	return {
+		id: groupId,
+		label: meta.label,
+		balances: balances.map((b) => ({ account: b.chartAccountId, balance: b.balanceMinor })),
+		snapshot: {
+			runway: latestRunway?.runwayMonths ?? null,
+			lastMonthNet: lastCompleteMonth?.netMinor ?? null,
+			netWorth: totalMinor,
+			medianSpend: medianExpense,
+		},
+		assetAllocation: buildAssetAllocation(groupId, balances, medianExpense, latestReserve),
+		lastMonth: buildLastMonth(cashflow),
+		cashflow: cashflow.map((p) => ({ month: p.month, income: p.incomeMinor, expenses: p.expenseMinor, net: p.netMinor, savingsRate: p.savingsRatePct })),
+		incomeSources,
+		expenseSinks,
+		expenseTree: flattenExpenseTreeJson(expenseTree),
+	};
+}
+
+function buildConsolidatedJson(db: ReturnType<typeof getReadonlyDb>, groupIds: GroupId[], months: number): Record<string, unknown> {
+	let totalBalance = 0;
+	for (const gid of groupIds) {
+		const accountIds = getAccountIdsByGroup(gid);
+		const balances = getLatestBalances(db, accountIds);
+		for (const b of balances) {
+			if (b.balanceMinor !== null) totalBalance += b.balanceMinor;
+		}
+	}
+
+	const consolidated = getConsolidatedDailyRunwaySeries(db, { includeGroups: groupIds });
+	const latestCon = last(consolidated);
+
+	const allLiquidAccountIds = getLiquidAccountIds();
+	const expenseTree = getGroupExpenseHierarchyMedian(db, allLiquidAccountIds, { months });
+
+	return {
+		totalBalance,
+		runway: latestCon?.runwayMonths ?? null,
+		burnRate: latestCon?.burnRateMinor ?? null,
+		expenseTree: flattenExpenseTreeJson(expenseTree),
+	};
+}
+
+function buildSummaryJson(db: ReturnType<typeof getReadonlyDb>, groupIds: GroupId[], months: number): Record<string, unknown> {
+	const groups: Array<Record<string, unknown>> = [];
+	for (const gid of groupIds) {
+		const groupData = buildGroupJson(db, gid, months);
+		if (groupData) groups.push(groupData);
+	}
+
+	const consolidated = groupIds.length > 1 && groups.length > 1 ? buildConsolidatedJson(db, groupIds, months) : null;
+
+	const bs = getBalanceSheet(db);
+
+	return {
+		generatedAt: today(),
+		periodMonths: months,
+		currency: 'GBP',
+		groups,
+		consolidated,
+		balanceSheet: {
+			assets: bs.assets,
+			liabilities: bs.liabilities,
+			equity: bs.equity,
+			income: bs.income,
+			expenses: bs.expenses,
+			netWorth: bs.netWorth,
+			netIncome: bs.netIncome,
+		},
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Markdown builder
+// ---------------------------------------------------------------------------
 
 function buildSummaryMarkdown(db: ReturnType<typeof getReadonlyDb>, groupIds: GroupId[], months: number): string {
 	const lines: string[] = [];
@@ -425,13 +679,17 @@ function buildSummaryMarkdown(db: ReturnType<typeof getReadonlyDb>, groupIds: Gr
 	return lines.join('\n');
 }
 
+// ---------------------------------------------------------------------------
+// Output handler
+// ---------------------------------------------------------------------------
+
 function writeOutput(content: string, outputPath: string | undefined): void {
 	if (outputPath) {
 		try {
 			writeFileSync(outputPath, content, 'utf-8');
 			log(`Summary written to ${outputPath}`);
 		} catch (e) {
-			error(`Failed to write to ${outputPath}: ${e instanceof Error ? e.message : String(e)}`);
+			process.stderr.write(`Error: Failed to write to ${outputPath}: ${e instanceof Error ? e.message : String(e)}\n`);
 			process.exit(1);
 		}
 	} else {
@@ -446,19 +704,65 @@ function writeOutput(content: string, outputPath: string | undefined): void {
 	}
 }
 
-export const summary = defineCommand({
-	meta: { name: 'summary', description: 'Comprehensive Markdown financial summary' },
-	args: {
-		months: { type: 'string', description: 'Cashflow history depth', default: '12' },
-		group: { type: 'string', description: 'Filter to single group' },
-		output: { type: 'string', description: 'Write Markdown to file (default: stdout)' },
-		db: { type: 'string', description: 'Database path' },
+// ---------------------------------------------------------------------------
+// Command definition
+// ---------------------------------------------------------------------------
+
+export const reportSummaryCommand = defineToolCommand(
+	{
+		name: 'report.summary',
+		command: 'fin report summary',
+		category: 'report',
+		outputSchema: {
+			generatedAt: { type: 'string', description: 'ISO timestamp of report generation' },
+			periodMonths: { type: 'number', description: 'Number of months covered' },
+			currency: { type: 'string', description: 'Currency code (e.g. GBP)' },
+			groups: { type: 'array', items: 'GroupSummary', description: 'Per-group financial data' },
+			consolidated: { type: 'object', description: 'Cross-group consolidated metrics' },
+			balanceSheet: { type: 'object', description: 'Full balance sheet snapshot' },
+		},
+		idempotent: true,
+		rateLimit: null,
+		example: 'fin report summary --months=12 --group=personal --json',
 	},
-	run({ args }) {
-		const months = Number.parseInt(args.months ?? '12', 10);
-		const db = getReadonlyDb(args.db ? { options: new Map([['db', args.db]]) } : undefined);
-		const groupIds = resolveGroupIds(args.group);
-		const content = buildSummaryMarkdown(db, groupIds, months);
-		writeOutput(content, args.output);
+	{
+		meta: {
+			name: 'summary',
+			description: 'Comprehensive financial summary',
+		},
+		args: {
+			months: { type: 'string' as const, description: 'Cashflow history depth', default: '12' },
+			group: { type: 'string' as const, description: 'Filter to single group' },
+			output: { type: 'string' as const, description: 'Write Markdown to file (default: stdout + clipboard)' },
+			json: { type: 'boolean' as const, description: 'Output as JSON envelope', default: false },
+			db: { type: 'string' as const, description: 'Database path' },
+			format: { type: 'string' as const, description: 'Output format: table, json, tsv', default: 'table' },
+		},
+		run({ args }) {
+			const start = performance.now();
+			const jsonMode = isJsonMode();
+
+			try {
+				const months = Number.parseInt(args.months ?? '12', 10);
+				const db = getReadonlyDb(args.db ? { options: new Map([['db', args.db]]) } : undefined);
+				const groupIds = resolveGroupIds(args.group, jsonMode, start);
+
+				if (jsonMode) {
+					const data = buildSummaryJson(db, groupIds, months);
+					ok('report.summary', data, start);
+				}
+
+				const content = buildSummaryMarkdown(db, groupIds, months);
+				writeOutput(content, args.output);
+			} catch (error) {
+				rethrowCapture(error);
+				const message = error instanceof Error ? error.message : String(error);
+				if (jsonMode) {
+					fail('report.summary', 'DB_ERROR', `Failed to generate summary: ${message}`, 'Check database at data/fin.db', start);
+				}
+				process.stderr.write(`Error: ${message}\n`);
+				process.exit(1);
+			}
+		},
 	},
-});
+);

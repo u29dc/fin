@@ -1,0 +1,554 @@
+{
+	"project": "fin",
+	"description": "Restructure fin CLI into an agent-native toolbelt with JSON envelope contracts, tool registry, health checks, and /fin Claude Code skill",
+	"branchName": "loop/agent-native-cli",
+	"idPrefix": "ENG",
+	"userStories": [
+		{
+			"id": "ENG-001",
+			"category": "setup",
+			"title": "Create JSON envelope module and tool registry",
+			"description": "As a CLI developer, I need the envelope.ts and tool.ts infrastructure modules so that all commands can output structured JSON envelopes and self-register in a tool catalog",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/envelope.ts exporting ok(), fail(), emitRaw(), isJsonMode(), rethrowCapture(), setCaptureMode(), setJsonModeOverride(), EnvelopeCapture",
+				"BLOCKING_CODES set contains NO_CONFIG, NO_DATABASE, SCHEMA_MISMATCH",
+				"ok() writes exactly one JSON line to stdout and calls process.exit(0)",
+				"fail() writes error envelope and exits with code 1 or 2 for blocking codes",
+				"File exists at packages/cli/src/tool.ts exporting defineToolCommand(), toolRegistry[], ToolMeta, ParameterMeta types",
+				"defineToolCommand() extracts parameters from citty args and pushes metadata to toolRegistry[]",
+				"Quality gate passes"
+			],
+			"priority": 1,
+			"passes": true,
+			"notes": "Copy patterns from .tmp/let/packages/cli/src/envelope.ts and .tmp/let/packages/cli/src/tool.ts. Adapt BLOCKING_CODES for fin domain (NO_CONFIG, NO_DATABASE, SCHEMA_MISMATCH instead of NO_CONFIG, NO_SOURCES, SCHEMA_MISMATCH)"
+		},
+		{
+			"id": "ENG-002",
+			"category": "setup",
+			"title": "Split entry point into index.ts and main.ts",
+			"description": "As a CLI developer, I need index.ts to be a thin executable wrapper and main.ts to be an importable command tree so that tests can import commands without side effects",
+			"acceptanceCriteria": [
+				"File packages/cli/src/main.ts exports a main command via defineCommand() with all subcommands",
+				"File packages/cli/src/index.ts imports main from ./main, calls initConfig() in setup, and runs runMain(main)",
+				"Existing CLI commands still work: bun run fin view accounts, bun run fin report cashflow --group=personal",
+				"main.ts has no process.exit() or runMain() calls",
+				"Quality gate passes"
+			],
+			"priority": 2,
+			"passes": true,
+			"dependsOn": ["ENG-001"],
+			"notes": "Reference .tmp/let/packages/cli/src/index.ts and .tmp/let/packages/cli/src/main.ts. Keep existing subcommands wired in main.ts alongside new ones as they are added"
+		},
+		{
+			"id": "ENG-003",
+			"category": "setup",
+			"title": "Implement tools command",
+			"description": "As an agent, I need fin tools --json to return the full tool catalog so I can discover available commands and their parameters",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/tools/index.ts exporting toolsCommand",
+				"fin tools --json outputs a valid JSON envelope with data.tools array and data.total count",
+				"fin tools (text mode) prints tool catalog grouped by category to stderr",
+				"fin tools <name> --json returns single tool detail or NOT_FOUND error",
+				"toolsCommand uses plain defineCommand() (not defineToolCommand -- infrastructure, not a tool)",
+				"Command is wired in main.ts subCommands",
+				"Quality gate passes"
+			],
+			"priority": 3,
+			"passes": true,
+			"dependsOn": ["ENG-001", "ENG-002"],
+			"notes": "Reference .tmp/let/packages/cli/src/commands/tools/index.ts. Global flags for fin: --json, --db, --format"
+		},
+		{
+			"id": "ENG-004",
+			"category": "setup",
+			"title": "Implement health command",
+			"description": "As an agent, I need fin health --json to check prerequisites (config, DB, rules, inbox) and report status with actionable fix commands",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/health/index.ts exporting healthCommand",
+				"Checks: config file exists (data/fin.config.toml, blocking), config validates (blocking), database exists (data/fin.db, info), rules file exists (data/fin.rules.ts, degraded), inbox directory exists (imports/inbox/, info)",
+				"fin health --json outputs envelope with data.status (ready|degraded|blocked), data.checks array, data.summary",
+				"Each check has id, label, status, severity, detail, fix fields",
+				"Exit code 2 when status is blocked, 0 otherwise",
+				"Text mode prints human-readable check list",
+				"Command is wired in main.ts subCommands",
+				"Quality gate passes"
+			],
+			"priority": 4,
+			"passes": true,
+			"dependsOn": ["ENG-001", "ENG-002"],
+			"notes": "Reference .tmp/let/packages/cli/src/commands/health/index.ts. Adapt checks for fin: config TOML, SQLite DB, rules TS, inbox dir. Use emitRaw() for health envelope (builds its own)"
+		},
+		{
+			"id": "ENG-005",
+			"category": "core",
+			"title": "Implement config show and config validate commands",
+			"description": "As an agent, I need config show --json and config validate --json to inspect and verify the configuration before querying data",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/config/index.ts exporting configCommand group",
+				"File exists at packages/cli/src/commands/config/show.ts using defineToolCommand() with name 'config.show'",
+				"File exists at packages/cli/src/commands/config/validate.ts using defineToolCommand() with name 'config.validate'",
+				"config show --json returns envelope with data.groups, data.accounts, data.financial, data.configPath",
+				"config validate --json returns envelope with data.valid boolean and data.errors array",
+				"Both commands appear in fin tools --json catalog",
+				"Text mode outputs readable config display",
+				"Quality gate passes"
+			],
+			"priority": 5,
+			"passes": true,
+			"dependsOn": ["ENG-003"],
+			"notes": "Use getConfig(), getGroupIds(), getGroupMetadata(), getAccountsByGroup() from @fin/core. Config commands catch NO_CONFIG and INVALID_CONFIG errors"
+		},
+		{
+			"id": "ENG-006",
+			"category": "core",
+			"title": "Implement view accounts and view transactions commands",
+			"description": "As an agent, I need view accounts --json and view transactions --json to query account balances and transaction lists with filters",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/view/index.ts exporting viewCommand group",
+				"File exists at packages/cli/src/commands/view/accounts.ts using defineToolCommand() with name 'view.accounts'",
+				"File exists at packages/cli/src/commands/view/transactions.ts using defineToolCommand() with name 'view.transactions'",
+				"view accounts --json returns envelope with data.accounts array and data.total",
+				"view accounts --group=personal --json filters by group",
+				"view transactions --json returns envelope with data.transactions array and data.count",
+				"view transactions supports --account, --group, --from, --to, --limit filters",
+				"Both commands appear in fin tools --json catalog",
+				"Text mode uses existing table rendering from output.ts",
+				"Quality gate passes"
+			],
+			"priority": 6,
+			"passes": true,
+			"dependsOn": ["ENG-003"],
+			"notes": "Use getAssetAccounts(), getLatestBalances(), getTransactions() from @fin/core. Reference existing packages/cli/src/commands/view.ts for text output patterns"
+		},
+		{
+			"id": "ENG-007",
+			"category": "core",
+			"title": "Implement view ledger and view balance commands",
+			"description": "As an agent, I need view ledger --json and view balance --json to query journal entries and the balance sheet",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/view/ledger.ts using defineToolCommand() with name 'view.ledger'",
+				"File exists at packages/cli/src/commands/view/balance.ts using defineToolCommand() with name 'view.balance'",
+				"view ledger --json returns envelope with data.entries array, data.count, data.total",
+				"view ledger supports --account, --from, --to, --limit filters",
+				"view balance --json returns envelope with data.assets, data.liabilities, data.equity, data.income, data.expenses, data.netWorth, data.netIncome",
+				"view balance --as-of=DATE filters by date",
+				"Both commands appear in fin tools --json catalog and are wired in view/index.ts",
+				"Text mode uses existing table rendering",
+				"Quality gate passes"
+			],
+			"priority": 7,
+			"passes": true,
+			"dependsOn": ["ENG-006"],
+			"notes": "Use getJournalEntries(), getJournalEntryCount(), getBalanceSheet() from @fin/core. Reference existing view.ts for text patterns"
+		},
+		{
+			"id": "ENG-008",
+			"category": "core",
+			"title": "Implement report cashflow command",
+			"description": "As an agent, I need report cashflow --group=personal --json to get monthly income/expense/net/savings data",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/report/index.ts exporting reportCommand group",
+				"File exists at packages/cli/src/commands/report/cashflow.ts using defineToolCommand() with name 'report.cashflow'",
+				"report cashflow --group=personal --json returns envelope with data.series array and data.totals",
+				"Supports --months, --from, --expenses flags",
+				"--expenses flag switches to getGroupPureMonthlyCashflowSeries()",
+				"--group is required; INVALID_GROUP error if unrecognized",
+				"Appears in fin tools --json catalog",
+				"Text mode renders existing table output",
+				"Quality gate passes"
+			],
+			"priority": 8,
+			"passes": true,
+			"dependsOn": ["ENG-003"],
+			"notes": "Use getGroupMonthlyCashflowSeries(), getGroupPureMonthlyCashflowSeries() from @fin/core. Reference existing report.ts cashflow handler"
+		},
+		{
+			"id": "ENG-009",
+			"category": "core",
+			"title": "Implement report health and report runway commands",
+			"description": "As an agent, I need report health --json for financial health metrics and report runway --json for months of cash remaining",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/report/health.ts using defineToolCommand() with name 'report.health'",
+				"File exists at packages/cli/src/commands/report/runway.ts using defineToolCommand() with name 'report.runway'",
+				"report health --group=personal --json returns envelope with data.series and data.latest",
+				"report runway --group=personal --json returns envelope with data.series and data.latest",
+				"report runway --consolidated --include=personal,business --json returns consolidated data with data.groups",
+				"Both support --from, --to filters and require --group (except consolidated mode)",
+				"Both appear in fin tools --json catalog",
+				"Quality gate passes"
+			],
+			"priority": 9,
+			"passes": true,
+			"dependsOn": ["ENG-008"],
+			"notes": "Use getGroupDailyHealthSeries(), getGroupDailyRunwaySeries(), getConsolidatedDailyRunwaySeries() from @fin/core. Note: 'report health' is financial health, not system health"
+		},
+		{
+			"id": "ENG-010",
+			"category": "core",
+			"title": "Implement report reserves and report categories commands",
+			"description": "As an agent, I need report reserves --json for reserve breakdowns and report categories --json for spending by category",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/report/reserves.ts using defineToolCommand() with name 'report.reserves'",
+				"File exists at packages/cli/src/commands/report/categories.ts using defineToolCommand() with name 'report.categories'",
+				"report reserves --group=business --json returns envelope with data.series and data.latest",
+				"report categories --group=personal --json returns envelope with data.categories and data.total",
+				"report categories --mode=median returns data.categories and data.estimatedMonthly",
+				"categories supports --months, --limit, --mode=breakdown|median flags",
+				"Both appear in fin tools --json catalog",
+				"Quality gate passes"
+			],
+			"priority": 10,
+			"passes": true,
+			"dependsOn": ["ENG-008"],
+			"notes": "Use getGroupDailyReserveBreakdownSeries(), getGroupCategoryBreakdown(), getGroupCategoryMonthlyMedian() from @fin/core. categories --mode flattens the old breakdown/median subcommand nesting"
+		},
+		{
+			"id": "ENG-011",
+			"category": "core",
+			"title": "Implement report audit command",
+			"description": "As an agent, I need report audit --json to get payee breakdown for a specific expense account",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/report/audit.ts using defineToolCommand() with name 'report.audit'",
+				"report audit --account=Expenses:Business:Uncategorized --json returns envelope with data.payees array and data.total",
+				"--account is required; INVALID_INPUT error if missing",
+				"Supports --months, --group optional filters",
+				"Appears in fin tools --json catalog",
+				"Text mode renders payee table",
+				"Quality gate passes"
+			],
+			"priority": 11,
+			"passes": true,
+			"dependsOn": ["ENG-008"],
+			"notes": "Use getExpenseAccountPayeeBreakdown() from @fin/core. Reference existing report.ts audit handler"
+		},
+		{
+			"id": "ENG-012",
+			"category": "core",
+			"title": "Implement report summary command (text mode)",
+			"description": "As a CLI developer, I need report summary to produce the existing markdown financial report, migrated from the legacy summary.ts to the new directory structure",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/report/summary.ts using defineToolCommand() with name 'report.summary'",
+				"report summary (text mode) produces the same markdown output as the existing summary.ts",
+				"Supports --months, --group, --output flags",
+				"All helper functions from summary.ts are preserved or inlined",
+				"Appears in fin tools --json catalog and is wired in report/index.ts",
+				"Quality gate passes"
+			],
+			"priority": 12,
+			"passes": true,
+			"dependsOn": ["ENG-008"],
+			"notes": "Migrate from packages/cli/src/commands/summary.ts (464 lines, 20 helpers). Text mode output is the priority here; JSON mode added in next story"
+		},
+		{
+			"id": "ENG-013",
+			"category": "core",
+			"title": "Add JSON structured data mode to report summary",
+			"description": "As an agent, I need report summary --json to return structured financial data (groups, consolidated, balanceSheet) instead of markdown",
+			"acceptanceCriteria": [
+				"report summary --json returns envelope with data.generatedAt, data.periodMonths, data.currency, data.groups array, data.consolidated, data.balanceSheet",
+				"Each group in data.groups has id, label, balances, snapshot (runway, lastMonthNet, netWorth, medianSpend), assetAllocation, lastMonth, cashflow, incomeSources, expenseSinks, expenseTree",
+				"data.consolidated has totalBalance, runway, burnRate",
+				"data.balanceSheet has assets, liabilities, equity, income, expenses, netWorth, netIncome",
+				"Text mode still produces markdown (ENG-012 behavior preserved)",
+				"Quality gate passes"
+			],
+			"priority": 13,
+			"passes": true,
+			"dependsOn": ["ENG-012"],
+			"notes": "Extract the raw data structures that the markdown is built from. Return them directly in JSON mode instead of generating markdown. See .tmp/AGENT_NATIVE.md line 566 for expected JSON shape"
+		},
+		{
+			"id": "ENG-014",
+			"category": "core",
+			"title": "Implement import command",
+			"description": "As an agent, I need fin import --json to run the import pipeline and get structured results",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/import/index.ts using defineToolCommand() with name 'import'",
+				"import --json returns envelope with data containing processedFiles, skippedFiles, totalTransactions, duplicateTransactions, journalEntriesCreated, transferPairsCreated, entryErrors, accountsTouched, unmappedDescriptions, archivedFiles",
+				"Supports --inbox optional path override",
+				"Partial success pattern: ok: true with errors in data when some files fail",
+				"Appears in fin tools --json catalog and is wired in main.ts",
+				"Text mode preserves existing import output behavior",
+				"Quality gate passes"
+			],
+			"priority": 14,
+			"passes": true,
+			"dependsOn": ["ENG-003"],
+			"notes": "Use importInbox() from @fin/core. Reference existing packages/cli/src/commands/import.ts. This is a mutating (non-idempotent) command"
+		},
+		{
+			"id": "ENG-015",
+			"category": "core",
+			"title": "Implement sanitize discover, migrate, and recategorize commands",
+			"description": "As an agent, I need sanitize --json commands to find unmapped descriptions and apply mapping rules",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/src/commands/sanitize/index.ts exporting sanitizeCommand group",
+				"File exists at packages/cli/src/commands/sanitize/discover.ts using defineToolCommand() with name 'sanitize.discover'",
+				"File exists at packages/cli/src/commands/sanitize/migrate.ts using defineToolCommand() with name 'sanitize.migrate'",
+				"File exists at packages/cli/src/commands/sanitize/recategorize.ts using defineToolCommand() with name 'sanitize.recategorize'",
+				"discover --json returns envelope with data.descriptions and data.count",
+				"discover --unmapped filters to unmapped only",
+				"migrate --json returns envelope with data.plan and data.result (or just plan with --dry-run)",
+				"recategorize --json returns same pattern as migrate",
+				"All three appear in fin tools --json catalog",
+				"Quality gate passes"
+			],
+			"priority": 15,
+			"passes": true,
+			"dependsOn": ["ENG-003"],
+			"notes": "Use discoverDescriptions(), discoverUnmappedDescriptions(), planMigration(), executeMigration(), planRecategorize(), executeRecategorize(), loadRules() from @fin/core. Reference existing sanitize.ts"
+		},
+		{
+			"id": "ENG-016",
+			"category": "integration",
+			"title": "Create contract test harness and fixtures",
+			"description": "As a developer, I need a test harness that can spawn fin commands and validate JSON envelope contracts without requiring a real database",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/tests/contract.test.ts with test harness setup",
+				"Harness uses EnvelopeCapture + setCaptureMode() for in-process testing (no subprocess spawning needed for most tests)",
+				"Helper function validateEnvelope(json) checks: parses as JSON, has ok field, if ok:true has data+meta, if ok:false has error.code+message+hint+meta",
+				"Helper function runTool(command, args) invokes a command in capture mode and returns the envelope",
+				"At least tools and health commands have passing contract tests",
+				"Quality gate passes"
+			],
+			"priority": 16,
+			"passes": true,
+			"dependsOn": ["ENG-004"],
+			"notes": "Reference .tmp/let/packages/cli/tests/contract.test.ts. Use Bun test runner. In-process capture mode avoids subprocess overhead"
+		},
+		{
+			"id": "ENG-017",
+			"category": "integration",
+			"title": "Add contract tests for all tool commands and parity gate",
+			"description": "As a developer, I need contract tests validating JSON envelope output for all 17 registered tools, plus an end-to-end parity gate test",
+			"acceptanceCriteria": [
+				"Contract tests exist for: config.show, config.validate, view.accounts, view.transactions, view.ledger, view.balance, report.cashflow, report.health, report.runway, report.reserves, report.categories, report.audit, report.summary, import, sanitize.discover, sanitize.migrate, sanitize.recategorize",
+				"Each test validates: stdout is valid JSON, has ok field, correct meta.tool name",
+				"File exists at packages/cli/tests/parity-gate.test.ts with end-to-end agent loop test",
+				"Parity gate runs: tools --json -> health --json -> config show --json -> view accounts --json -> view balance --json -> report summary --json",
+				"All tests pass",
+				"Quality gate passes"
+			],
+			"priority": 17,
+			"passes": true,
+			"dependsOn": ["ENG-016", "ENG-013", "ENG-015"],
+			"notes": "Commands that need a database may test error envelopes (NO_DATABASE) if no fixture DB is available. The parity gate verifies the complete agent orientation workflow"
+		},
+		{
+			"id": "ENG-018",
+			"category": "polish",
+			"title": "Remove legacy command files",
+			"description": "As a developer, I need the old monolithic command files removed since all functionality has been migrated to the new directory-based structure",
+			"acceptanceCriteria": [
+				"File packages/cli/src/commands/view.ts is deleted",
+				"File packages/cli/src/commands/report.ts is deleted",
+				"File packages/cli/src/commands/sanitize.ts is deleted",
+				"File packages/cli/src/commands/import.ts is deleted",
+				"File packages/cli/src/commands/summary.ts is deleted",
+				"File packages/cli/src/commands/help.ts is deleted",
+				"No remaining imports reference deleted files",
+				"main.ts wires only new command groups (tools, health, config, view, report, import, sanitize)",
+				"fin tools --json lists exactly 17 tools",
+				"Quality gate passes"
+			],
+			"priority": 18,
+			"passes": true,
+			"dependsOn": ["ENG-017"],
+			"notes": "Verify all functionality is covered by new commands before deleting. Run all tests after removal"
+		},
+		{
+			"id": "ENG-019",
+			"category": "polish",
+			"title": "Add registry drift test",
+			"description": "As a developer, I need a test that fails if any command is not registered in the tool registry, preventing drift between commands and the tools catalog",
+			"acceptanceCriteria": [
+				"File exists at packages/cli/tests/registry.test.ts",
+				"Test scans packages/cli/src/commands/ for defineToolCommand() usage and verifies each appears in toolRegistry[]",
+				"Test verifies toolRegistry has exactly 17 entries",
+				"Test verifies no duplicate tool names in registry",
+				"Quality gate passes"
+			],
+			"priority": 19,
+			"passes": true,
+			"dependsOn": ["ENG-018"],
+			"notes": "This prevents adding a new command file that forgets to use defineToolCommand(). Can use glob + grep to scan files or import the registry directly"
+		},
+		{
+			"id": "ENG-020",
+			"category": "polish",
+			"title": "Create /fin Claude Code skill file",
+			"description": "As a Claude Code user, I need a /fin skill that provides autonomous financial analysis via the CLI toolbelt",
+			"acceptanceCriteria": [
+				"File exists at .claude/skills/fin/SKILL.md with frontmatter (name, description, compatibility, allowed-tools)",
+				"Skill includes Orientation section (tools, health, config show)",
+				"Skill includes Self-describing CLI section referencing fin tools --json",
+				"Skill includes Common workflows: quick snapshot, investigate spending, check financial health, import new data",
+				"Skill includes Expected output section describing what agent should return",
+				"Quality gate passes"
+			],
+			"priority": 20,
+			"passes": true,
+			"dependsOn": ["ENG-018"],
+			"notes": "Reference .tmp/AGENT_NATIVE.md lines 640-704 for the exact skill content. Also reference .tmp/let/.claude/skills/let/SKILL.md for structure"
+		},
+		{
+			"id": "ENG-021",
+			"category": "polish",
+			"title": "Update CLAUDE.md with agent-native CLI documentation",
+			"description": "As a developer or agent, I need CLAUDE.md to reflect the new tool surface, JSON envelope contracts, and agent workflow",
+			"acceptanceCriteria": [
+				"CLAUDE.md section 6 (CLI) updated to show all 17 tools plus 2 infrastructure commands",
+				"CLAUDE.md includes JSON envelope contract documentation (success/error shapes, exit codes, error codes)",
+				"CLAUDE.md includes agent workflow diagram (orient -> understand -> investigate -> maintain -> report)",
+				"CLAUDE.md references /fin skill",
+				"Existing sections (Documentation, Repository Structure, Stack, Architecture, Configuration, Quality) preserved",
+				"Quality gate passes"
+			],
+			"priority": 21,
+			"passes": true,
+			"dependsOn": ["ENG-020"],
+			"notes": "Reference .tmp/AGENT_NATIVE.md sections on JSON Envelope Contract and Agent Workflow. Keep CLAUDE.md concise -- link to AGENT_NATIVE.md for exhaustive details"
+		},
+		{
+			"id": "ENG-022",
+			"category": "polish",
+			"title": "Final validation of complete agent-native CLI",
+			"description": "As a developer, I need to verify the entire agent-native CLI works end-to-end with all quality gates passing",
+			"acceptanceCriteria": [
+				"bun run util:check passes (format + lint + types + tests)",
+				"bun run fin tools --json lists exactly 17 tools",
+				"bun run fin health --json returns ready or degraded status (not blocked)",
+				"bun test packages/cli/tests/contract.test.ts passes",
+				"bun test packages/cli/tests/parity-gate.test.ts passes",
+				"bun test packages/cli/tests/registry.test.ts passes",
+				"No legacy command files remain in packages/cli/src/commands/",
+				"Quality gate passes"
+			],
+			"priority": 22,
+			"passes": true,
+			"dependsOn": ["ENG-021"],
+			"notes": "This is the final validation story. Fix any remaining issues discovered during full integration testing"
+		},
+		{
+			"id": "ENG-023",
+			"category": "polish",
+			"title": "Populate outputSchema for all 17 tool commands",
+			"description": "As an agent, I need fin tools --json to return typed field descriptions (type, description) for each tool's data payload so I can understand response shapes without trial-and-error",
+			"acceptanceCriteria": [
+				"All 17 defineToolCommand() calls use outputSchema instead of outputFields",
+				"Each field has type (string|number|boolean|array|object) and description",
+				"Array-typed fields have items property naming the element type",
+				"fin tools --json catalog entries all show outputSchema",
+				"outputFields auto-derived from outputSchema keys (existing tool.ts:117 logic)",
+				"Quality gate passes"
+			],
+			"priority": 23,
+			"passes": true,
+			"dependsOn": ["ENG-022"],
+			"notes": "Mechanical, no behavioral changes. The OutputSchema type already exists in tool.ts. Reference each command's ok() call to determine field types. No test count changes."
+		},
+		{
+			"id": "ENG-024",
+			"category": "core",
+			"title": "Health command verifies DB schema integrity",
+			"description": "As an agent, I need fin health --json to verify DB tables and schema version so I get SCHEMA_MISMATCH instead of cryptic DB_ERROR",
+			"acceptanceCriteria": [
+				"New db_schema check with severity blocking runs when DB file exists",
+				"Verifies PRAGMA user_version matches SCHEMA_VERSION (currently 5, from @fin/core)",
+				"Verifies tables chart_of_accounts, journal_entries, postings exist via sqlite_master",
+				"Invalid schema: status invalid, fix suggests running import to trigger migration",
+				"Skipped when DB file doesn't exist (existing database check covers that)",
+				"Contract test updated to include db_schema check ID",
+				"Quality gate passes"
+			],
+			"priority": 24,
+			"passes": true,
+			"dependsOn": ["ENG-022"],
+			"notes": "Open DB read-only with new Database(path, { readonly: true }) (not openDatabase which triggers migration). Insert check after existing checkDatabase(). SCHEMA_VERSION exported from @fin/core (chain: db/schema.ts -> db/index.ts -> index.ts). getUserVersion() pattern in packages/core/src/db/connection.ts:27. Health command at packages/cli/src/commands/health/index.ts."
+		},
+		{
+			"id": "ENG-025",
+			"category": "core",
+			"title": "Add text search to core transaction queries",
+			"description": "As a core library consumer, I need TransactionQueryOptions.search to filter by description/counterparty text",
+			"acceptanceCriteria": [
+				"TransactionQueryOptions type gains search?: string field",
+				"getTransactions() adds WHERE clause matching clean_description, raw_description, counterparty using LIKE with % wildcards",
+				"Search is case-insensitive (SQLite LIKE default)",
+				"Search term is parameterized (no SQL injection)",
+				"Empty/undefined search = no filter",
+				"Combines with other filters via AND",
+				"Quality gate passes"
+			],
+			"priority": 25,
+			"passes": true,
+			"dependsOn": ["ENG-022"],
+			"notes": "Core-only change. File to modify: packages/core/src/queries/transactions.ts only. Add after existing WHERE clauses: where.push with COALESCE pattern on je.clean_description, je.raw_description, je.counterparty using LIKE ? with %search% pattern."
+		},
+		{
+			"id": "ENG-026",
+			"category": "core",
+			"title": "Add --search flag to CLI view transactions command",
+			"description": "As an agent, I need fin view transactions --search='tesco' --json to filter by payee/description text",
+			"acceptanceCriteria": [
+				"--search flag added (type: string, description: Search description/counterparty text)",
+				"Value passed to getTransactions() as search option",
+				"Combines with --group, --account, --from, --to, --limit",
+				"Appears in fin tools view.transactions --json parameter list",
+				"Text mode also supports --search",
+				"Quality gate passes"
+			],
+			"priority": 26,
+			"passes": true,
+			"dependsOn": ["ENG-025"],
+			"notes": "Thin CLI wiring. File to modify: packages/cli/src/commands/view/transactions.ts. If ENG-023 already ran, update outputSchema to include search parameter."
+		},
+		{
+			"id": "ENG-027",
+			"category": "core",
+			"title": "Implement transaction void command",
+			"description": "As an agent, I need fin view void <id> --json to create a reversing journal entry that zeroes out a bad import",
+			"acceptanceCriteria": [
+				"File at packages/cli/src/commands/view/void.ts using defineToolCommand() with name view.void",
+				"Positional <id> argument (journal entry ID)",
+				"Looks up original journal entry + postings; INVALID_INPUT if not found",
+				"Creates new journal entry with negated posting amounts",
+				"Description: VOID: {original description}, posted_at: current timestamp",
+				"JSON: ok() with originalEntry, voidEntry, postingsReversed",
+				"Text: prints void confirmation to stderr",
+				"--dry-run shows what would be voided without writing",
+				"Marked idempotent: false",
+				"Registry drift test updated: count 17 -> 18, names list includes view.void",
+				"Contract test added for view.void",
+				"Parity gate tool count updated: 17 -> 18",
+				"Wired in packages/cli/src/commands/view/index.ts",
+				"Quality gate passes"
+			],
+			"priority": 27,
+			"passes": true,
+			"dependsOn": ["ENG-022"],
+			"notes": "Core void logic can live directly in the command file (thin: one SELECT + one INSERT). Use getWritableDb() for actual void, getReadonlyDb() for --dry-run reads. Insert pattern: packages/core/src/import/journal.ts:343-350 (prepared statements). ID generation: generateId(prefix) at journal.ts:32 (private -- inline the pattern: `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`). Journal entry columns: packages/core/src/db/schema.ts:17-30. Posting columns: packages/core/src/db/schema.ts:32-43."
+		},
+		{
+			"id": "ENG-028",
+			"category": "polish",
+			"title": "Final validation of agent-native gap closure",
+			"description": "As a developer, I need to verify all gaps are closed with tests passing and docs updated",
+			"acceptanceCriteria": [
+				"bun run util:check passes",
+				"fin tools --json lists exactly 18 tools",
+				"All tools show outputSchema in catalog",
+				"fin health --json includes db_schema check when DB exists",
+				"fin view transactions --search=test --json returns valid envelope",
+				"fin view void produces INVALID_INPUT for nonexistent ID",
+				"All test files pass (contract, parity-gate, registry)",
+				"CLAUDE.md section 6 updated: 18 tools, --search flag, view void documented",
+				"Quality gate passes"
+			],
+			"priority": 28,
+			"passes": true,
+			"dependsOn": ["ENG-023", "ENG-024", "ENG-025", "ENG-026", "ENG-027"],
+			"notes": "This is the final validation story for gap closure. Fix any remaining issues discovered during full integration testing."
+		}
+	]
+}
