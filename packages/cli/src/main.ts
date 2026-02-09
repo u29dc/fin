@@ -10,7 +10,7 @@ import { configCommand } from './commands/config';
 import { healthCommand } from './commands/health';
 import { help } from './commands/help';
 import { importCmd } from './commands/import';
-import { report } from './commands/report';
+import { reportCommand } from './commands/report';
 import { sanitize } from './commands/sanitize';
 import { toolsCommand } from './commands/tools';
 import { viewCommand } from './commands/view';
@@ -30,7 +30,7 @@ export const main = defineCommand({
 		health: healthCommand,
 		config: configCommand,
 		view: viewCommand,
-		report,
+		report: reportCommand,
 		import: importCmd,
 		sanitize,
 	},

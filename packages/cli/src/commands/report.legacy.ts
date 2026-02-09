@@ -1,5 +1,8 @@
 /**
- * report - Financial analytics and reports.
+ * report.legacy -- Legacy report subcommands not yet migrated to defineToolCommand().
+ *
+ * These are imported by report/index.ts alongside migrated commands.
+ * Each command will be moved to its own file in report/ as it is migrated.
  */
 
 import {
@@ -11,15 +14,13 @@ import {
 	getGroupDailyHealthSeries,
 	getGroupDailyReserveBreakdownSeries,
 	getGroupDailyRunwaySeries,
-	getGroupMonthlyCashflowSeries,
-	getGroupPureMonthlyCashflowSeries,
 	isGroupId,
 } from '@fin/core';
 import { getAccountIdsByGroup } from '@fin/core/config';
 import { defineCommand } from 'citty';
 
 import { getReadonlyDb } from '../db';
-import { formatAmount, formatCount, formatDate, formatMonth, formatMonths, formatPercentRaw } from '../format';
+import { formatAmount, formatDate, formatMonths } from '../format';
 import { error } from '../logger';
 import { type Column, parseFormat, renderOutput } from '../output';
 import { summary } from './summary';
@@ -54,69 +55,6 @@ function validateGroup(group: string | undefined, cmd: string): asserts group is
 }
 
 // ============================================================================
-// cashflow
-// ============================================================================
-
-type CashflowRow = {
-	month: string;
-	income: number;
-	expenses: number;
-	net: number;
-	savingsRate: number | null;
-};
-
-const CASHFLOW_COLUMNS: Column<CashflowRow>[] = [
-	{ key: 'month', label: 'Month', minWidth: 7, format: (v) => formatMonth(v as string) },
-	{ key: 'income', label: 'Income', align: 'right', minWidth: 12, format: (v) => formatAmount(v as number) },
-	{ key: 'expenses', label: 'Expenses', align: 'right', minWidth: 12, format: (v) => formatAmount(v as number) },
-	{ key: 'net', label: 'Net', align: 'right', minWidth: 12, format: (v) => formatAmount(v as number) },
-	{ key: 'savingsRate', label: 'Savings%', align: 'right', minWidth: 8, format: (v) => formatPercentRaw(v as number | null) },
-];
-
-const cashflow = defineCommand({
-	meta: { name: 'cashflow', description: 'Monthly cashflow summary' },
-	args: {
-		group: groupArg,
-		months: { type: 'string', description: 'Number of months', default: '12' },
-		from: { type: 'string', description: 'Start month (YYYY-MM)' },
-		expenses: { type: 'boolean', description: 'Show true expenses only (exclude transfers, dividends, round-ups)', default: false },
-		format: formatArg,
-		db: dbArg,
-	},
-	run({ args }) {
-		validateGroup(args.group, 'cashflow');
-		const format = parseFormat(args.format);
-		const months = Number.parseInt(args.months ?? '12', 10);
-		const from = args.from;
-		const dbPath = args.db;
-		const pureExpenses = args.expenses;
-
-		const db = getReadonlyDb(dbPath ? { options: new Map([['db', dbPath]]) } : undefined);
-		const options: { from?: string; limit: number } = { limit: months };
-		if (from) options.from = from;
-
-		const series = pureExpenses ? getGroupPureMonthlyCashflowSeries(db, args.group, options) : getGroupMonthlyCashflowSeries(db, args.group, options);
-
-		const rows: CashflowRow[] = series.map((p) => ({
-			month: p.month,
-			income: p.incomeMinor,
-			expenses: p.expenseMinor,
-			net: p.netMinor,
-			savingsRate: p.savingsRatePct,
-		}));
-
-		// Calculate totals
-		const totalIncome = rows.reduce((sum, r) => sum + r.income, 0);
-		const totalExpenses = rows.reduce((sum, r) => sum + r.expenses, 0);
-		const totalNet = totalIncome - totalExpenses;
-		const modeLabel = pureExpenses ? ' (pure expenses)' : '';
-		const summaryText = `${formatCount(rows.length, 'month')}${modeLabel} | Net: ${formatAmount(totalNet)}`;
-
-		renderOutput(rows, CASHFLOW_COLUMNS, format, summaryText);
-	},
-});
-
-// ============================================================================
 // health
 // ============================================================================
 
@@ -130,7 +68,7 @@ const HEALTH_COLUMNS: Column<HealthRow>[] = [
 	{ key: 'health', label: 'Health', align: 'right', minWidth: 14, format: (v) => formatAmount(v as number) },
 ];
 
-const health = defineCommand({
+export const health = defineCommand({
 	meta: { name: 'health', description: 'Financial health metrics (balance - reserves)' },
 	args: {
 		group: groupArg,
@@ -227,7 +165,7 @@ function renderConsolidatedRunway(db: ReturnType<typeof getReadonlyDb>, includeG
 	renderOutput(rows, CONSOLIDATED_RUNWAY_COLUMNS, format, summaryText);
 }
 
-const runway = defineCommand({
+export const runway = defineCommand({
 	meta: { name: 'runway', description: 'Months of cash remaining' },
 	args: {
 		group: { type: 'string', description: 'Group ID (personal, business, joint)' },
@@ -280,7 +218,7 @@ const RESERVES_COLUMNS: Column<ReservesRow>[] = [
 	{ key: 'available', label: 'Available', align: 'right', minWidth: 12, format: (v) => formatAmount(v as number) },
 ];
 
-const reserves = defineCommand({
+export const reserves = defineCommand({
 	meta: { name: 'reserves', description: 'Reserve breakdown (tax + expense reserves)' },
 	args: {
 		group: groupArg,
@@ -410,7 +348,7 @@ const categoriesMedian = defineCommand({
 	},
 });
 
-const categories = defineCommand({
+export const categories = defineCommand({
 	meta: { name: 'categories', description: 'Spending by category' },
 	subCommands: {
 		breakdown: categoriesBreakdown,
@@ -440,7 +378,7 @@ const AUDIT_COLUMNS: Column<AuditRow>[] = [
 	{ key: 'lastDate', label: 'Last Date', minWidth: 10, format: (v) => formatDate(v as string) },
 ];
 
-const audit = defineCommand({
+export const audit = defineCommand({
 	meta: { name: 'audit', description: 'Expense account payee breakdown' },
 	args: {
 		account: { type: 'string', description: 'Expense account prefix (e.g. Expenses:Business:Uncategorized)', required: true },
@@ -488,19 +426,5 @@ const audit = defineCommand({
 	},
 });
 
-// ============================================================================
-// report (parent command)
-// ============================================================================
-
-export const report = defineCommand({
-	meta: { name: 'report', description: 'Financial analytics and reports' },
-	subCommands: {
-		cashflow,
-		health,
-		runway,
-		reserves,
-		categories,
-		audit,
-		summary,
-	},
-});
+// Re-export summary for use by report/index.ts
+export { summary };
