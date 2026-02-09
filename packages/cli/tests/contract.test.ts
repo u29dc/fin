@@ -1,7 +1,9 @@
 /**
- * Contract tests for JSON envelope across commands.
+ * Contract tests for JSON envelope across all commands.
  *
- * Verifies stdout purity and envelope shape for infrastructure commands.
+ * Verifies stdout purity and envelope shape for all 17 tool commands
+ * plus 2 infrastructure commands (tools, health).
+ *
  * Each command is tested with --json to ensure:
  * 1. stdout contains exactly one JSON line
  * 2. Envelope has { ok, data|error, meta } structure
@@ -26,7 +28,7 @@ const DATA_DIR = join(TEMP_DIR, 'data');
 
 mkdirSync(DATA_DIR, { recursive: true });
 
-// Write minimal valid config for health checks
+// Write minimal valid config
 writeFileSync(
 	join(DATA_DIR, 'fin.config.toml'),
 	`
@@ -127,10 +129,10 @@ function assertValidEnvelope(stdout: string, expectedTool: string): Record<strin
 }
 
 // ---------------------------------------------------------------------------
-// Contract tests
+// Infrastructure commands (tools, health)
 // ---------------------------------------------------------------------------
 
-describe('JSON envelope contracts', () => {
+describe('infrastructure commands', () => {
 	test('tools --json', async () => {
 		const { stdout } = await run(['tools', '--json'], ENV);
 		const parsed = assertValidEnvelope(stdout, 'tools');
@@ -178,5 +180,209 @@ describe('JSON envelope contracts', () => {
 		expect(checkIds).toContain('database');
 		expect(checkIds).toContain('rules');
 		expect(checkIds).toContain('inbox');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Config commands (config present, no DB needed)
+// ---------------------------------------------------------------------------
+
+describe('config commands', () => {
+	test('config.show --json', async () => {
+		const { stdout } = await run(['config', 'show', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'config.show');
+		expect(parsed['ok']).toBe(true);
+		const data = parsed['data'] as Record<string, unknown>;
+		expect(data['groups']).toBeDefined();
+		expect(data['accounts']).toBeDefined();
+		expect(data['financial']).toBeDefined();
+		expect(data['configPath']).toBeDefined();
+	});
+
+	test('config.validate --json', async () => {
+		const { stdout } = await run(['config', 'validate', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'config.validate');
+		expect(parsed['ok']).toBe(true);
+		const data = parsed['data'] as Record<string, unknown>;
+		expect(data['valid']).toBe(true);
+		expect(Array.isArray(data['errors'])).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// View commands (DB-dependent -- verify envelope shape)
+// ---------------------------------------------------------------------------
+
+describe('view commands', () => {
+	test('view.accounts --json', async () => {
+		const { stdout } = await run(['view', 'accounts', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'view.accounts');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['accounts'])).toBe(true);
+			expect(typeof data['total']).toBe('number');
+		}
+	});
+
+	test('view.transactions --json', async () => {
+		const { stdout } = await run(['view', 'transactions', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'view.transactions');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['transactions'])).toBe(true);
+			expect(typeof data['count']).toBe('number');
+		}
+	});
+
+	test('view.ledger --json', async () => {
+		const { stdout } = await run(['view', 'ledger', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'view.ledger');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['entries'])).toBe(true);
+			expect(typeof data['count']).toBe('number');
+			expect(typeof data['total']).toBe('number');
+		}
+	});
+
+	test('view.balance --json', async () => {
+		const { stdout } = await run(['view', 'balance', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'view.balance');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(typeof data['assets']).toBe('number');
+			expect(typeof data['liabilities']).toBe('number');
+			expect(typeof data['equity']).toBe('number');
+			expect(typeof data['netWorth']).toBe('number');
+			expect(typeof data['netIncome']).toBe('number');
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Report commands (DB-dependent -- verify envelope shape)
+// ---------------------------------------------------------------------------
+
+describe('report commands', () => {
+	test('report.cashflow --json', async () => {
+		const { stdout } = await run(['report', 'cashflow', '--group=personal', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'report.cashflow');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['series'])).toBe(true);
+			expect(data['totals']).toBeDefined();
+		}
+	});
+
+	test('report.health --json', async () => {
+		const { stdout } = await run(['report', 'health', '--group=personal', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'report.health');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['series'])).toBe(true);
+			expect(data['latest']).toBeDefined();
+		}
+	});
+
+	test('report.runway --json', async () => {
+		const { stdout } = await run(['report', 'runway', '--group=personal', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'report.runway');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['series'])).toBe(true);
+			expect(data['latest']).toBeDefined();
+		}
+	});
+
+	test('report.reserves --json', async () => {
+		const { stdout } = await run(['report', 'reserves', '--group=personal', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'report.reserves');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['series'])).toBe(true);
+			expect(data['latest']).toBeDefined();
+		}
+	});
+
+	test('report.categories --json', async () => {
+		const { stdout } = await run(['report', 'categories', '--group=personal', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'report.categories');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['categories'])).toBe(true);
+			expect(typeof data['total']).toBe('number');
+		}
+	});
+
+	test('report.audit --json', async () => {
+		const { stdout } = await run(['report', 'audit', '--account=Expenses:Personal:Test', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'report.audit');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['payees'])).toBe(true);
+			expect(typeof data['total']).toBe('number');
+		}
+	});
+
+	test('report.summary --json', async () => {
+		const { stdout } = await run(['report', 'summary', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'report.summary');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(data['generatedAt']).toBeDefined();
+			expect(data['currency']).toBeDefined();
+			expect(Array.isArray(data['groups'])).toBe(true);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Import command (verify envelope shape)
+// ---------------------------------------------------------------------------
+
+describe('import command', () => {
+	test('import --json', async () => {
+		const { stdout } = await run(['import', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'import');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['processedFiles'])).toBe(true);
+			expect(typeof data['totalTransactions']).toBe('number');
+			expect(typeof data['journalEntriesCreated']).toBe('number');
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Sanitize commands (verify envelope shape)
+// ---------------------------------------------------------------------------
+
+describe('sanitize commands', () => {
+	test('sanitize.discover --json', async () => {
+		const { stdout } = await run(['sanitize', 'discover', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'sanitize.discover');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(Array.isArray(data['descriptions'])).toBe(true);
+			expect(typeof data['count']).toBe('number');
+		}
+	});
+
+	test('sanitize.migrate --json', async () => {
+		const { stdout } = await run(['sanitize', 'migrate', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'sanitize.migrate');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(data['plan']).toBeDefined();
+		}
+	});
+
+	test('sanitize.recategorize --json', async () => {
+		const { stdout } = await run(['sanitize', 'recategorize', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'sanitize.recategorize');
+		if (parsed['ok'] === true) {
+			const data = parsed['data'] as Record<string, unknown>;
+			expect(data['plan']).toBeDefined();
+		}
 	});
 });

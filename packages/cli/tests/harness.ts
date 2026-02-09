@@ -11,7 +11,7 @@
  * 4. Catches EnvelopeCapture and returns { stdout, exitCode }
  */
 
-import { resetConfig } from '@fin/core/config';
+import { initConfig, resetConfig } from '@fin/core/config';
 import { runCommand } from 'citty';
 import { EnvelopeCapture, setCaptureMode, setJsonModeOverride } from '../src/envelope';
 import { main } from '../src/main';
@@ -40,8 +40,13 @@ export async function run(rawArgs: string[], env?: Record<string, string>): Prom
 			}
 		}
 
-		// Reset config singleton so env vars take effect
+		// Reset config singleton so env vars take effect, then re-initialize
 		resetConfig();
+		try {
+			initConfig();
+		} catch {
+			// Config may not exist in some test scenarios (e.g. tools command)
+		}
 
 		// Enable capture mode + json mode override (ref-counted for concurrent safety)
 		setCaptureMode(true);
