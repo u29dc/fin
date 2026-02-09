@@ -462,7 +462,7 @@
 				"Quality gate passes"
 			],
 			"priority": 24,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-022"],
 			"notes": "Open DB read-only with new Database(path, { readonly: true }) (not openDatabase which triggers migration). Insert check after existing checkDatabase(). SCHEMA_VERSION exported from @fin/core (chain: db/schema.ts -> db/index.ts -> index.ts). getUserVersion() pattern in packages/core/src/db/connection.ts:27. Health command at packages/cli/src/commands/health/index.ts."
 		},

@@ -271,3 +271,14 @@
 - **Learnings:** Purely mechanical change. The OutputSchema type and auto-derivation logic were already in place from ENG-001. Each command's ok() call data argument is the source of truth for field types. Array items use the local type alias name (e.g. AccountRow, CashflowRow) for agent readability.
 ---
 
+## 2026-02-09 - ENG-024: Health command verifies DB schema integrity
+- Added checkDbSchema() function to packages/cli/src/commands/health/index.ts
+- Opens DB read-only via `new Database(path, { readonly: true })` (avoids migration trigger)
+- Verifies PRAGMA user_version matches SCHEMA_VERSION (5) from @fin/core
+- Verifies required tables (chart_of_accounts, journal_entries, postings) via sqlite_master
+- Returns null (skipped) when DB file doesn't exist; severity blocking when schema invalid
+- Added contract test with minimal fixture DB validating db_schema check presence and ok status
+- Files changed: packages/cli/src/commands/health/index.ts (modified), packages/cli/tests/contract.test.ts (modified)
+- **Learnings:** SCHEMA_VERSION is available via @fin/core (re-exported chain: db/schema.ts -> db/index.ts -> core/index.ts). The checkDbSchema returns null to skip insertion into checks array when DB doesn't exist, keeping the check conditional without complicating runHealthChecks(). bun:sqlite Database constructor with `{ readonly: true }` is safe for health probing without triggering migrations.
+---
+
