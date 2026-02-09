@@ -161,3 +161,14 @@
 - **Learnings:** ok() returns `never` so no `return` is needed after it -- TypeScript's unreachable code detection catches this. JSON builders should parallel markdown renderers 1:1 to ensure data parity. Extract numeric pctNum() alongside string pctOf() to serve both output modes from the same allocation logic.
 ---
 
+## 2026-02-09 - ENG-014: Implement import command
+- Migrated packages/cli/src/commands/import.ts to packages/cli/src/commands/import/index.ts using defineToolCommand()
+- JSON mode: ok() envelope with processedFiles, skippedFiles, totalTransactions, duplicateTransactions, journalEntriesCreated, transferPairsCreated, entryErrors, accountsTouched, unmappedDescriptions, archivedFiles
+- Text mode: preserves existing human-readable output (processed files, skipped files, results summary, unmapped descriptions, archived files)
+- Error handling: IMPORT_ERROR code with fail() envelope in JSON mode, stderr in text mode
+- Registered as non-idempotent tool (idempotent: false) since import mutates the database
+- Deleted old flat import.ts file; import now resolves via import/index.ts
+- Files changed: packages/cli/src/commands/import/index.ts (new), packages/cli/src/commands/import.ts (deleted), packages/cli/src/main.ts (modified)
+- **Learnings:** Import is a top-level command (not nested under a group) so its tool name is just "import" not "import.index". The import command doesn't need initConfig() in its run() because main.ts index.ts already calls it in setup. Old flat files can be deleted once the directory replacement is wired in main.ts.
+---
+

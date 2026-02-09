@@ -272,7 +272,7 @@
 				"Quality gate passes"
 			],
 			"priority": 14,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-003"],
 			"notes": "Use importInbox() from @fin/core. Reference existing packages/cli/src/commands/import.ts. This is a mutating (non-idempotent) command"
 		},
