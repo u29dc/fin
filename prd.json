@@ -198,7 +198,7 @@
 				"Quality gate passes"
 			],
 			"priority": 10,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-008"],
 			"notes": "Use getGroupDailyReserveBreakdownSeries(), getGroupCategoryBreakdown(), getGroupCategoryMonthlyMedian() from @fin/core. categories --mode flattens the old breakdown/median subcommand nesting"
 		},

@@ -113,3 +113,15 @@
 - **Learnings:** Biome forbids non-null assertions (noNonNullAssertion). Use `(arr[i] ?? null)` instead of `arr[i]!` for safe array access. Runway command requires careful mode branching -- extract handleConsolidatedMode/handleSingleMode helpers to keep run() under complexity limit.
 ---
 
+## 2026-02-09 - ENG-010: Implement report reserves and report categories commands
+- Created packages/cli/src/commands/report/reserves.ts using defineToolCommand() with name 'report.reserves'
+- Created packages/cli/src/commands/report/categories.ts using defineToolCommand() with name 'report.categories'
+- Reserves: JSON returns series + latest; supports --group (required), --from, --to
+- Categories: flattened breakdown/median subcommands into --mode flag (default: breakdown)
+- Breakdown mode: returns categories array + total; Median mode: returns categories array + estimatedMonthly
+- Extracted validateGroupArg() and validateModeArg() helpers to keep run() cognitive complexity under 15
+- Removed reserves and categories from report.legacy.ts; updated report/index.ts to wire new commands
+- Files changed: packages/cli/src/commands/report/reserves.ts (new), packages/cli/src/commands/report/categories.ts (new), packages/cli/src/commands/report/index.ts (modified), packages/cli/src/commands/report.legacy.ts (trimmed)
+- **Learnings:** When a command has multiple modes (breakdown vs median), use a --mode flag instead of subcommands for flatter agent consumption. Extract validation into typed assert functions (asserts x is T) to both reduce complexity and give TypeScript narrowing.
+---
+
