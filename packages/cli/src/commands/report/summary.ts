@@ -447,6 +447,209 @@ function computeGroupTotals(db: ReturnType<typeof getReadonlyDb>, groupIds: Grou
 }
 
 // ---------------------------------------------------------------------------
+// JSON data builders
+// ---------------------------------------------------------------------------
+
+function pctNum(value: number, total: number): number | null {
+	return total > 0 ? Math.round((value / total) * 100) : null;
+}
+
+function buildPersonalAllocation(groupId: GroupId, balances: BalanceEntry[], medianExpense: number | null): Array<{ segment: string; amount: number; pct: number | null }> {
+	const accounts = getAccountsByGroup(groupId);
+	const balanceMap = new Map<string, number>();
+	for (const b of balances) {
+		if (b.balanceMinor !== null) balanceMap.set(b.chartAccountId, b.balanceMinor);
+	}
+
+	let checkingTotal = 0;
+	let savingsTotal = 0;
+	let investmentTotal = 0;
+
+	for (const acc of accounts) {
+		const bal = balanceMap.get(acc.id) ?? 0;
+		if (acc.subtype === 'investment') investmentTotal += bal;
+		else if (acc.subtype === 'savings') savingsTotal += bal;
+		else checkingTotal += bal;
+	}
+
+	const expenseBuffer = medianExpense !== null ? medianExpense * 3 : 0;
+	const available = Math.max(0, checkingTotal - expenseBuffer);
+	const total = checkingTotal + savingsTotal + investmentTotal;
+
+	return [
+		{ segment: 'Available cash', amount: available, pct: pctNum(available, total) },
+		{ segment: 'Expense buffer', amount: expenseBuffer, pct: pctNum(expenseBuffer, total) },
+		{ segment: 'Emergency fund', amount: savingsTotal, pct: pctNum(savingsTotal, total) },
+		{ segment: 'Investment', amount: investmentTotal, pct: pctNum(investmentTotal, total) },
+	];
+}
+
+function buildReserveAllocation(reserve: ReservePoint): Array<{ segment: string; amount: number; pct: number | null }> {
+	const total = reserve.balanceMinor;
+	return [
+		{ segment: 'Available', amount: reserve.availableMinor, pct: pctNum(reserve.availableMinor, total) },
+		{ segment: 'Expense buffer', amount: reserve.expenseReserveMinor, pct: pctNum(reserve.expenseReserveMinor, total) },
+		{ segment: 'Tax reserve', amount: reserve.taxReserveMinor, pct: pctNum(reserve.taxReserveMinor, total) },
+	];
+}
+
+function buildAssetAllocation(
+	groupId: GroupId,
+	balances: BalanceEntry[],
+	medianExpense: number | null,
+	latestReserve: ReservePoint | undefined,
+): Array<{ segment: string; amount: number; pct: number | null }> {
+	const meta = getGroupMetadata(groupId);
+	if (meta.taxType === 'income') return buildPersonalAllocation(groupId, balances, medianExpense);
+	if (latestReserve) return buildReserveAllocation(latestReserve);
+	return [];
+}
+
+function buildFlowData(
+	db: ReturnType<typeof getReadonlyDb>,
+	groupId: GroupId,
+	months: number,
+): { incomeSources: Array<{ source: string; amount: number }>; expenseSinks: Array<{ category: string; amount: number }> } {
+	const flowData: SankeyFlowData = getGroupCashFlowDataMedian(db, groupId, { months });
+	const nodeCategories = new Map<string, string>();
+	for (const n of flowData.nodes) {
+		nodeCategories.set(n.name, n.category);
+	}
+
+	const incomeSources = flowData.links
+		.filter((l) => nodeCategories.get(l.source) === 'income')
+		.sort((a, b) => b.value - a.value)
+		.map((l) => ({ source: l.source, amount: l.value }));
+
+	const expenseSinks = flowData.links
+		.filter((l) => nodeCategories.get(l.target) === 'expense')
+		.sort((a, b) => b.value - a.value)
+		.map((l) => ({ category: l.target, amount: l.value }));
+
+	return { incomeSources, expenseSinks };
+}
+
+function flattenExpenseTreeJson(
+	nodes: ExpenseNode[],
+): Array<{ accountId: string; name: string; amount: number; children: Array<{ accountId: string; name: string; amount: number; children: unknown[] }> }> {
+	const sorted = [...nodes].sort((a, b) => b.totalMinor - a.totalMinor);
+	return sorted.map((node) => ({
+		accountId: node.accountId,
+		name: node.name,
+		amount: node.totalMinor,
+		children: node.children.length > 0 ? flattenExpenseTreeJson(node.children) : [],
+	}));
+}
+
+function buildLastMonth(cashflow: CashflowPoint[]): { income: number; expenses: number; net: number; momIncome: number | null; momExpenses: number | null } | null {
+	if (cashflow.length < 2) return null;
+	const current = cashflow[cashflow.length - 2] as CashflowPoint;
+	const previous = cashflow.length >= 3 ? (cashflow[cashflow.length - 3] as CashflowPoint) : undefined;
+	return {
+		income: current.incomeMinor,
+		expenses: current.expenseMinor,
+		net: current.netMinor,
+		momIncome: previous ? momChange(current.incomeMinor, previous.incomeMinor) : null,
+		momExpenses: previous ? momChange(current.expenseMinor, previous.expenseMinor) : null,
+	};
+}
+
+function buildGroupJson(db: ReturnType<typeof getReadonlyDb>, groupId: GroupId, months: number): Record<string, unknown> | null {
+	const meta = getGroupMetadata(groupId);
+	const accountIds = getAccountIdsByGroup(groupId);
+	if (accountIds.length === 0) return null;
+
+	const balances = getLatestBalances(db, accountIds);
+	const runwaySeries = getGroupDailyRunwaySeries(db, groupId);
+	const reserveSeries = getGroupDailyReserveBreakdownSeries(db, groupId);
+	const latestRunway = last(runwaySeries);
+	const latestReserve = last(reserveSeries);
+	const medianExpense = latestRunway?.medianExpenseMinor ?? null;
+
+	const from = monthsAgo(months);
+	const cashflow = getGroupMonthlyCashflowSeries(db, groupId, { from });
+	const lastCompleteMonth = cashflow.length >= 2 ? cashflow[cashflow.length - 2] : undefined;
+	const { incomeSources, expenseSinks } = buildFlowData(db, groupId, months);
+	const expenseTree = getGroupExpenseTreeMedian(db, groupId, { months });
+
+	let totalMinor = 0;
+	for (const b of balances) {
+		if (b.balanceMinor !== null) totalMinor += b.balanceMinor;
+	}
+
+	return {
+		id: groupId,
+		label: meta.label,
+		balances: balances.map((b) => ({ account: b.chartAccountId, balance: b.balanceMinor })),
+		snapshot: {
+			runway: latestRunway?.runwayMonths ?? null,
+			lastMonthNet: lastCompleteMonth?.netMinor ?? null,
+			netWorth: totalMinor,
+			medianSpend: medianExpense,
+		},
+		assetAllocation: buildAssetAllocation(groupId, balances, medianExpense, latestReserve),
+		lastMonth: buildLastMonth(cashflow),
+		cashflow: cashflow.map((p) => ({ month: p.month, income: p.incomeMinor, expenses: p.expenseMinor, net: p.netMinor, savingsRate: p.savingsRatePct })),
+		incomeSources,
+		expenseSinks,
+		expenseTree: flattenExpenseTreeJson(expenseTree),
+	};
+}
+
+function buildConsolidatedJson(db: ReturnType<typeof getReadonlyDb>, groupIds: GroupId[], months: number): Record<string, unknown> {
+	let totalBalance = 0;
+	for (const gid of groupIds) {
+		const accountIds = getAccountIdsByGroup(gid);
+		const balances = getLatestBalances(db, accountIds);
+		for (const b of balances) {
+			if (b.balanceMinor !== null) totalBalance += b.balanceMinor;
+		}
+	}
+
+	const consolidated = getConsolidatedDailyRunwaySeries(db, { includeGroups: groupIds });
+	const latestCon = last(consolidated);
+
+	const allLiquidAccountIds = getLiquidAccountIds();
+	const expenseTree = getGroupExpenseHierarchyMedian(db, allLiquidAccountIds, { months });
+
+	return {
+		totalBalance,
+		runway: latestCon?.runwayMonths ?? null,
+		burnRate: latestCon?.burnRateMinor ?? null,
+		expenseTree: flattenExpenseTreeJson(expenseTree),
+	};
+}
+
+function buildSummaryJson(db: ReturnType<typeof getReadonlyDb>, groupIds: GroupId[], months: number): Record<string, unknown> {
+	const groups: Array<Record<string, unknown>> = [];
+	for (const gid of groupIds) {
+		const groupData = buildGroupJson(db, gid, months);
+		if (groupData) groups.push(groupData);
+	}
+
+	const consolidated = groupIds.length > 1 && groups.length > 1 ? buildConsolidatedJson(db, groupIds, months) : null;
+
+	const bs = getBalanceSheet(db);
+
+	return {
+		generatedAt: today(),
+		periodMonths: months,
+		currency: 'GBP',
+		groups,
+		consolidated,
+		balanceSheet: {
+			assets: bs.assets,
+			liabilities: bs.liabilities,
+			equity: bs.equity,
+			income: bs.income,
+			expenses: bs.expenses,
+			netWorth: bs.netWorth,
+			netIncome: bs.netIncome,
+		},
+	};
+}
+
+// ---------------------------------------------------------------------------
 // Markdown builder
 // ---------------------------------------------------------------------------
 
@@ -538,7 +741,8 @@ export const reportSummaryCommand = defineToolCommand(
 				const groupIds = resolveGroupIds(args.group, jsonMode, start);
 
 				if (jsonMode) {
-					ok('report.summary', { generatedAt: today(), periodMonths: months, currency: 'GBP', groups: [], consolidated: null, balanceSheet: null }, start);
+					const data = buildSummaryJson(db, groupIds, months);
+					ok('report.summary', data, start);
 				}
 
 				const content = buildSummaryMarkdown(db, groupIds, months);

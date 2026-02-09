@@ -149,3 +149,15 @@
 - **Learnings:** The summary command is the largest single migration (464 lines, 20+ helpers). Biome requires type imports to be sorted after value imports within the same import block (e.g., `type SankeyFlowData` after `isGroupId`). Large render functions with many sequential sections need extraction into sub-functions to stay under biome's cognitive complexity limit of 15. report.legacy.ts is now fully eliminated -- all report subcommands use defineToolCommand().
 ---
 
+## 2026-02-09 - ENG-013: Add JSON structured data mode to report summary
+- Replaced placeholder JSON mode with buildSummaryJson() that extracts the same raw data the markdown renderers use
+- buildGroupJson() per group: balances, snapshot (runway, lastMonthNet, netWorth, medianSpend), assetAllocation, lastMonth (with MoM), cashflow series, incomeSources, expenseSinks, expenseTree
+- buildConsolidatedJson(): totalBalance, runway, burnRate, consolidated expenseTree across all liquid accounts
+- Balance sheet data from getBalanceSheet() mapped directly to envelope
+- JSON helper functions (pctNum, buildPersonalAllocation, buildReserveAllocation, etc.) parallel the markdown renderers but return structured objects
+- flattenExpenseTreeJson() returns recursive tree structure preserving accountId, name, amount, children
+- Text mode (markdown) remains unchanged from ENG-012
+- Files changed: packages/cli/src/commands/report/summary.ts (modified)
+- **Learnings:** ok() returns `never` so no `return` is needed after it -- TypeScript's unreachable code detection catches this. JSON builders should parallel markdown renderers 1:1 to ensure data parity. Extract numeric pctNum() alongside string pctOf() to serve both output modes from the same allocation logic.
+---
+

@@ -253,7 +253,7 @@
 				"Quality gate passes"
 			],
 			"priority": 13,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-012"],
 			"notes": "Extract the raw data structures that the markdown is built from. Return them directly in JSON mode instead of generating markdown. See .tmp/AGENT_NATIVE.md line 566 for expected JSON shape"
 		},
