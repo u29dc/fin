@@ -178,7 +178,7 @@
 				"Quality gate passes"
 			],
 			"priority": 9,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-008"],
 			"notes": "Use getGroupDailyHealthSeries(), getGroupDailyRunwaySeries(), getConsolidatedDailyRunwaySeries() from @fin/core. Note: 'report health' is financial health, not system health"
 		},

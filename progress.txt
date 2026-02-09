@@ -102,3 +102,14 @@
 - **Learnings:** The report group migration follows the same incremental pattern as view: rename legacy file, export individual commands, import them in the new directory index.ts. buildCashflowData() helper keeps run() clean and separates data construction from output concerns.
 ---
 
+## 2026-02-09 - ENG-009: Implement report health and report runway commands
+- Created packages/cli/src/commands/report/health.ts using defineToolCommand() with name 'report.health'
+- Created packages/cli/src/commands/report/runway.ts using defineToolCommand() with name 'report.runway'
+- Health: JSON returns series + latest; supports --group (required), --from, --to
+- Runway: two modes -- single group (--group) and consolidated (--consolidated --include=group1,group2)
+- Consolidated mode returns series + latest + groups array in JSON envelope
+- Removed health/runway from report.legacy.ts, updated report/index.ts to wire new commands
+- Files changed: packages/cli/src/commands/report/health.ts (new), packages/cli/src/commands/report/runway.ts (new), packages/cli/src/commands/report/index.ts (modified), packages/cli/src/commands/report.legacy.ts (trimmed)
+- **Learnings:** Biome forbids non-null assertions (noNonNullAssertion). Use `(arr[i] ?? null)` instead of `arr[i]!` for safe array access. Runway command requires careful mode branching -- extract handleConsolidatedMode/handleSingleMode helpers to keep run() under complexity limit.
+---
+
