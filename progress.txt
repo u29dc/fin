@@ -206,3 +206,13 @@
 - **Learnings:** Many DB-dependent commands actually succeed with empty results when the DB is auto-created (import creates DB via getWritableDb, view/report commands use getReadonlyDb which fails if DB doesn't exist but succeeds with empty tables if created by a prior test). sanitize.migrate/recategorize with empty DB return only `plan` (no `result`) since toUpdate is 0. citty's `required: true` args throw CLIError before command code runs, so input validation fail() calls are a defense-in-depth layer reached only via direct invocation.
 ---
 
+## 2026-02-09 - ENG-018: Remove legacy command files
+- Deleted packages/cli/src/commands/help.ts (237 lines, static help text)
+- Deleted packages/cli/src/commands/summary.ts (464 lines, legacy markdown summary)
+- Removed help import and subcommand from main.ts
+- Verified: no remaining imports reference deleted files, 17 tools in registry
+- main.ts now wires only new command groups: tools, health, config, view, report, import, sanitize
+- Files changed: packages/cli/src/commands/help.ts (deleted), packages/cli/src/commands/summary.ts (deleted), packages/cli/src/main.ts (modified)
+- **Learnings:** view.ts, report.ts, sanitize.ts, import.ts were already deleted in earlier stories (ENG-007, ENG-012, ENG-015, ENG-014). Only help.ts and summary.ts remained as flat legacy files. The help command's static COMMAND_TREE is now fully superseded by the dynamic toolRegistry[] (fin tools --json).
+---
+

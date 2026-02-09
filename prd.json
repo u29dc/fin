@@ -352,7 +352,7 @@
 				"Quality gate passes"
 			],
 			"priority": 18,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-017"],
 			"notes": "Verify all functionality is covered by new commands before deleting. Run all tests after removal"
 		},
