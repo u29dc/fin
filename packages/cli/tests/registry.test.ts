@@ -66,8 +66,8 @@ function scanCommandFiles(): { file: string; names: string[] }[] {
 // ---------------------------------------------------------------------------
 
 describe('registry drift', () => {
-	test('toolRegistry has exactly 17 entries', () => {
-		expect(toolRegistry.length).toBe(17);
+	test('toolRegistry has exactly 18 entries', () => {
+		expect(toolRegistry.length).toBe(18);
 	});
 
 	test('no duplicate tool names in registry', () => {
@@ -101,7 +101,7 @@ describe('registry drift', () => {
 		expect(orphaned).toEqual([]);
 	});
 
-	test('all 17 expected tool names are present', () => {
+	test('all 18 expected tool names are present', () => {
 		const expected = [
 			'config.show',
 			'config.validate',
@@ -120,6 +120,7 @@ describe('registry drift', () => {
 			'view.balance',
 			'view.ledger',
 			'view.transactions',
+			'view.void',
 		];
 
 		const actual = toolRegistry.map((t) => t.name).sort();

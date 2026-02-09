@@ -268,6 +268,15 @@ describe('view commands', () => {
 		}
 	});
 
+	test('view.void --json (not found)', async () => {
+		const { stdout, exitCode } = await run(['view', 'void', 'nonexistent_id', '--json'], ENV);
+		const parsed = assertValidEnvelope(stdout, 'view.void');
+		expect(parsed['ok']).toBe(false);
+		const error = parsed['error'] as Record<string, unknown>;
+		expect(error['code']).toBe('INVALID_INPUT');
+		expect(exitCode).toBe(1);
+	});
+
 	test('view.balance --json', async () => {
 		const { stdout } = await run(['view', 'balance', '--json'], ENV);
 		const parsed = assertValidEnvelope(stdout, 'view.balance');
