@@ -35,7 +35,7 @@
 				"Quality gate passes"
 			],
 			"priority": 2,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-001"],
 			"notes": "Reference .tmp/let/packages/cli/src/index.ts and .tmp/let/packages/cli/src/main.ts. Keep existing subcommands wired in main.ts alongside new ones as they are added"
 		},
