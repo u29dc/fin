@@ -1,0 +1,7 @@
+## Codebase Patterns
+(Patterns will be added by the agent as it discovers them)
+
+---
+
+## Progress Log
+
