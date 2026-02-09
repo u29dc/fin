@@ -6,8 +6,10 @@
  */
 
 import { defineCommand } from 'citty';
-import { audit, categories, health, reserves, runway, summary } from '../report.legacy';
+import { audit, categories, reserves, summary } from '../report.legacy';
 import { reportCashflowCommand } from './cashflow';
+import { reportHealthCommand } from './health';
+import { reportRunwayCommand } from './runway';
 
 export const reportCommand = defineCommand({
 	meta: {
@@ -16,8 +18,8 @@ export const reportCommand = defineCommand({
 	},
 	subCommands: {
 		cashflow: reportCashflowCommand,
-		health,
-		runway,
+		health: reportHealthCommand,
+		runway: reportRunwayCommand,
 		reserves,
 		categories,
 		audit,
