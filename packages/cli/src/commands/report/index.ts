@@ -1,18 +1,17 @@
 /**
  * `report` command group -- Financial analytics and reports.
  *
- * Migrated subcommands use defineToolCommand() with --json envelope support.
- * Legacy subcommands are imported from report.legacy.ts until they are migrated.
+ * All subcommands use defineToolCommand() with --json envelope support.
  */
 
 import { defineCommand } from 'citty';
-import { summary } from '../report.legacy';
 import { reportAuditCommand } from './audit';
 import { reportCashflowCommand } from './cashflow';
 import { reportCategoriesCommand } from './categories';
 import { reportHealthCommand } from './health';
 import { reportReservesCommand } from './reserves';
 import { reportRunwayCommand } from './runway';
+import { reportSummaryCommand } from './summary';
 
 export const reportCommand = defineCommand({
 	meta: {
@@ -26,6 +25,6 @@ export const reportCommand = defineCommand({
 		reserves: reportReservesCommand,
 		categories: reportCategoriesCommand,
 		audit: reportAuditCommand,
-		summary,
+		summary: reportSummaryCommand,
 	},
 });
