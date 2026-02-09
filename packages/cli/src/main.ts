@@ -8,7 +8,6 @@
 import { defineCommand } from 'citty';
 import { configCommand } from './commands/config';
 import { healthCommand } from './commands/health';
-import { help } from './commands/help';
 import { importCommand } from './commands/import';
 import { reportCommand } from './commands/report';
 import { sanitizeCommand } from './commands/sanitize';
@@ -25,7 +24,6 @@ export const main = defineCommand({
 		description: 'Personal finance CLI',
 	},
 	subCommands: {
-		help,
 		tools: toolsCommand,
 		health: healthCommand,
 		config: configCommand,
