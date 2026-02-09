@@ -37,6 +37,7 @@ export type TransactionQueryOptions = {
 	to?: string;
 	afterPostedAt?: string;
 	afterId?: string;
+	search?: string;
 	limit?: number;
 };
 
@@ -75,6 +76,11 @@ export function getTransactions(db: Database, options: TransactionQueryOptions =
 			where.push('je.posted_at < ?');
 			params.push(options.afterPostedAt);
 		}
+	}
+	if (options.search) {
+		where.push("(COALESCE(je.clean_description, '') LIKE ? OR COALESCE(je.raw_description, '') LIKE ? OR COALESCE(je.counterparty, '') LIKE ?)");
+		const pattern = `%${options.search}%`;
+		params.push(pattern, pattern, pattern);
 	}
 
 	const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
