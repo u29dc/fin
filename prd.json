@@ -74,7 +74,7 @@
 				"Quality gate passes"
 			],
 			"priority": 4,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-001", "ENG-002"],
 			"notes": "Reference .tmp/let/packages/cli/src/commands/health/index.ts. Adapt checks for fin: config TOML, SQLite DB, rules TS, inbox dir. Use emitRaw() for health envelope (builds its own)"
 		},

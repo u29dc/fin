@@ -6,6 +6,7 @@
 - **Entry point split**: index.ts is thin (initConfig + runMain), main.ts exports the command tree with no side effects. Tests should import main.ts, not index.ts.
 - **Monorepo structure**: packages/cli/src/ for CLI, packages/core/src/ for business logic, packages/web/src/ for frontend. CLI imports core via @fin/core.
 - **tools command**: Plain defineCommand() (infrastructure). GLOBAL_FLAGS for fin: --json, --db, --format. getSortedRegistry() sorts by category then name. Text output to stderr, JSON via ok()/fail().
+- **health command**: Plain defineCommand() (infrastructure). Standalone path resolution (no initConfig dependency). Uses loadConfig() from @fin/core for validation. emitRaw() for custom envelope. Exit 2 when blocked.
 
 ---
 
@@ -35,5 +36,17 @@
 - Wired toolsCommand into main.ts subCommands
 - Files changed: packages/cli/src/commands/tools/index.ts (new), packages/cli/src/main.ts (modified)
 - **Learnings:** Global flags for fin differ from let (--json, --db, --format vs --json, --data-dir, --cache-dir, --config-dir, --sources-dir). New commands go in directories (tools/index.ts) while legacy ones remain as flat files (view.ts, report.ts).
+---
+
+## 2026-02-09 - ENG-004: Implement health command
+- Created packages/cli/src/commands/health/index.ts with healthCommand using plain defineCommand()
+- Five checks: config exists (blocking), config validates (blocking), database (info), rules file (degraded), inbox dir (info)
+- Standalone path resolution (findMonorepoRoot, resolveConfigPath, resolveDbPath, resolveRulesPath, resolveInboxPath) - runs before initConfig()
+- Uses loadConfig() from @fin/core for TOML+Zod validation without adding smol-toml dependency to CLI
+- JSON mode: emitRaw() with custom envelope containing status/checks/summary; exit 2 when blocked
+- Text mode: human-readable check list to stderr with +/x/! icons and fix commands
+- Wired healthCommand into main.ts subCommands
+- Files changed: packages/cli/src/commands/health/index.ts (new), packages/cli/src/main.ts (modified)
+- **Learnings:** smol-toml is a core dependency, not CLI. Reuse loadConfig() from @fin/core/config for validation rather than duplicating TOML parsing. Health command needs standalone path resolution since it runs diagnostics before initConfig().
 ---
 
