@@ -137,3 +137,15 @@
 - **Learnings:** Audit command is straightforward since it has a single mode with required --account and optional --group. The buildAuditData() helper pattern keeps run() clean by separating validation+query from output. After this migration, report.legacy.ts only re-exports summary -- next migration (ENG-012) will eliminate the legacy file entirely.
 ---
 
+## 2026-02-09 - ENG-012: Implement report summary command (text mode)
+- Migrated all 20+ helpers from packages/cli/src/commands/summary.ts to packages/cli/src/commands/report/summary.ts
+- Wrapped in defineToolCommand() with name 'report.summary', registered in tool catalog
+- Text mode preserves exact same markdown output (balances, snapshot, asset allocation, last month, cashflow, income/expense flows, expense tree, consolidated, balance sheet, methodology)
+- JSON mode scaffolded with placeholder data (ENG-013 will flesh out structured data)
+- Extracted renderSnapshotSection() from renderGroupSection() to keep cognitive complexity below biome threshold
+- Deleted report.legacy.ts (summary was the last remaining legacy command in the report group)
+- Updated report/index.ts to import reportSummaryCommand directly (no more legacy imports)
+- Files changed: packages/cli/src/commands/report/summary.ts (new), packages/cli/src/commands/report/index.ts (modified), packages/cli/src/commands/report.legacy.ts (deleted)
+- **Learnings:** The summary command is the largest single migration (464 lines, 20+ helpers). Biome requires type imports to be sorted after value imports within the same import block (e.g., `type SankeyFlowData` after `isGroupId`). Large render functions with many sequential sections need extraction into sub-functions to stay under biome's cognitive complexity limit of 15. report.legacy.ts is now fully eliminated -- all report subcommands use defineToolCommand().
+---
+

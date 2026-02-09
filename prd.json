@@ -235,7 +235,7 @@
 				"Quality gate passes"
 			],
 			"priority": 12,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-008"],
 			"notes": "Migrate from packages/cli/src/commands/summary.ts (464 lines, 20 helpers). Text mode output is the priority here; JSON mode added in next story"
 		},
