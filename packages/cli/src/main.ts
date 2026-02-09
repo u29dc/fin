@@ -10,6 +10,7 @@ import { help } from './commands/help';
 import { importCmd } from './commands/import';
 import { report } from './commands/report';
 import { sanitize } from './commands/sanitize';
+import { toolsCommand } from './commands/tools';
 import { view } from './commands/view';
 
 /**
@@ -23,6 +24,7 @@ export const main = defineCommand({
 	},
 	subCommands: {
 		help,
+		tools: toolsCommand,
 		view,
 		report,
 		import: importCmd,
