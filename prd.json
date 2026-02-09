@@ -94,7 +94,7 @@
 				"Quality gate passes"
 			],
 			"priority": 5,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-003"],
 			"notes": "Use getConfig(), getGroupIds(), getGroupMetadata(), getAccountsByGroup() from @fin/core. Config commands catch NO_CONFIG and INVALID_CONFIG errors"
 		},
