@@ -6,6 +6,7 @@
  */
 
 import { defineCommand } from 'citty';
+import { configCommand } from './commands/config';
 import { healthCommand } from './commands/health';
 import { help } from './commands/help';
 import { importCmd } from './commands/import';
@@ -27,6 +28,7 @@ export const main = defineCommand({
 		help,
 		tools: toolsCommand,
 		health: healthCommand,
+		config: configCommand,
 		view,
 		report,
 		import: importCmd,
