@@ -116,7 +116,7 @@
 				"Quality gate passes"
 			],
 			"priority": 6,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-003"],
 			"notes": "Use getAssetAccounts(), getLatestBalances(), getTransactions() from @fin/core. Reference existing packages/cli/src/commands/view.ts for text output patterns"
 		},

@@ -8,6 +8,7 @@
 - **tools command**: Plain defineCommand() (infrastructure). GLOBAL_FLAGS for fin: --json, --db, --format. getSortedRegistry() sorts by category then name. Text output to stderr, JSON via ok()/fail().
 - **health command**: Plain defineCommand() (infrastructure). Standalone path resolution (no initConfig dependency). Uses loadConfig() from @fin/core for validation. emitRaw() for custom envelope. Exit 2 when blocked.
 - **config commands**: defineToolCommand() pattern. show uses accessor functions (getGroupIds, getAllGroupMetadata, getAccountsByGroup, getFinancialConfig) from @fin/core/config. validate uses Bun.TOML.parse() + FinConfigSchema.safeParse() for structured errors. Both catch NO_CONFIG and INVALID_CONFIG. Text output to stderr.
+- **Incremental migration**: When migrating command groups (e.g. view), rename legacy file to *.legacy.ts, export only unmigrated commands, and import them alongside new defineToolCommand() commands in the new directory's index.ts. This preserves all subcommands during progressive migration.
 
 ---
 
@@ -61,5 +62,18 @@
 - Wired configCommand into main.ts subCommands
 - Files changed: packages/cli/src/commands/config/ (new dir, 3 files), packages/cli/src/main.ts (modified)
 - **Learnings:** smol-toml is not available in CLI package; use Bun.TOML.parse() instead. Biome enforces type imports before value imports in the same specifier. Extract helper functions to reduce cognitive complexity below 15.
+---
+
+## 2026-02-09 - ENG-006: Implement view accounts and view transactions commands
+- Created packages/cli/src/commands/view/accounts.ts using defineToolCommand() with name 'view.accounts'
+- Created packages/cli/src/commands/view/transactions.ts using defineToolCommand() with name 'view.transactions'
+- Created packages/cli/src/commands/view/index.ts with viewCommand group wiring both new commands plus legacy ledger/balance
+- Renamed packages/cli/src/commands/view.ts to view.legacy.ts (trimmed to only export ledger + balance)
+- Updated main.ts to import viewCommand from new view/ directory
+- Both commands appear in fin tools --json catalog with correct metadata
+- JSON mode: ok() with accounts/total or transactions/count + meta.count
+- Text mode: preserves existing table rendering via renderOutput()
+- Files changed: packages/cli/src/commands/view/ (new dir, 3 files), packages/cli/src/commands/view.legacy.ts (renamed+trimmed), packages/cli/src/main.ts (modified)
+- **Learnings:** When migrating subcommands incrementally, rename the legacy file (view.ts -> view.legacy.ts) and export only the unmigrated commands. The new directory index.ts imports both new defineToolCommand() commands and legacy commands as subcommands. This avoids breaking existing functionality while progressively migrating.
 ---
 
