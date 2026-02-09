@@ -330,7 +330,7 @@
 				"Quality gate passes"
 			],
 			"priority": 17,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-016", "ENG-013", "ENG-015"],
 			"notes": "Commands that need a database may test error envelopes (NO_DATABASE) if no fixture DB is available. The parity gate verifies the complete agent orientation workflow"
 		},

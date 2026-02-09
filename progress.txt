@@ -195,3 +195,14 @@
 - **Learnings:** fin harness differs from let: uses resetConfig() instead of resetPaths()/resolvePaths(), and FIN_HOME env var instead of LET_DATA_DIR/LET_CONFIG_DIR. tools command needs no config (reads in-memory registry). health command has standalone path resolution so FIN_HOME is sufficient. Bun test runner picks up tests from packages/cli/tests/ via root tsconfig include.
 ---
 
+## 2026-02-09 - ENG-017: Add contract tests for all tool commands and parity gate
+- Expanded contract.test.ts from 5 tests to 22 tests covering all 17 tool commands + 5 infrastructure tests
+- Created parity-gate.test.ts with 9 tests: 6-step agent orientation workflow + config validation chain
+- Updated harness.ts to call initConfig() after env setup so config-dependent commands work in test isolation
+- Contract tests validate envelope shape for both success and error paths (DB-dependent commands may succeed with empty data or fail with DB_ERROR)
+- Parity gate chain: tools -> health -> config show -> view accounts -> view balance -> report summary
+- Config validation chain: config validate, tool count (17), infrastructure exclusion
+- Files changed: packages/cli/tests/contract.test.ts (expanded), packages/cli/tests/parity-gate.test.ts (new), packages/cli/tests/harness.ts (modified)
+- **Learnings:** Many DB-dependent commands actually succeed with empty results when the DB is auto-created (import creates DB via getWritableDb, view/report commands use getReadonlyDb which fails if DB doesn't exist but succeeds with empty tables if created by a prior test). sanitize.migrate/recategorize with empty DB return only `plan` (no `result`) since toUpdate is 0. citty's `required: true` args throw CLIError before command code runs, so input validation fail() calls are a defense-in-depth layer reached only via direct invocation.
+---
+
