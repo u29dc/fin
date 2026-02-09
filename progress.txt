@@ -226,3 +226,14 @@
 - **Learnings:** Importing main.ts is sufficient to trigger all defineToolCommand() registrations via the module import chain. Bun's Glob class provides synchronous scanning for test-time file discovery. The regex for extracting tool names needs the /s (dotAll) flag since defineToolCommand() call and name: field may be on different lines.
 ---
 
+## 2026-02-09 - ENG-020: Create /fin Claude Code skill file
+- Created .claude/skills/fin/SKILL.md with frontmatter (name, description, compatibility, allowed-tools)
+- Orientation section: tools, health, config show base checks
+- Self-describing CLI section referencing fin tools --json as source of truth
+- Common workflows: quick snapshot, investigate spending, check financial health, import new data
+- Expected output section: key metrics, trends, actionable insights, data source references
+- Updated .gitignore: changed `.claude/` to `.claude/*` with `!.claude/skills/` exception to track skill files
+- Files changed: .claude/skills/fin/SKILL.md (new), .gitignore (modified)
+- **Learnings:** .gitignore pattern `.claude/` ignores the directory entirely and negation patterns for children are ineffective. Must use `.claude/*` (glob on contents) with `!.claude/skills/` negation to selectively track subdirectories. Skill content copied verbatim from AGENT_NATIVE.md spec lines 640-704.
+---
+

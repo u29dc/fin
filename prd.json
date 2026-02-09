@@ -387,7 +387,7 @@
 				"Quality gate passes"
 			],
 			"priority": 20,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-018"],
 			"notes": "Reference .tmp/AGENT_NATIVE.md lines 640-704 for the exact skill content. Also reference .tmp/let/.claude/skills/let/SKILL.md for structure"
 		},
