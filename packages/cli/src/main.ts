@@ -13,7 +13,7 @@ import { importCmd } from './commands/import';
 import { report } from './commands/report';
 import { sanitize } from './commands/sanitize';
 import { toolsCommand } from './commands/tools';
-import { view } from './commands/view';
+import { viewCommand } from './commands/view';
 
 /**
  * Root command - fin personal finance CLI
@@ -29,7 +29,7 @@ export const main = defineCommand({
 		tools: toolsCommand,
 		health: healthCommand,
 		config: configCommand,
-		view,
+		view: viewCommand,
 		report,
 		import: importCmd,
 		sanitize,
