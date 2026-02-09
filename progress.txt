@@ -314,3 +314,17 @@
 - **Learnings:** Biome cognitive complexity limit (15) requires extracting validation and mode-handling into separate functions. The `asserts x is T` pattern from TypeScript narrows types after validation calls. Inline ID generation pattern (`prefix_${randomUUID().replace(...).slice(0, 16)}`) avoids importing private helpers from @fin/core. getWritableDb() auto-creates DB with migrations, so void command works on fresh DBs (though entry won't be found).
 ---
 
+## 2026-02-09 - ENG-028: Final validation of agent-native gap closure
+- Verified all 8 acceptance criteria pass:
+  - Quality gate: biome format, lint, tsgo types, 180 tests all pass
+  - fin tools --json: 18 tools in catalog (was 17)
+  - All tools show outputSchema in catalog (ENG-023)
+  - fin health --json: includes db_schema check when DB exists (ENG-024)
+  - fin view transactions --search: supported via core + CLI (ENG-025, ENG-026)
+  - fin view void: INVALID_INPUT for nonexistent ID, reversing entries for valid (ENG-027)
+  - All test files pass: contract (23), parity gate (9), registry (5) = 180 total across 18 files
+  - CLAUDE.md section 6 updated: 18 tools, --search flag on view transactions, view void documented
+- Files changed: AGENTS.md (modified), prd.json (updated), progress.txt (updated)
+- **Learnings:** The gap closure batch (ENG-023 through ENG-028) added outputSchema typing, DB schema health check, text search, and void command. Total test count grew from 178 to 180. The zvelte-check pre-commit failure is pre-existing (command not found) and does not affect actual code quality.
+---
+

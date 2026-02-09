@@ -61,16 +61,17 @@ fin tools <name>               Single tool detail [--json]
 fin health                     Prerequisite checks (config, DB, rules, inbox) [--json]
 ```
 
-### Tool Commands (17)
+### Tool Commands (18)
 
 ```
 fin config show                Show parsed configuration [--json]
 fin config validate            Validate config file [--json]
 
 fin view accounts              Account balances [--group, --json]
-fin view transactions          Transaction list [--account, --group, --from, --to, --limit, --json]
+fin view transactions          Transaction list [--account, --group, --from, --to, --search, --limit, --json]
 fin view ledger                Journal entries [--account, --from, --to, --limit, --json]
 fin view balance               Balance sheet [--as-of, --json]
+fin view void <id>             Void a journal entry [--dry-run, --json]
 
 fin report cashflow            Monthly cashflow [--group*, --months, --from, --expenses, --json]
 fin report health              Financial health metrics [--group*, --from, --to, --json]
