@@ -19,7 +19,7 @@
 				"Quality gate passes"
 			],
 			"priority": 1,
-			"passes": false,
+			"passes": true,
 			"notes": "Copy patterns from .tmp/let/packages/cli/src/envelope.ts and .tmp/let/packages/cli/src/tool.ts. Adapt BLOCKING_CODES for fin domain (NO_CONFIG, NO_DATABASE, SCHEMA_MISMATCH instead of NO_CONFIG, NO_SOURCES, SCHEMA_MISMATCH)"
 		},
 		{

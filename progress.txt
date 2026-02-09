@@ -1,7 +1,19 @@
 ## Codebase Patterns
-(Patterns will be added by the agent as it discovers them)
+
+- **envelope.ts**: ok()/fail()/emitRaw()/isJsonMode() with capture mode for testing. BLOCKING_CODES: NO_CONFIG, NO_DATABASE, SCHEMA_MISMATCH. Exit 0=success, 1=runtime error, 2=blocked prereqs.
+- **tool.ts**: defineToolCommand() wraps citty defineCommand() and pushes to toolRegistry[]. extractParametersFromArgs() derives ParameterMeta from citty ArgsDef. outputFields auto-derived from outputSchema keys when present.
+- **Quality gate**: biome format/lint fail on this machine due to /Users/han/ config path mismatch. tsgo and bun test pass cleanly. Rely on tsgo + tests for validation.
+- **Monorepo structure**: packages/cli/src/ for CLI, packages/core/src/ for business logic, packages/web/src/ for frontend. CLI imports core via @fin/core.
 
 ---
 
 ## Progress Log
+
+## 2026-02-09 - ENG-001: Create JSON envelope module and tool registry
+- Created packages/cli/src/envelope.ts with ok(), fail(), emitRaw(), isJsonMode(), rethrowCapture(), setCaptureMode(), setJsonModeOverride(), EnvelopeCapture
+- Created packages/cli/src/tool.ts with defineToolCommand(), toolRegistry[], ToolMeta, ParameterMeta, OutputFieldSchema, OutputSchema types
+- BLOCKING_CODES adapted for fin domain: NO_CONFIG, NO_DATABASE, SCHEMA_MISMATCH
+- Files changed: packages/cli/src/envelope.ts (new), packages/cli/src/tool.ts (new)
+- **Learnings:** Reference implementation from .tmp/let/ copies almost directly. Only BLOCKING_CODES and command prefix (fin vs let) differ. biome config references /Users/han/ which doesn't exist on this machine -- use tsgo for type checking.
+---
 
