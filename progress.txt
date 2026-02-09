@@ -125,3 +125,15 @@
 - **Learnings:** When a command has multiple modes (breakdown vs median), use a --mode flag instead of subcommands for flatter agent consumption. Extract validation into typed assert functions (asserts x is T) to both reduce complexity and give TypeScript narrowing.
 ---
 
+## 2026-02-09 - ENG-011: Implement report audit command
+- Created packages/cli/src/commands/report/audit.ts using defineToolCommand() with name 'report.audit'
+- JSON mode: ok() with payees array + total; meta.count for payee count
+- Text mode: preserves existing table rendering with AUDIT_COLUMNS (payee, total, monthlyAvg, count, account, lastDate)
+- --account required with INVALID_INPUT error; --group optional with INVALID_GROUP error
+- Extracted buildAuditData() and typed assert guards (validateAccountArg, validateGroupArg)
+- Removed audit from report.legacy.ts; updated report/index.ts to wire reportAuditCommand
+- report.legacy.ts now only exports summary (last remaining legacy command)
+- Files changed: packages/cli/src/commands/report/audit.ts (new), packages/cli/src/commands/report/index.ts (modified), packages/cli/src/commands/report.legacy.ts (trimmed)
+- **Learnings:** Audit command is straightforward since it has a single mode with required --account and optional --group. The buildAuditData() helper pattern keeps run() clean by separating validation+query from output. After this migration, report.legacy.ts only re-exports summary -- next migration (ENG-012) will eliminate the legacy file entirely.
+---
+

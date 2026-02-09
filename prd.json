@@ -217,7 +217,7 @@
 				"Quality gate passes"
 			],
 			"priority": 11,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-008"],
 			"notes": "Use getExpenseAccountPayeeBreakdown() from @fin/core. Reference existing report.ts audit handler"
 		},
