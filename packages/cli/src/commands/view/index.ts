@@ -1,13 +1,13 @@
 /**
  * `view` command group -- View accounts, transactions, ledger, balance sheet.
  *
- * accounts and transactions are migrated to defineToolCommand().
- * ledger and balance remain as legacy commands until ENG-007.
+ * All subcommands use defineToolCommand() and support --json envelope output.
  */
 
 import { defineCommand } from 'citty';
-import { balance, ledger } from '../view.legacy';
 import { viewAccountsCommand } from './accounts';
+import { viewBalanceCommand } from './balance';
+import { viewLedgerCommand } from './ledger';
 import { viewTransactionsCommand } from './transactions';
 
 export const viewCommand = defineCommand({
@@ -18,7 +18,7 @@ export const viewCommand = defineCommand({
 	subCommands: {
 		accounts: viewAccountsCommand,
 		transactions: viewTransactionsCommand,
-		ledger,
-		balance,
+		ledger: viewLedgerCommand,
+		balance: viewBalanceCommand,
 	},
 });
