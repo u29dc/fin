@@ -185,3 +185,13 @@
 - **Learnings:** When a flat file and directory with same name coexist (sanitize.ts vs sanitize/index.ts), TypeScript resolves to the flat file first. Must delete the flat file before the directory index.ts takes effect. Sanitize commands use loadRules() from @fin/core which handles both generic and external rules loading with caching. Migrate/recategorize share the same plan+result JSON pattern, making them consistent for agent consumption.
 ---
 
+## 2026-02-09 - ENG-016: Create contract test harness and fixtures
+- Created packages/cli/tests/harness.ts with in-process execution via capture mode
+- Created packages/cli/tests/contract.test.ts with 5 passing tests (tools catalog, tool lookup, tool not found, health envelope, health check IDs)
+- Harness: resetConfig() between runs, FIN_HOME env var for temp fixture, setCaptureMode()/setJsonModeOverride() ref-counted
+- assertValidEnvelope() validates: JSON parse, ok boolean, meta.tool match, meta.elapsed >= 0, data (success) or error.code/message/hint (failure)
+- Fixture: minimal TOML config with one group/account/bank, inbox dir for health checks
+- Files changed: packages/cli/tests/harness.ts (new), packages/cli/tests/contract.test.ts (new)
+- **Learnings:** fin harness differs from let: uses resetConfig() instead of resetPaths()/resolvePaths(), and FIN_HOME env var instead of LET_DATA_DIR/LET_CONFIG_DIR. tools command needs no config (reads in-memory registry). health command has standalone path resolution so FIN_HOME is sufficient. Bun test runner picks up tests from packages/cli/tests/ via root tsconfig include.
+---
+

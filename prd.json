@@ -312,7 +312,7 @@
 				"Quality gate passes"
 			],
 			"priority": 16,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-004"],
 			"notes": "Reference .tmp/let/packages/cli/tests/contract.test.ts. Use Bun test runner. In-process capture mode avoids subprocess overhead"
 		},
