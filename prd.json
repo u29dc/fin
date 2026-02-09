@@ -405,7 +405,7 @@
 				"Quality gate passes"
 			],
 			"priority": 21,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-020"],
 			"notes": "Reference .tmp/AGENT_NATIVE.md sections on JSON Envelope Contract and Agent Workflow. Keep CLAUDE.md concise -- link to AGENT_NATIVE.md for exhaustive details"
 		},

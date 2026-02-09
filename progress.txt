@@ -237,3 +237,13 @@
 - **Learnings:** .gitignore pattern `.claude/` ignores the directory entirely and negation patterns for children are ineffective. Must use `.claude/*` (glob on contents) with `!.claude/skills/` negation to selectively track subdirectories. Skill content copied verbatim from AGENT_NATIVE.md spec lines 640-704.
 ---
 
+## 2026-02-09 - ENG-021: Update CLAUDE.md with agent-native CLI documentation
+- Updated section 6 (CLI) to show all 17 tools plus 2 infrastructure commands with all flags
+- Added JSON envelope contract documentation (success/error shapes, exit codes, error codes list, stdout purity)
+- Added agent workflow diagram (orient -> understand -> investigate -> maintain -> report)
+- Referenced /fin skill for autonomous analysis sessions
+- Preserved all existing sections (1-5 Documentation through Architecture, 7-8 Configuration and Quality)
+- Files changed: AGENTS.md (modified via CLAUDE.md symlink)
+- **Learnings:** CLAUDE.md is a symlink to AGENTS.md -- must `git add AGENTS.md` not `git add CLAUDE.md` since git tracks the symlink target. The agent workflow diagram is a concise 5-step reference matching the AGENT_NATIVE.md specification.
+---
+
