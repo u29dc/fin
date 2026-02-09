@@ -11,7 +11,7 @@ import { healthCommand } from './commands/health';
 import { help } from './commands/help';
 import { importCommand } from './commands/import';
 import { reportCommand } from './commands/report';
-import { sanitize } from './commands/sanitize';
+import { sanitizeCommand } from './commands/sanitize';
 import { toolsCommand } from './commands/tools';
 import { viewCommand } from './commands/view';
 
@@ -32,6 +32,6 @@ export const main = defineCommand({
 		view: viewCommand,
 		report: reportCommand,
 		import: importCommand,
-		sanitize,
+		sanitize: sanitizeCommand,
 	},
 });
