@@ -216,3 +216,13 @@
 - **Learnings:** view.ts, report.ts, sanitize.ts, import.ts were already deleted in earlier stories (ENG-007, ENG-012, ENG-015, ENG-014). Only help.ts and summary.ts remained as flat legacy files. The help command's static COMMAND_TREE is now fully superseded by the dynamic toolRegistry[] (fin tools --json).
 ---
 
+## 2026-02-09 - ENG-019: Add registry drift test
+- Created packages/cli/tests/registry.test.ts with 5 tests
+- Verifies toolRegistry has exactly 17 entries
+- Verifies no duplicate tool names
+- Bidirectional cross-check: scans command files for defineToolCommand() calls using Bun Glob + readFileSync regex, and verifies each name exists in toolRegistry (and vice versa)
+- Explicit expected tool name list test ensures complete coverage
+- Files changed: packages/cli/tests/registry.test.ts (new)
+- **Learnings:** Importing main.ts is sufficient to trigger all defineToolCommand() registrations via the module import chain. Bun's Glob class provides synchronous scanning for test-time file discovery. The regex for extracting tool names needs the /s (dotAll) flag since defineToolCommand() call and name: field may be on different lines.
+---
+

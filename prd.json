@@ -369,7 +369,7 @@
 				"Quality gate passes"
 			],
 			"priority": 19,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-018"],
 			"notes": "This prevents adding a new command file that forgets to use defineToolCommand(). Can use glob + grep to scan files or import the registry directly"
 		},
