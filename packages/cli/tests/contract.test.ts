@@ -13,6 +13,7 @@
  * Uses in-process execution via harness for speed.
  */
 
+import { Database } from 'bun:sqlite';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -180,6 +181,28 @@ describe('infrastructure commands', () => {
 		expect(checkIds).toContain('database');
 		expect(checkIds).toContain('rules');
 		expect(checkIds).toContain('inbox');
+	});
+
+	test('health --json includes db_schema check when DB exists', async () => {
+		// Create a minimal valid DB so db_schema check runs
+		const dbPath = join(DATA_DIR, 'fin.db');
+		const db = new Database(dbPath);
+		db.exec('PRAGMA user_version = 5');
+		db.exec('CREATE TABLE IF NOT EXISTS chart_of_accounts (id TEXT PRIMARY KEY)');
+		db.exec('CREATE TABLE IF NOT EXISTS journal_entries (id TEXT PRIMARY KEY)');
+		db.exec('CREATE TABLE IF NOT EXISTS postings (id TEXT PRIMARY KEY)');
+		db.close();
+
+		const { stdout } = await run(['health', '--json'], ENV);
+		const parsed = JSON.parse(stdout) as Record<string, unknown>;
+		const data = parsed['data'] as Record<string, unknown>;
+		const checks = data['checks'] as Array<Record<string, unknown>>;
+		const checkIds = checks.map((c) => c['id']);
+		expect(checkIds).toContain('db_schema');
+
+		const schemaCheck = checks.find((c) => c['id'] === 'db_schema');
+		expect(schemaCheck).toBeDefined();
+		expect(schemaCheck?.['status']).toBe('ok');
 	});
 });
 

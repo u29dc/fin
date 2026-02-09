@@ -5,8 +5,10 @@
  * Uses plain defineCommand() -- infrastructure, not a tool.
  */
 
+import { Database } from 'bun:sqlite';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { SCHEMA_VERSION } from '@fin/core';
 import { loadConfig } from '@fin/core/config';
 import type { ArgsDef } from 'citty';
 import { defineCommand } from 'citty';
@@ -154,6 +156,65 @@ function checkDatabase(dbPath: string): HealthCheck {
 	};
 }
 
+const REQUIRED_TABLES = ['chart_of_accounts', 'journal_entries', 'postings'] as const;
+
+function checkDbSchema(dbPath: string): HealthCheck | null {
+	if (!existsSync(dbPath)) return null;
+
+	try {
+		const db = new Database(dbPath, { readonly: true });
+		try {
+			const versionRow = db.query<{ user_version: number }, []>('PRAGMA user_version').get();
+			const currentVersion = versionRow?.user_version ?? 0;
+
+			const tableRows = db
+				.query<{ name: string }, []>(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${REQUIRED_TABLES.map(() => '?').join(',')})`)
+				.all(...(REQUIRED_TABLES as unknown as []));
+			const foundTables = new Set(tableRows.map((r) => r.name));
+			const missingTables = REQUIRED_TABLES.filter((t) => !foundTables.has(t));
+
+			if (currentVersion !== SCHEMA_VERSION || missingTables.length > 0) {
+				const details: string[] = [];
+				if (currentVersion !== SCHEMA_VERSION) {
+					details.push(`version ${currentVersion}, expected ${SCHEMA_VERSION}`);
+				}
+				if (missingTables.length > 0) {
+					details.push(`missing tables: ${missingTables.join(', ')}`);
+				}
+				return {
+					id: 'db_schema',
+					label: 'Database schema',
+					status: 'invalid',
+					severity: 'blocking',
+					detail: details.join('; '),
+					fix: ['bun run fin import'],
+				};
+			}
+
+			return {
+				id: 'db_schema',
+				label: 'Database schema',
+				status: 'ok',
+				severity: 'info',
+				detail: `version ${currentVersion}, ${REQUIRED_TABLES.length} tables`,
+				fix: null,
+			};
+		} finally {
+			db.close();
+		}
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : String(e);
+		return {
+			id: 'db_schema',
+			label: 'Database schema',
+			status: 'invalid',
+			severity: 'blocking',
+			detail: `failed to read schema: ${msg}`,
+			fix: ['bun run fin import'],
+		};
+	}
+}
+
 function checkRules(rulesPath: string): HealthCheck {
 	if (!existsSync(rulesPath)) {
 		return {
@@ -211,6 +272,8 @@ function runHealthChecks(): { checks: HealthCheck[]; status: 'ready' | 'degraded
 	checks.push(checkConfigExists(configPath));
 	checks.push(checkConfigValidates(configPath));
 	checks.push(checkDatabase(dbPath));
+	const schemaCheck = checkDbSchema(dbPath);
+	if (schemaCheck) checks.push(schemaCheck);
 	checks.push(checkRules(rulesPath));
 	checks.push(checkInbox(inboxPath));
 
