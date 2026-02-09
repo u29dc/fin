@@ -6,6 +6,7 @@
  */
 
 import { defineCommand } from 'citty';
+import { healthCommand } from './commands/health';
 import { help } from './commands/help';
 import { importCmd } from './commands/import';
 import { report } from './commands/report';
@@ -25,6 +26,7 @@ export const main = defineCommand({
 	subCommands: {
 		help,
 		tools: toolsCommand,
+		health: healthCommand,
 		view,
 		report,
 		import: importCmd,
