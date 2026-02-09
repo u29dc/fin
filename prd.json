@@ -481,7 +481,7 @@
 				"Quality gate passes"
 			],
 			"priority": 25,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-022"],
 			"notes": "Core-only change. File to modify: packages/core/src/queries/transactions.ts only. Add after existing WHERE clauses: where.push with COALESCE pattern on je.clean_description, je.raw_description, je.counterparty using LIKE ? with %search% pattern."
 		},

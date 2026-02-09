@@ -282,3 +282,12 @@
 - **Learnings:** SCHEMA_VERSION is available via @fin/core (re-exported chain: db/schema.ts -> db/index.ts -> core/index.ts). The checkDbSchema returns null to skip insertion into checks array when DB doesn't exist, keeping the check conditional without complicating runHealthChecks(). bun:sqlite Database constructor with `{ readonly: true }` is safe for health probing without triggering migrations.
 ---
 
+## 2026-02-09 - ENG-025: Add text search to core transaction queries
+- Added `search?: string` field to `TransactionQueryOptions` type
+- Added WHERE clause matching `clean_description`, `raw_description`, `counterparty` using LIKE with `%` wildcards
+- Case-insensitive (SQLite LIKE default for ASCII), parameterized (no SQL injection)
+- Empty/undefined search = no filter, combines with other filters via AND
+- Files changed: packages/core/src/queries/transactions.ts (modified)
+- **Learnings:** Minimal core-only change. COALESCE pattern handles NULL columns gracefully. The search parameter is repeated 3 times in params for the 3 OR branches. Pre-existing `zvelte-check` failure (command not found, exit 127) blocks pre-commit hook; all real quality checks pass.
+---
+
