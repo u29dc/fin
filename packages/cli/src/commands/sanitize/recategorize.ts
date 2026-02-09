@@ -57,7 +57,10 @@ export const sanitizeRecategorizeCommand = defineToolCommand(
 		name: 'sanitize.recategorize',
 		command: 'fin sanitize recategorize',
 		category: 'sanitize',
-		outputFields: ['plan', 'result'],
+		outputSchema: {
+			plan: { type: 'object', description: 'Recategorize plan (toUpdate, alreadyCategorized, noMatch counts)' },
+			result: { type: 'object', description: 'Execution result (updated, skipped, errors); absent in dry-run' },
+		},
 		idempotent: false,
 		rateLimit: null,
 		example: 'fin sanitize recategorize --dry-run --json',

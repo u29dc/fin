@@ -61,7 +61,10 @@ export const viewAccountsCommand = defineToolCommand(
 		name: 'view.accounts',
 		command: 'fin view accounts',
 		category: 'view',
-		outputFields: ['accounts', 'total'],
+		outputSchema: {
+			accounts: { type: 'array', items: 'AccountRow', description: 'Account list with balances' },
+			total: { type: 'number', description: 'Sum of all account balances (minor units)' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin view accounts --group=personal --json',

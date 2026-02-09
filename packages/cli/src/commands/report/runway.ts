@@ -130,7 +130,11 @@ export const reportRunwayCommand = defineToolCommand(
 		name: 'report.runway',
 		command: 'fin report runway',
 		category: 'report',
-		outputFields: ['series', 'latest', 'groups'],
+		outputSchema: {
+			series: { type: 'array', items: 'RunwayRow', description: 'Daily runway data points' },
+			latest: { type: 'object', description: 'Most recent runway data point (or null)' },
+			groups: { type: 'array', items: 'string', description: 'Included group IDs (consolidated mode only)' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin report runway --group=personal --json',

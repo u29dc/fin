@@ -53,7 +53,10 @@ export const sanitizeMigrateCommand = defineToolCommand(
 		name: 'sanitize.migrate',
 		command: 'fin sanitize migrate',
 		category: 'sanitize',
-		outputFields: ['plan', 'result'],
+		outputSchema: {
+			plan: { type: 'object', description: 'Migration plan (toUpdate, alreadyClean, noMatch counts)' },
+			result: { type: 'object', description: 'Execution result (updated, skipped, errors); absent in dry-run' },
+		},
 		idempotent: false,
 		rateLimit: null,
 		example: 'fin sanitize migrate --dry-run --json',

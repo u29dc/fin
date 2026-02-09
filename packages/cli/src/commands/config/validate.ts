@@ -25,7 +25,10 @@ export const configValidateCommand = defineToolCommand(
 		name: 'config.validate',
 		command: 'fin config validate',
 		category: 'config',
-		outputFields: ['valid', 'errors'],
+		outputSchema: {
+			valid: { type: 'boolean', description: 'Whether config is valid' },
+			errors: { type: 'array', items: 'ValidationError', description: 'Validation errors with path and message' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin config validate --json',

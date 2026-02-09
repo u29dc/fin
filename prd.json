@@ -428,6 +428,127 @@
 			"passes": true,
 			"dependsOn": ["ENG-021"],
 			"notes": "This is the final validation story. Fix any remaining issues discovered during full integration testing"
+		},
+		{
+			"id": "ENG-023",
+			"category": "polish",
+			"title": "Populate outputSchema for all 17 tool commands",
+			"description": "As an agent, I need fin tools --json to return typed field descriptions (type, description) for each tool's data payload so I can understand response shapes without trial-and-error",
+			"acceptanceCriteria": [
+				"All 17 defineToolCommand() calls use outputSchema instead of outputFields",
+				"Each field has type (string|number|boolean|array|object) and description",
+				"Array-typed fields have items property naming the element type",
+				"fin tools --json catalog entries all show outputSchema",
+				"outputFields auto-derived from outputSchema keys (existing tool.ts:117 logic)",
+				"Quality gate passes"
+			],
+			"priority": 23,
+			"passes": true,
+			"dependsOn": ["ENG-022"],
+			"notes": "Mechanical, no behavioral changes. The OutputSchema type already exists in tool.ts. Reference each command's ok() call to determine field types. No test count changes."
+		},
+		{
+			"id": "ENG-024",
+			"category": "core",
+			"title": "Health command verifies DB schema integrity",
+			"description": "As an agent, I need fin health --json to verify DB tables and schema version so I get SCHEMA_MISMATCH instead of cryptic DB_ERROR",
+			"acceptanceCriteria": [
+				"New db_schema check with severity blocking runs when DB file exists",
+				"Verifies PRAGMA user_version matches SCHEMA_VERSION (currently 5, from @fin/core)",
+				"Verifies tables chart_of_accounts, journal_entries, postings exist via sqlite_master",
+				"Invalid schema: status invalid, fix suggests running import to trigger migration",
+				"Skipped when DB file doesn't exist (existing database check covers that)",
+				"Contract test updated to include db_schema check ID",
+				"Quality gate passes"
+			],
+			"priority": 24,
+			"passes": false,
+			"dependsOn": ["ENG-022"],
+			"notes": "Open DB read-only with new Database(path, { readonly: true }) (not openDatabase which triggers migration). Insert check after existing checkDatabase(). SCHEMA_VERSION exported from @fin/core (chain: db/schema.ts -> db/index.ts -> index.ts). getUserVersion() pattern in packages/core/src/db/connection.ts:27. Health command at packages/cli/src/commands/health/index.ts."
+		},
+		{
+			"id": "ENG-025",
+			"category": "core",
+			"title": "Add text search to core transaction queries",
+			"description": "As a core library consumer, I need TransactionQueryOptions.search to filter by description/counterparty text",
+			"acceptanceCriteria": [
+				"TransactionQueryOptions type gains search?: string field",
+				"getTransactions() adds WHERE clause matching clean_description, raw_description, counterparty using LIKE with % wildcards",
+				"Search is case-insensitive (SQLite LIKE default)",
+				"Search term is parameterized (no SQL injection)",
+				"Empty/undefined search = no filter",
+				"Combines with other filters via AND",
+				"Quality gate passes"
+			],
+			"priority": 25,
+			"passes": false,
+			"dependsOn": ["ENG-022"],
+			"notes": "Core-only change. File to modify: packages/core/src/queries/transactions.ts only. Add after existing WHERE clauses: where.push with COALESCE pattern on je.clean_description, je.raw_description, je.counterparty using LIKE ? with %search% pattern."
+		},
+		{
+			"id": "ENG-026",
+			"category": "core",
+			"title": "Add --search flag to CLI view transactions command",
+			"description": "As an agent, I need fin view transactions --search='tesco' --json to filter by payee/description text",
+			"acceptanceCriteria": [
+				"--search flag added (type: string, description: Search description/counterparty text)",
+				"Value passed to getTransactions() as search option",
+				"Combines with --group, --account, --from, --to, --limit",
+				"Appears in fin tools view.transactions --json parameter list",
+				"Text mode also supports --search",
+				"Quality gate passes"
+			],
+			"priority": 26,
+			"passes": false,
+			"dependsOn": ["ENG-025"],
+			"notes": "Thin CLI wiring. File to modify: packages/cli/src/commands/view/transactions.ts. If ENG-023 already ran, update outputSchema to include search parameter."
+		},
+		{
+			"id": "ENG-027",
+			"category": "core",
+			"title": "Implement transaction void command",
+			"description": "As an agent, I need fin view void <id> --json to create a reversing journal entry that zeroes out a bad import",
+			"acceptanceCriteria": [
+				"File at packages/cli/src/commands/view/void.ts using defineToolCommand() with name view.void",
+				"Positional <id> argument (journal entry ID)",
+				"Looks up original journal entry + postings; INVALID_INPUT if not found",
+				"Creates new journal entry with negated posting amounts",
+				"Description: VOID: {original description}, posted_at: current timestamp",
+				"JSON: ok() with originalEntry, voidEntry, postingsReversed",
+				"Text: prints void confirmation to stderr",
+				"--dry-run shows what would be voided without writing",
+				"Marked idempotent: false",
+				"Registry drift test updated: count 17 -> 18, names list includes view.void",
+				"Contract test added for view.void",
+				"Parity gate tool count updated: 17 -> 18",
+				"Wired in packages/cli/src/commands/view/index.ts",
+				"Quality gate passes"
+			],
+			"priority": 27,
+			"passes": false,
+			"dependsOn": ["ENG-022"],
+			"notes": "Core void logic can live directly in the command file (thin: one SELECT + one INSERT). Use getWritableDb() for actual void, getReadonlyDb() for --dry-run reads. Insert pattern: packages/core/src/import/journal.ts:343-350 (prepared statements). ID generation: generateId(prefix) at journal.ts:32 (private -- inline the pattern: `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`). Journal entry columns: packages/core/src/db/schema.ts:17-30. Posting columns: packages/core/src/db/schema.ts:32-43."
+		},
+		{
+			"id": "ENG-028",
+			"category": "polish",
+			"title": "Final validation of agent-native gap closure",
+			"description": "As a developer, I need to verify all gaps are closed with tests passing and docs updated",
+			"acceptanceCriteria": [
+				"bun run util:check passes",
+				"fin tools --json lists exactly 18 tools",
+				"All tools show outputSchema in catalog",
+				"fin health --json includes db_schema check when DB exists",
+				"fin view transactions --search=test --json returns valid envelope",
+				"fin view void produces INVALID_INPUT for nonexistent ID",
+				"All test files pass (contract, parity-gate, registry)",
+				"CLAUDE.md section 6 updated: 18 tools, --search flag, view void documented",
+				"Quality gate passes"
+			],
+			"priority": 28,
+			"passes": false,
+			"dependsOn": ["ENG-023", "ENG-024", "ENG-025", "ENG-026", "ENG-027"],
+			"notes": "This is the final validation story for gap closure. Fix any remaining issues discovered during full integration testing."
 		}
 	]
 }

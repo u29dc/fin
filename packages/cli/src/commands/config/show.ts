@@ -52,7 +52,12 @@ export const configShowCommand = defineToolCommand(
 		name: 'config.show',
 		command: 'fin config show',
 		category: 'config',
-		outputFields: ['groups', 'accounts', 'financial', 'configPath'],
+		outputSchema: {
+			groups: { type: 'array', items: 'GroupMetadata', description: 'Group configurations' },
+			accounts: { type: 'object', description: 'Accounts keyed by group ID' },
+			financial: { type: 'object', description: 'Financial parameters (tax rates, reserves)' },
+			configPath: { type: 'string', description: 'Resolved config file path' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin config show --json',

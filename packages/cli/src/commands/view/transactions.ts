@@ -41,7 +41,10 @@ export const viewTransactionsCommand = defineToolCommand(
 		name: 'view.transactions',
 		command: 'fin view transactions',
 		category: 'view',
-		outputFields: ['transactions', 'count'],
+		outputSchema: {
+			transactions: { type: 'array', items: 'TransactionRow', description: 'Transaction list' },
+			count: { type: 'number', description: 'Number of transactions returned' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin view transactions --group=personal --limit=20 --json',

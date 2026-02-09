@@ -51,7 +51,11 @@ export const viewLedgerCommand = defineToolCommand(
 		name: 'view.ledger',
 		command: 'fin view ledger',
 		category: 'view',
-		outputFields: ['entries', 'count', 'total'],
+		outputSchema: {
+			entries: { type: 'array', items: 'JournalEntry', description: 'Journal entries with postings' },
+			count: { type: 'number', description: 'Number of entries returned' },
+			total: { type: 'number', description: 'Total journal entry count (unfiltered)' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin view ledger --account=Assets:Personal:Monzo --limit=20 --json',

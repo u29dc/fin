@@ -86,7 +86,10 @@ export const reportAuditCommand = defineToolCommand(
 		name: 'report.audit',
 		command: 'fin report audit',
 		category: 'report',
-		outputFields: ['payees', 'total'],
+		outputSchema: {
+			payees: { type: 'array', items: 'AuditRow', description: 'Payee breakdown with totals and counts' },
+			total: { type: 'number', description: 'Grand total across all payees (minor units)' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin report audit --account=Expenses:Business:Uncategorized --months=12 --json',

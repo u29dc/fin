@@ -51,7 +51,10 @@ export const reportReservesCommand = defineToolCommand(
 		name: 'report.reserves',
 		command: 'fin report reserves',
 		category: 'report',
-		outputFields: ['series', 'latest'],
+		outputSchema: {
+			series: { type: 'array', items: 'ReservesRow', description: 'Daily reserve breakdown data points' },
+			latest: { type: 'object', description: 'Most recent reserve breakdown (or null)' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin report reserves --group=business --json',

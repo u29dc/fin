@@ -61,7 +61,10 @@ export const reportCashflowCommand = defineToolCommand(
 		name: 'report.cashflow',
 		command: 'fin report cashflow',
 		category: 'report',
-		outputFields: ['series', 'totals'],
+		outputSchema: {
+			series: { type: 'array', items: 'CashflowRow', description: 'Monthly cashflow data points' },
+			totals: { type: 'object', description: 'Aggregate totals (income, expenses, net) in minor units' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin report cashflow --group=personal --months=12 --json',

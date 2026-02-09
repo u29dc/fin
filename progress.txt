@@ -9,6 +9,12 @@
 - **health command**: Plain defineCommand() (infrastructure). Standalone path resolution (no initConfig dependency). Uses loadConfig() from @fin/core for validation. emitRaw() for custom envelope. Exit 2 when blocked.
 - **config commands**: defineToolCommand() pattern. show uses accessor functions (getGroupIds, getAllGroupMetadata, getAccountsByGroup, getFinancialConfig) from @fin/core/config. validate uses Bun.TOML.parse() + FinConfigSchema.safeParse() for structured errors. Both catch NO_CONFIG and INVALID_CONFIG. Text output to stderr.
 - **Incremental migration**: When migrating command groups (e.g. view), rename legacy file to *.legacy.ts, export only unmigrated commands, and import them alongside new defineToolCommand() commands in the new directory's index.ts. This preserves all subcommands during progressive migration.
+- **outputSchema (ENG-023)**: `OutputSchema` type at `packages/cli/src/tool.ts:29` -- `Record<string, OutputFieldSchema>`. `OutputFieldSchema` at `tool.ts:22-27`: `{ type, items?, description? }`. Auto-derivation at `tool.ts:117`: `const resolvedOutputFields = toolMeta.outputSchema ? Object.keys(toolMeta.outputSchema) : (toolMeta.outputFields ?? [])`. All 17 commands currently use `outputFields: string[]`; replace with `outputSchema: OutputSchema` and remove `outputFields`. Reference each command's `ok()` call data argument to determine field types.
+- **Health DB schema check (ENG-024)**: `SCHEMA_VERSION` exported from `@fin/core` (chain: `db/schema.ts` -> `db/index.ts` -> `index.ts`). `getUserVersion()` pattern at `packages/core/src/db/connection.ts:27`. Health command at `packages/cli/src/commands/health/index.ts`. Open DB read-only: `new Database(path, { readonly: true })` -- do NOT use `openDatabase()` which triggers migration. Insert `db_schema` check after existing `checkDatabase()` function, skip when DB file doesn't exist. Required tables: `chart_of_accounts`, `journal_entries`, `postings`. Query: `SELECT name FROM sqlite_master WHERE type='table' AND name IN (...)`.
+- **Core search (ENG-025)**: `TransactionQueryOptions` type at `packages/core/src/queries/transactions.ts`. Add `search?: string` field to the options type. WHERE clause: `(COALESCE(je.clean_description, '') LIKE ? OR COALESCE(je.raw_description, '') LIKE ? OR COALESCE(je.counterparty, '') LIKE ?)`. Parameters: `%${search}%` repeated 3 times. SQLite LIKE is case-insensitive by default for ASCII.
+- **CLI --search flag (ENG-026)**: File: `packages/cli/src/commands/view/transactions.ts`. Add `search: { type: 'string', description: 'Search description/counterparty text' }` to citty args. Pass `args.search` to `getTransactions()` options.
+- **Transaction void (ENG-027)**: New file: `packages/cli/src/commands/view/void.ts`. ID generation pattern (inline from private `generateId`): `` `je_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}` ``. Journal entry columns: `packages/core/src/db/schema.ts:17-30`. Posting columns: `packages/core/src/db/schema.ts:32-43`. Insert pattern: `packages/core/src/import/journal.ts:343-350` (prepared statements). Use `getWritableDb()` for writes, `getReadonlyDb()` for dry-run reads. Wire in `packages/cli/src/commands/view/index.ts`. Update tests: registry count 17->18, contract test, parity gate count.
+- **Final validation (ENG-028)**: Update CLAUDE.md section 6: 17->18 tools, add `--search` flag, add `view void` command. Update registry.test.ts expected count and names. Update parity-gate.test.ts tool count. Run full `bun run util:check` and verify all tests pass.
 
 ---
 
@@ -253,5 +259,15 @@
 - No code changes needed -- all prior stories left the codebase in clean state
 - Files changed: prd.json (updated), progress.txt (updated)
 - **Learnings:** The full 22-story restructuring from human-sequential CLI to agent-native toolbelt completed successfully. Key architectural decisions that worked well: envelope.ts capture mode for in-process testing, defineToolCommand() auto-registration eliminating registry drift, incremental migration via *.legacy.ts files, and the orient->understand->investigate->maintain->report agent workflow pattern.
+---
+
+## 2026-02-09 - ENG-023: Populate outputSchema for all 17 tool commands
+- Replaced `outputFields: string[]` with `outputSchema: OutputSchema` in all 17 defineToolCommand() calls
+- Each field now has `type` (string|number|boolean|array|object), optional `items` (element type name), and `description`
+- Auto-derivation at tool.ts:117 still produces `outputFields` from schema keys for backward compatibility
+- fin tools --json catalog entries now show typed field descriptions for all tools
+- No test changes needed -- outputFields still derived correctly, all 178 tests pass
+- Files changed: 17 command files (config/show, config/validate, view/accounts, view/transactions, view/ledger, view/balance, report/cashflow, report/health, report/runway, report/reserves, report/categories, report/audit, report/summary, import/index, sanitize/discover, sanitize/migrate, sanitize/recategorize)
+- **Learnings:** Purely mechanical change. The OutputSchema type and auto-derivation logic were already in place from ENG-001. Each command's ok() call data argument is the source of truth for field types. Array items use the local type alias name (e.g. AccountRow, CashflowRow) for agent readability.
 ---
 

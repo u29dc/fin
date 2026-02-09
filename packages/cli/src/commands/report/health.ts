@@ -43,7 +43,10 @@ export const reportHealthCommand = defineToolCommand(
 		name: 'report.health',
 		command: 'fin report health',
 		category: 'report',
-		outputFields: ['series', 'latest'],
+		outputSchema: {
+			series: { type: 'array', items: 'HealthRow', description: 'Daily financial health data points' },
+			latest: { type: 'object', description: 'Most recent health data point (or null)' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin report health --group=personal --json',

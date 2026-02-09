@@ -4,9 +4,17 @@ You are an autonomous coding agent working through a structured PRD.
 
 ## Context
 
-You are restructuring the `fin` CLI from a human-sequential interface into an agent-native toolbelt. The master specification is at `.tmp/AGENT_NATIVE.md` (1116 lines). The proven reference implementation is at `.tmp/let/packages/cli/src/` (envelope.ts, tool.ts, commands/). Only `packages/cli/` changes -- `packages/core/` and `packages/web/` are untouched.
+You are working through a structured PRD for the `fin` CLI. The stories in `prd.json` define all
+work to be done -- follow the data, not assumptions about what is or isn't complete.
 
-Key patterns to follow from the reference:
+The codebase is a monorepo: `packages/core/` (backend logic, SQLite), `packages/cli/` (agent-native
+toolbelt), `packages/web/` (SvelteKit frontend). Stories may touch any package.
+
+Reference materials (use when stories reference them):
+- `.tmp/AGENT_NATIVE.md` -- agent-native architecture specification
+- `.tmp/let/packages/cli/src/` -- proven reference implementation (envelope.ts, tool.ts, commands/)
+
+Key patterns:
 - `envelope.ts`: ok()/fail()/isJsonMode()/emitRaw() for JSON output
 - `tool.ts`: defineToolCommand() wraps citty and auto-registers in toolRegistry[]
 - Each command: defineToolCommand() + isJsonMode() branching + ok()/fail() for JSON, existing renderers for text

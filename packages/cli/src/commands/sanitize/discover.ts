@@ -31,7 +31,10 @@ export const sanitizeDiscoverCommand = defineToolCommand(
 		name: 'sanitize.discover',
 		command: 'fin sanitize discover',
 		category: 'sanitize',
-		outputFields: ['descriptions', 'count'],
+		outputSchema: {
+			descriptions: { type: 'array', items: 'DescriptionPattern', description: 'Unique description patterns with stats' },
+			count: { type: 'number', description: 'Number of patterns found' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin sanitize discover --unmapped --json',

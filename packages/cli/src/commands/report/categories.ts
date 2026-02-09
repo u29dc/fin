@@ -103,7 +103,11 @@ export const reportCategoriesCommand = defineToolCommand(
 		name: 'report.categories',
 		command: 'fin report categories',
 		category: 'report',
-		outputFields: ['categories', 'total', 'estimatedMonthly'],
+		outputSchema: {
+			categories: { type: 'array', items: 'CategoryRow', description: 'Category spending data' },
+			total: { type: 'number', description: 'Grand total spending (breakdown mode, minor units)' },
+			estimatedMonthly: { type: 'number', description: 'Estimated monthly spend (median mode, minor units)' },
+		},
 		idempotent: true,
 		rateLimit: null,
 		example: 'fin report categories --group=personal --mode=breakdown --months=6 --json',
