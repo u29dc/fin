@@ -89,3 +89,16 @@
 - **Learnings:** Once all subcommands in a group are migrated, the legacy file can be fully deleted and the index.ts simplified to import only from the new defineToolCommand() files. Balance sheet data from getBalanceSheet() returns a flat object that maps directly to the JSON envelope without transformation.
 ---
 
+## 2026-02-09 - ENG-008: Implement report cashflow command
+- Created packages/cli/src/commands/report/cashflow.ts using defineToolCommand() with name 'report.cashflow'
+- Created packages/cli/src/commands/report/index.ts with reportCommand group (cashflow new + legacy imports)
+- Renamed packages/cli/src/commands/report.ts to report.legacy.ts (exports health, runway, reserves, categories, audit, summary)
+- Updated main.ts to import reportCommand from new report/ directory
+- JSON mode: ok() with series array and totals object; meta.count for series length
+- Text mode: preserves existing table rendering with CASHFLOW_COLUMNS
+- --expenses flag switches between getGroupMonthlyCashflowSeries() and getGroupPureMonthlyCashflowSeries()
+- INVALID_GROUP error for bad --group values in JSON mode
+- Files changed: packages/cli/src/commands/report/cashflow.ts (new), packages/cli/src/commands/report/index.ts (new), packages/cli/src/commands/report.legacy.ts (renamed+trimmed), packages/cli/src/main.ts (modified)
+- **Learnings:** The report group migration follows the same incremental pattern as view: rename legacy file, export individual commands, import them in the new directory index.ts. buildCashflowData() helper keeps run() clean and separates data construction from output concerns.
+---
+

@@ -158,7 +158,7 @@
 				"Quality gate passes"
 			],
 			"priority": 8,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-003"],
 			"notes": "Use getGroupMonthlyCashflowSeries(), getGroupPureMonthlyCashflowSeries() from @fin/core. Reference existing report.ts cashflow handler"
 		},
