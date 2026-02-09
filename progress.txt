@@ -5,6 +5,7 @@
 - **Quality gate**: zvelte-check not installed (pre-existing). biome, tsgo, svelte-check-rs, and bun test all pass. Only zvelte-check fails (exit 127).
 - **Entry point split**: index.ts is thin (initConfig + runMain), main.ts exports the command tree with no side effects. Tests should import main.ts, not index.ts.
 - **Monorepo structure**: packages/cli/src/ for CLI, packages/core/src/ for business logic, packages/web/src/ for frontend. CLI imports core via @fin/core.
+- **tools command**: Plain defineCommand() (infrastructure). GLOBAL_FLAGS for fin: --json, --db, --format. getSortedRegistry() sorts by category then name. Text output to stderr, JSON via ok()/fail().
 
 ---
 
@@ -25,5 +26,14 @@
 - Verified: `fin view accounts` and `fin report cashflow --group=personal` work
 - Files changed: packages/cli/src/main.ts (new), packages/cli/src/index.ts (modified)
 - **Learnings:** citty setup() hook vs module-scope init are equivalent for entry points. Module-scope is simpler for index.ts since it only runs as an executable.
+---
+
+## 2026-02-09 - ENG-003: Implement tools command
+- Created packages/cli/src/commands/tools/index.ts with toolsCommand using plain defineCommand()
+- JSON mode: ok() with version, tools array, globalFlags; single-tool lookup; NOT_FOUND error
+- Text mode: catalog grouped by category to stderr; single-tool detail to stderr
+- Wired toolsCommand into main.ts subCommands
+- Files changed: packages/cli/src/commands/tools/index.ts (new), packages/cli/src/main.ts (modified)
+- **Learnings:** Global flags for fin differ from let (--json, --db, --format vs --json, --data-dir, --cache-dir, --config-dir, --sources-dir). New commands go in directories (tools/index.ts) while legacy ones remain as flat files (view.ts, report.ts).
 ---
 

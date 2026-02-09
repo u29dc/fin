@@ -54,7 +54,7 @@
 				"Quality gate passes"
 			],
 			"priority": 3,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-001", "ENG-002"],
 			"notes": "Reference .tmp/let/packages/cli/src/commands/tools/index.ts. Global flags for fin: --json, --db, --format"
 		},
