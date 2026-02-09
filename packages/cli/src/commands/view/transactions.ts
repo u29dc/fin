@@ -59,6 +59,7 @@ export const viewTransactionsCommand = defineToolCommand(
 			group: { type: 'string' as const, description: 'Filter by group (personal, business, joint)' },
 			from: { type: 'string' as const, description: 'Start date (YYYY-MM-DD)' },
 			to: { type: 'string' as const, description: 'End date (YYYY-MM-DD)' },
+			search: { type: 'string' as const, description: 'Search description/counterparty text' },
 			limit: { type: 'string' as const, description: 'Max results', default: '50' },
 			json: { type: 'boolean' as const, description: 'Output as JSON envelope', default: false },
 			db: { type: 'string' as const, description: 'Database path' },
@@ -73,10 +74,11 @@ export const viewTransactionsCommand = defineToolCommand(
 				const limit = Number.parseInt(args.limit ?? '50', 10);
 				const chartAccountIds = resolveChartAccountIds(args.account, args.group);
 
-				const options: { chartAccountIds?: string[]; from?: string; to?: string; limit: number } = { limit };
+				const options: { chartAccountIds?: string[]; from?: string; to?: string; search?: string; limit: number } = { limit };
 				if (chartAccountIds) options.chartAccountIds = chartAccountIds;
 				if (args.from) options.from = args.from;
 				if (args.to) options.to = args.to;
+				if (args.search) options.search = args.search;
 
 				const txns = getTransactions(db, options);
 
