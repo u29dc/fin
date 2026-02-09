@@ -291,3 +291,12 @@
 - **Learnings:** Minimal core-only change. COALESCE pattern handles NULL columns gracefully. The search parameter is repeated 3 times in params for the 3 OR branches. Pre-existing `zvelte-check` failure (command not found, exit 127) blocks pre-commit hook; all real quality checks pass.
 ---
 
+## 2026-02-09 - ENG-026: Add --search flag to CLI view transactions command
+- Added `search` arg to citty args definition in view/transactions.ts
+- Passes `args.search` to `getTransactions()` options
+- Combines with --group, --account, --from, --to, --limit in both JSON and text modes
+- Appears in fin tools view.transactions --json parameter list automatically via defineToolCommand()
+- Files changed: packages/cli/src/commands/view/transactions.ts (modified)
+- **Learnings:** Thin CLI wiring -- the core change (ENG-025) does the heavy lifting, CLI just passes the arg through. defineToolCommand() auto-extracts parameters from citty args, so adding the arg automatically updates the tool catalog.
+---
+

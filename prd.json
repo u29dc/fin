@@ -499,7 +499,7 @@
 				"Quality gate passes"
 			],
 			"priority": 26,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-025"],
 			"notes": "Thin CLI wiring. File to modify: packages/cli/src/commands/view/transactions.ts. If ENG-023 already ran, update outputSchema to include search parameter."
 		},
