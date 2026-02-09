@@ -26,5 +26,6 @@ bin/
 # project
 data/
 imports/
-.claude/
+.claude/*
+!.claude/skills/
 .zvelte-check/
