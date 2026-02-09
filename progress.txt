@@ -77,3 +77,15 @@
 - **Learnings:** When migrating subcommands incrementally, rename the legacy file (view.ts -> view.legacy.ts) and export only the unmigrated commands. The new directory index.ts imports both new defineToolCommand() commands and legacy commands as subcommands. This avoids breaking existing functionality while progressively migrating.
 ---
 
+## 2026-02-09 - ENG-007: Implement view ledger and view balance commands
+- Created packages/cli/src/commands/view/ledger.ts using defineToolCommand() with name 'view.ledger'
+- Created packages/cli/src/commands/view/balance.ts using defineToolCommand() with name 'view.balance'
+- Deleted packages/cli/src/commands/view.legacy.ts (all view subcommands now migrated)
+- Updated view/index.ts to wire viewLedgerCommand and viewBalanceCommand directly (no legacy imports)
+- view ledger: JSON returns entries array, count, total; supports --account, --from, --to, --limit
+- view balance: JSON returns balance sheet fields (assets, liabilities, equity, income, expenses, netWorth, netIncome); supports --as-of
+- Both registered in tool registry and appear in fin tools --json catalog
+- Files changed: packages/cli/src/commands/view/ledger.ts (new), packages/cli/src/commands/view/balance.ts (new), packages/cli/src/commands/view/index.ts (modified), packages/cli/src/commands/view.legacy.ts (deleted)
+- **Learnings:** Once all subcommands in a group are migrated, the legacy file can be fully deleted and the index.ts simplified to import only from the new defineToolCommand() files. Balance sheet data from getBalanceSheet() returns a flat object that maps directly to the JSON envelope without transformation.
+---
+

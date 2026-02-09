@@ -137,7 +137,7 @@
 				"Quality gate passes"
 			],
 			"priority": 7,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-006"],
 			"notes": "Use getJournalEntries(), getJournalEntryCount(), getBalanceSheet() from @fin/core. Reference existing view.ts for text patterns"
 		},
