@@ -172,3 +172,16 @@
 - **Learnings:** Import is a top-level command (not nested under a group) so its tool name is just "import" not "import.index". The import command doesn't need initConfig() in its run() because main.ts index.ts already calls it in setup. Old flat files can be deleted once the directory replacement is wired in main.ts.
 ---
 
+## 2026-02-09 - ENG-015: Implement sanitize discover, migrate, and recategorize commands
+- Created packages/cli/src/commands/sanitize/discover.ts using defineToolCommand() with name 'sanitize.discover'
+- Created packages/cli/src/commands/sanitize/migrate.ts using defineToolCommand() with name 'sanitize.migrate'
+- Created packages/cli/src/commands/sanitize/recategorize.ts using defineToolCommand() with name 'sanitize.recategorize'
+- Created packages/cli/src/commands/sanitize/index.ts with sanitizeCommand group (discover, migrate, recategorize)
+- Discover: JSON returns descriptions array + count; supports --unmapped, --min, --account filters
+- Migrate/Recategorize: --dry-run returns plan only, full run returns plan+result; both marked idempotent: false
+- Migrate plan: toUpdate/alreadyClean/noMatch; Recategorize plan: toUpdate/alreadyCategorized/noMatch
+- Deleted old flat sanitize.ts; updated main.ts to import sanitizeCommand from new directory
+- Files changed: packages/cli/src/commands/sanitize/ (new dir, 4 files), packages/cli/src/commands/sanitize.ts (deleted), packages/cli/src/main.ts (modified)
+- **Learnings:** When a flat file and directory with same name coexist (sanitize.ts vs sanitize/index.ts), TypeScript resolves to the flat file first. Must delete the flat file before the directory index.ts takes effect. Sanitize commands use loadRules() from @fin/core which handles both generic and external rules loading with caching. Migrate/recategorize share the same plan+result JSON pattern, making them consistent for agent consumption.
+---
+

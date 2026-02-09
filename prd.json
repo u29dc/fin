@@ -294,7 +294,7 @@
 				"Quality gate passes"
 			],
 			"priority": 15,
-			"passes": false,
+			"passes": true,
 			"dependsOn": ["ENG-003"],
 			"notes": "Use discoverDescriptions(), discoverUnmappedDescriptions(), planMigration(), executeMigration(), planRecategorize(), executeRecategorize(), loadRules() from @fin/core. Reference existing sanitize.ts"
 		},
