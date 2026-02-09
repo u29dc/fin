@@ -247,3 +247,11 @@
 - **Learnings:** CLAUDE.md is a symlink to AGENTS.md -- must `git add AGENTS.md` not `git add CLAUDE.md` since git tracks the symlink target. The agent workflow diagram is a concise 5-step reference matching the AGENT_NATIVE.md specification.
 ---
 
+## 2026-02-09 - ENG-022: Final validation of complete agent-native CLI
+- Verified all 7 acceptance criteria pass: quality gate, 17 tools in catalog, health ready, contract tests (22), parity gate (9), registry tests (5), no legacy files
+- Total test count: 178 tests across 18 files, 528 expect() calls, all passing
+- No code changes needed -- all prior stories left the codebase in clean state
+- Files changed: prd.json (updated), progress.txt (updated)
+- **Learnings:** The full 22-story restructuring from human-sequential CLI to agent-native toolbelt completed successfully. Key architectural decisions that worked well: envelope.ts capture mode for in-process testing, defineToolCommand() auto-registration eliminating registry drift, incremental migration via *.legacy.ts files, and the orient->understand->investigate->maintain->report agent workflow pattern.
+---
+
