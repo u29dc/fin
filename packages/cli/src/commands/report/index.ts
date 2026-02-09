@@ -6,7 +6,8 @@
  */
 
 import { defineCommand } from 'citty';
-import { audit, summary } from '../report.legacy';
+import { summary } from '../report.legacy';
+import { reportAuditCommand } from './audit';
 import { reportCashflowCommand } from './cashflow';
 import { reportCategoriesCommand } from './categories';
 import { reportHealthCommand } from './health';
@@ -24,7 +25,7 @@ export const reportCommand = defineCommand({
 		runway: reportRunwayCommand,
 		reserves: reportReservesCommand,
 		categories: reportCategoriesCommand,
-		audit,
+		audit: reportAuditCommand,
 		summary,
 	},
 });
