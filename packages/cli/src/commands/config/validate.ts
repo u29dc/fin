@@ -6,18 +6,14 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { FinConfigSchema, findMonorepoRoot, getConfigPath } from '@fin/core/config';
+import { FinConfigSchema, getConfigPath, resolveFinPaths } from '@fin/core/config';
 import { emitRaw, fail, isJsonMode, ok, rethrowCapture } from '../../envelope';
 import { defineToolCommand } from '../../tool';
 
 function resolveConfigPath(): string {
 	const existing = getConfigPath();
 	if (existing) return existing;
-
-	const root = findMonorepoRoot(process.cwd());
-	if (root) return join(root, 'data', 'fin.config.toml');
-	return join(process.cwd(), 'data', 'fin.config.toml');
+	return resolveFinPaths().configFile;
 }
 
 export const configValidateCommand = defineToolCommand(

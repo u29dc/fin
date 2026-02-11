@@ -5,14 +5,14 @@
  * This script is fully self-contained - it will:
  * 1. Create the data/ directory if needed
  * 2. Back up any existing config and database
- * 3. Copy the config template to data/fin.config.toml
+ * 3. Copy the config template to $FIN_HOME/data/fin.config.toml
  * 4. Generate realistic demo transactions
  *
  * Usage: bun run demo:generate
  *
  * To restore your real data afterward:
- *   mv data/fin.config.toml.backup data/fin.config.toml
- *   mv data/fin.db.backup data/fin.db
+ *   mv $FIN_HOME/data/fin.config.toml.backup $FIN_HOME/data/fin.config.toml
+ *   mv $FIN_HOME/data/fin.db.backup $FIN_HOME/data/fin.db
  */
 
 /* biome-ignore-all lint/suspicious/noConsole: CLI script requires console output */
@@ -22,13 +22,15 @@ import { copyFileSync, existsSync, mkdirSync, renameSync, unlinkSync } from 'nod
 import { resolve } from 'node:path';
 
 import { getConfig, initConfig } from '../config/index';
+import { resolveFinPaths } from '../config/paths';
 import { migrateToLatest } from '../db/migrate';
 
 // Paths
-const DATA_DIR = resolve(process.cwd(), 'data');
-const DB_PATH = resolve(DATA_DIR, 'fin.db');
-const CONFIG_PATH = resolve(DATA_DIR, 'fin.config.toml');
-const CONFIG_TEMPLATE_PATH = resolve(process.cwd(), 'fin.config.template.toml');
+const paths = resolveFinPaths();
+const DATA_DIR = paths.dataDir;
+const DB_PATH = paths.dbFile;
+const CONFIG_PATH = paths.configFile;
+const CONFIG_TEMPLATE_PATH = resolve(import.meta.dirname, '../../../../fin.config.template.toml');
 
 // Date range for demo data
 const START_DATE = new Date('2023-01-01');
@@ -490,10 +492,10 @@ async function main(): Promise<void> {
 	log('Step 3: Setting up config...');
 	if (!existsSync(CONFIG_TEMPLATE_PATH)) {
 		logError(`  Error: Config template not found at ${CONFIG_TEMPLATE_PATH}`);
-		logError('  Make sure you are running this from the repository root.');
+		logError('  Ensure you are running from a checkout that includes fin.config.template.toml.');
 		process.exit(1);
 	}
-	log('  Copying config template to data/fin.config.toml');
+	log(`  Copying config template to ${CONFIG_PATH}`);
 	copyFileSync(CONFIG_TEMPLATE_PATH, CONFIG_PATH);
 	log('');
 

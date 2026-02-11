@@ -10,8 +10,11 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const DATA_DIR = resolve(process.cwd(), 'data');
-const BACKUPS_DIR = resolve(DATA_DIR, 'backups');
+import { resolveFinPaths } from '../config/paths';
+
+const paths = resolveFinPaths();
+const DATA_DIR = paths.dataDir;
+const BACKUPS_DIR = paths.backupsDir;
 
 const FILES_TO_BACKUP = ['fin.db', 'fin.config.toml', 'fin.rules.ts'];
 

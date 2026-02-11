@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
-import { resolve } from 'node:path';
 
+import { resolveFinPaths } from '../config/paths';
 import { openDatabase } from '../db';
 import { migrateToLatest } from '../db/migrate';
 import { loadRules, resetRulesCache } from '../sanitize/rules-loader';
@@ -133,9 +133,10 @@ async function commitWithArchive(
 }
 
 export async function importInbox(options: ImportInboxOptions = {}): Promise<ImportResult> {
-	const inboxDir = options.inboxDir ?? resolve(process.cwd(), 'imports/inbox');
-	const archiveDir = options.archiveDir ?? resolve(process.cwd(), 'imports/archive');
-	const dbPath = options.dbPath ?? resolve(process.cwd(), 'data/fin.db');
+	const paths = resolveFinPaths();
+	const inboxDir = options.inboxDir ?? paths.inboxDir;
+	const archiveDir = options.archiveDir ?? paths.archiveDir;
+	const dbPath = options.dbPath ?? paths.dbFile;
 	const shouldMigrate = options.migrate ?? true;
 
 	const db = openDatabase({ path: dbPath, create: true, migrate: false });

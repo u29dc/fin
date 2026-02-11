@@ -1,5 +1,4 @@
 export {
-	findMonorepoRoot,
 	getConfig,
 	getConfigDir,
 	getConfigPath,
@@ -8,6 +7,8 @@ export {
 	loadConfig,
 	resetConfig,
 } from './loader';
+
+export { resolveFinHome, resolveFinPaths } from './paths';
 
 export {
 	type Account,

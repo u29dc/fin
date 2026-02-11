@@ -7,9 +7,9 @@
 
 import { Database } from 'bun:sqlite';
 import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { SCHEMA_VERSION } from '@fin/core';
-import { loadConfig } from '@fin/core/config';
+import { loadConfig, resolveFinPaths } from '@fin/core/config';
 import type { ArgsDef } from 'citty';
 import { defineCommand } from 'citty';
 import { emitRaw, isJsonMode } from '../../envelope';
@@ -31,51 +31,6 @@ interface HealthCheck {
 }
 
 // ---------------------------------------------------------------------------
-// Path resolution (standalone, no initConfig dependency)
-// ---------------------------------------------------------------------------
-
-function findMonorepoRoot(startDir: string): string | null {
-	let dir = startDir;
-	while (dir !== dirname(dir)) {
-		if (existsSync(resolve(dir, 'fin.config.template.toml'))) {
-			return dir;
-		}
-		dir = dirname(dir);
-	}
-	return null;
-}
-
-function resolveConfigPath(): string {
-	const envPath = process.env['FIN_CONFIG_PATH'];
-	if (envPath) return resolve(envPath);
-
-	const homeDir = process.env['FIN_HOME'];
-	if (homeDir) return resolve(homeDir, 'data', 'fin.config.toml');
-
-	const root = findMonorepoRoot(process.cwd());
-	if (root) return resolve(root, 'data', 'fin.config.toml');
-
-	return resolve(process.cwd(), 'data', 'fin.config.toml');
-}
-
-function resolveDbPath(configDir: string): string {
-	const fromEnv = process.env['DB_PATH'];
-	if (fromEnv) return resolve(fromEnv);
-	return resolve(configDir, 'fin.db');
-}
-
-function resolveRulesPath(configDir: string): string {
-	// Default rules path relative to config dir (data/ -> data/fin.rules.ts)
-	return resolve(configDir, 'fin.rules.ts');
-}
-
-function resolveInboxPath(): string {
-	const root = findMonorepoRoot(process.cwd());
-	if (root) return resolve(root, 'imports', 'inbox');
-	return resolve(process.cwd(), 'imports', 'inbox');
-}
-
-// ---------------------------------------------------------------------------
 // Individual checks
 // ---------------------------------------------------------------------------
 
@@ -87,7 +42,7 @@ function checkConfigExists(configPath: string): HealthCheck {
 			status: 'missing',
 			severity: 'blocking',
 			detail: configPath,
-			fix: ['cp fin.config.template.toml data/fin.config.toml'],
+			fix: [`cp fin.config.template.toml ${configPath}`],
 		};
 	}
 	return {
@@ -108,7 +63,7 @@ function checkConfigValidates(configPath: string): HealthCheck {
 			status: 'missing',
 			severity: 'blocking',
 			detail: 'Config file missing, cannot validate',
-			fix: ['cp fin.config.template.toml data/fin.config.toml'],
+			fix: [`cp fin.config.template.toml ${configPath}`],
 		};
 	}
 
@@ -130,7 +85,7 @@ function checkConfigValidates(configPath: string): HealthCheck {
 			status: 'invalid',
 			severity: 'blocking',
 			detail: `${configPath} -- ${msg}`,
-			fix: ['cp fin.config.template.toml data/fin.config.toml'],
+			fix: [`cp fin.config.template.toml ${configPath}`],
 		};
 	}
 }
@@ -223,7 +178,7 @@ function checkRules(rulesPath: string): HealthCheck {
 			status: 'missing',
 			severity: 'degraded',
 			detail: rulesPath,
-			fix: ['cp fin.rules.template.ts data/fin.rules.ts'],
+			fix: [`cp fin.rules.template.ts ${rulesPath}`],
 		};
 	}
 	return {
@@ -262,11 +217,18 @@ function checkInbox(inboxPath: string): HealthCheck {
 // ---------------------------------------------------------------------------
 
 function runHealthChecks(): { checks: HealthCheck[]; status: 'ready' | 'degraded' | 'blocked' } {
-	const configPath = resolveConfigPath();
-	const configDir = dirname(configPath);
-	const dbPath = resolveDbPath(configDir);
-	const rulesPath = resolveRulesPath(configDir);
-	const inboxPath = resolveInboxPath();
+	const paths = resolveFinPaths();
+
+	// FIN_CONFIG_PATH overrides the default config location
+	const envConfigPath = process.env['FIN_CONFIG_PATH'];
+	const configPath = envConfigPath ? resolve(envConfigPath) : paths.configFile;
+
+	// DB_PATH overrides the default DB location
+	const envDbPath = process.env['DB_PATH'];
+	const dbPath = envDbPath ? resolve(envDbPath) : paths.dbFile;
+
+	const rulesPath = paths.rulesFile;
+	const inboxPath = paths.inboxDir;
 
 	const checks: HealthCheck[] = [];
 	checks.push(checkConfigExists(configPath));

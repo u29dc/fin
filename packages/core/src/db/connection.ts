@@ -1,7 +1,8 @@
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname } from 'node:path';
 
+import { resolveFinPaths } from '../config/paths';
 import { migrateToLatest } from './migrate';
 import { SCHEMA_VERSION } from './schema';
 
@@ -29,7 +30,7 @@ function getUserVersion(db: Database): number {
 }
 
 export function openDatabase(options: OpenDatabaseOptions = {}): Database {
-	const { path = resolve(process.cwd(), 'data/fin.db'), create = true, readonly = false, migrate: shouldMigrate = false } = options;
+	const { path = resolveFinPaths().dbFile, create = true, readonly = false, migrate: shouldMigrate = false } = options;
 
 	if (create) {
 		mkdirSync(dirname(path), { recursive: true });

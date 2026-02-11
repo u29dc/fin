@@ -1,24 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { parse as parseTOML } from 'smol-toml';
+import { resolveFinPaths } from './paths';
 import { type FinConfig, FinConfigSchema } from './schema';
 
 let configSingleton: FinConfig | null = null;
 let configPath: string | null = null;
-
-/**
- * Walk up directory tree to find monorepo root (where fin.config.template.toml exists).
- */
-export function findMonorepoRoot(startDir: string): string | null {
-	let dir = startDir;
-	while (dir !== dirname(dir)) {
-		if (existsSync(join(dir, 'fin.config.template.toml'))) {
-			return dir;
-		}
-		dir = dirname(dir);
-	}
-	return null;
-}
 
 function findConfigPath(startPath?: string): string {
 	// If explicit path provided, use it
@@ -32,28 +19,15 @@ function findConfigPath(startPath?: string): string {
 		return isAbsolute(envPath) ? envPath : join(process.cwd(), envPath);
 	}
 
-	// Check for FIN_HOME environment variable (project root directory)
-	const homeDir = process.env['FIN_HOME'];
-	if (homeDir) {
-		const homePath = isAbsolute(homeDir) ? homeDir : join(process.cwd(), homeDir);
-		return join(homePath, 'data', 'fin.config.toml');
-	}
-
-	// Walk up to find monorepo root (handles running from packages/web/ etc.)
-	const root = findMonorepoRoot(process.cwd());
-	if (root) {
-		return join(root, 'data', 'fin.config.toml');
-	}
-
-	// Fallback to cwd-relative path
-	return join(process.cwd(), 'data', 'fin.config.toml');
+	// Resolve via FIN_HOME -> TOOLS_HOME -> $HOME/.tools/fin
+	return resolveFinPaths().configFile;
 }
 
 export function loadConfig(path?: string): FinConfig {
 	const resolvedPath = findConfigPath(path);
 
 	if (!existsSync(resolvedPath)) {
-		throw new Error(`Config file not found: ${resolvedPath}\nCopy fin.config.template.toml to data/fin.config.toml and customize it.`);
+		throw new Error(`Config file not found: ${resolvedPath}\nCopy fin.config.template.toml to ${resolvedPath} and customize it.`);
 	}
 
 	// Read and parse TOML (compatible with Vite SSR)

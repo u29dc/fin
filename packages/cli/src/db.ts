@@ -1,7 +1,7 @@
 /**
  * Database connection utilities for CLI.
  *
- * Path resolution priority: --db flag > DB_PATH env > config dir > cwd
+ * Path resolution priority: --db flag > DB_PATH env > config dir > resolveFinPaths
  * Read-only commands use create: false to prevent empty DB creation.
  */
 
@@ -9,9 +9,7 @@ import type { Database } from 'bun:sqlite';
 import { resolve } from 'node:path';
 
 import { openDatabase } from '@fin/core';
-import { getConfigDir } from '@fin/core/config';
-
-const DEFAULT_DB_PATH = 'data/fin.db';
+import { getConfigDir, resolveFinPaths } from '@fin/core/config';
 
 type DbArgs = { options?: Map<string, string> } | undefined;
 
@@ -35,7 +33,7 @@ export function resolveDbPath(args?: DbArgs): string {
 		return resolve(configDir, 'fin.db');
 	}
 
-	return resolve(process.cwd(), DEFAULT_DB_PATH);
+	return resolveFinPaths().dbFile;
 }
 
 /**
