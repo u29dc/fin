@@ -1,0 +1,55 @@
+package.json
+  9023b80323b3545c 16
+.claude/skills/fin/SKILL.md
+  9023b80323b3545c 10
+  090dfb22e7bc9367 27,30-32,38,45,50-52,56-58,62-66
+AGENTS.md
+  9023b80323b3545c 44-47,68-69,78,145,147,160,178
+  071ba98321f7c982 28,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.1",
+  "base_commit_sha": "4523b1ddecbafe6d78ba58e38f058457f501d8da",
+  "prompts": {
+    "071ba98321f7c982": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b2af6442-5e24-429e-bffd-e49f64ca03eb",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    },
+    "090dfb22e7bc9367": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1155270f-d3a2-494f-bbde-c1337974776c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 17,
+      "overriden_lines": 0
+    },
+    "9023b80323b3545c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1eac866c-1b4d-4dee-9cf3-6ee1493d8ad6",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 13,
+      "overriden_lines": 0
+    }
+  }
+}
