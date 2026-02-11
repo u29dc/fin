@@ -1,0 +1,61 @@
+packages/core/src/db/categories.ts
+  071ba98321f7c982 35,128
+packages/cli/src/main.ts
+  071ba98321f7c982 10,32
+packages/cli/src/commands/edit/index.ts
+  071ba98321f7c982 1-18
+packages/core/src/db/seed.ts
+  071ba98321f7c982 143
+packages/cli/tests/parity-gate.test.ts
+  071ba98321f7c982 214,219
+packages/cli/src/commands/edit/transaction.ts
+  071ba98321f7c982 1-67,69-148,150-263
+packages/cli/tests/registry.test.ts
+  071ba98321f7c982 69-70,104,108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.1",
+  "base_commit_sha": "3b6cc04a3cd7966ba147c74bc7882c06935f1221",
+  "prompts": {
+    "071ba98321f7c982": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b2af6442-5e24-429e-bffd-e49f64ca03eb",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 292,
+      "overriden_lines": 0
+    },
+    "090dfb22e7bc9367": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1155270f-d3a2-494f-bbde-c1337974776c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 17,
+      "overriden_lines": 0
+    },
+    "9023b80323b3545c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1eac866c-1b4d-4dee-9cf3-6ee1493d8ad6",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Han <han@u29dc.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 13,
+      "overriden_lines": 0
+    }
+  }
+}
