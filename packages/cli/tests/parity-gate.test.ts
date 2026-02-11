@@ -211,12 +211,12 @@ describe('parity gate: config validation chain', () => {
 		expect(exitCode).toBe(0);
 	});
 
-	test('tools catalog has exactly 18 registered tools', async () => {
+	test('tools catalog has exactly 19 registered tools', async () => {
 		const { stdout } = await run(['tools', '--json'], ENV);
 		const parsed = JSON.parse(stdout) as Record<string, unknown>;
 		const data = parsed['data'] as Record<string, unknown>;
 		const tools = data['tools'] as Array<Record<string, unknown>>;
-		expect(tools.length).toBe(18);
+		expect(tools.length).toBe(19);
 	});
 
 	test('tools and health are infrastructure, not in catalog', async () => {

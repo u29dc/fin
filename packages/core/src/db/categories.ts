@@ -32,6 +32,7 @@ export const EXACT_CATEGORY_TO_ACCOUNT: Record<string, string> = {
 	contractors: 'Expenses:Business:Contractors',
 
 	// Personal expenses
+	immigration: 'Expenses:Personal:Immigration',
 	fitness: 'Expenses:Health:Fitness',
 	healthinsurance: 'Expenses:Health:Insurance',
 	supplements: 'Expenses:Food:Supplements',
@@ -124,6 +125,7 @@ const EXPENSE_CATEGORIES = new Set([
 	'professional',
 	'contractors',
 	'charity',
+	'immigration',
 	'cafe',
 	'parking',
 	'fuel',

@@ -140,6 +140,7 @@ const STATIC_SEEDS: ChartAccountSeed[] = [
 	{ id: 'Expenses:Personal:Gifts', name: 'Gifts', type: 'expense', parent: 'Expenses:Personal', placeholder: false },
 	{ id: 'Expenses:Personal:Education', name: 'Education', type: 'expense', parent: 'Expenses:Personal', placeholder: false },
 	{ id: 'Expenses:Personal:Charity', name: 'Charity', type: 'expense', parent: 'Expenses:Personal', placeholder: false },
+	{ id: 'Expenses:Personal:Immigration', name: 'Immigration', type: 'expense', parent: 'Expenses:Personal', placeholder: false },
 
 	{ id: 'Expenses:Taxes', name: 'Taxes', type: 'expense', parent: 'Expenses', placeholder: true },
 	{ id: 'Expenses:Taxes:IncomeTax', name: 'Income Tax', type: 'expense', parent: 'Expenses:Taxes', placeholder: false },
