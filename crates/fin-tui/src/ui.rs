@@ -1,14 +1,22 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
+    symbols::Marker,
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Tabs, Wrap},
+    widgets::{
+        Axis, BarChart, Block, Borders, Cell, Chart, Clear, Dataset, GraphType, List, ListItem,
+        Paragraph, Row, Table, Tabs, Wrap,
+    },
 };
 
 use crate::{
     app::App,
-    fetch::{RoutePayload, TransactionsPayload, transaction_matches_query},
+    fetch::{
+        CategoryBarsPayload, ChartTone, LineChartPayload, RoutePayload, TransactionsPayload,
+        transaction_matches_query,
+    },
     palette::PaletteRow,
+    palette::{ACCENT_1, ACCENT_2, ACCENT_3, ACCENT_4},
     routes::Route,
 };
 
@@ -145,6 +153,8 @@ fn render_main(frame: &mut Frame<'_>, app: &App, area: Rect) {
         RoutePayload::Transactions(payload) => {
             render_transactions_table(frame, inner, app.selected_row(), payload, app);
         }
+        RoutePayload::LineChart(payload) => render_line_chart(frame, inner, payload, app),
+        RoutePayload::CategoryBars(payload) => render_category_bars(frame, inner, payload, app),
     }
 }
 
@@ -204,13 +214,14 @@ fn render_transactions_table(
         (offset + visible_rows).min(filtered.len())
     };
 
+    let range_start = if filtered.is_empty() { 0 } else { offset + 1 };
     let summary = format!(
         "rows={} total={} has_more={} preview_limit={} range {}-{}",
         filtered.len(),
         payload.rows.len(),
         payload.has_more,
         payload.limit,
-        offset + 1,
+        range_start,
         end
     );
     frame.render_widget(
@@ -285,10 +296,179 @@ fn render_transactions_table(
     frame.render_widget(table, table_area);
 }
 
+fn render_line_chart(frame: &mut Frame<'_>, area: Rect, payload: &LineChartPayload, app: &App) {
+    if payload.series.is_empty() {
+        frame.render_widget(
+            Paragraph::new("No chart series available.").style(app.theme.footer_meta),
+            area,
+        );
+        return;
+    }
+
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(1),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(format!("{} ", payload.title), app.theme.section_heading),
+            Span::styled(payload.subtitle.clone(), app.theme.footer_meta),
+        ])),
+        sections[0],
+    );
+
+    let mut y_min = f64::INFINITY;
+    let mut y_max = f64::NEG_INFINITY;
+    let mut x_max = 0_f64;
+    for series in &payload.series {
+        if let Some(last) = series.points.last() {
+            x_max = x_max.max(last.0);
+        }
+        for (_, value) in &series.points {
+            y_min = y_min.min(*value);
+            y_max = y_max.max(*value);
+        }
+    }
+    if !y_min.is_finite() || !y_max.is_finite() {
+        frame.render_widget(
+            Paragraph::new("Chart values are unavailable.").style(app.theme.footer_meta),
+            sections[1],
+        );
+        return;
+    }
+    if (y_max - y_min).abs() < f64::EPSILON {
+        y_min -= 1.0;
+        y_max += 1.0;
+    } else {
+        let padding = (y_max - y_min) * 0.12;
+        y_min -= padding;
+        y_max += padding;
+    }
+    let mid_y = (y_min + y_max) / 2.0;
+
+    let datasets = payload
+        .series
+        .iter()
+        .map(|series| {
+            Dataset::default()
+                .name(series.label.clone())
+                .marker(Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(app.theme.body.fg(chart_tone_color(series.tone)))
+                .data(&series.points)
+        })
+        .collect::<Vec<_>>();
+
+    let x_labels = axis_labels(&payload.x_labels);
+    let y_labels = vec![
+        Span::raw(format_major_axis(y_min)),
+        Span::raw(format_major_axis(mid_y)),
+        Span::raw(format_major_axis(y_max)),
+    ];
+
+    let chart = Chart::new(datasets)
+        .x_axis(
+            Axis::default()
+                .style(app.theme.footer_meta)
+                .bounds([0.0, x_max.max(1.0)])
+                .labels(x_labels),
+        )
+        .y_axis(
+            Axis::default()
+                .style(app.theme.footer_meta)
+                .bounds([y_min, y_max])
+                .labels(y_labels),
+        );
+
+    frame.render_widget(chart, sections[1]);
+
+    let legend = payload
+        .series
+        .iter()
+        .map(|series| {
+            let latest = series.points.last().map(|(_, y)| *y).unwrap_or_default();
+            Span::styled(
+                format!("{} {}", series.label, format_major_axis(latest)),
+                app.theme.body.fg(chart_tone_color(series.tone)),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let mut legend_spans = Vec::new();
+    for (index, span) in legend.into_iter().enumerate() {
+        legend_spans.push(span);
+        if index + 1 < payload.series.len() {
+            legend_spans.push(Span::styled("  |  ", app.theme.footer_meta));
+        }
+    }
+    frame.render_widget(Paragraph::new(Line::from(legend_spans)), sections[2]);
+}
+
+fn render_category_bars(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    payload: &CategoryBarsPayload,
+    app: &App,
+) {
+    if payload.points.is_empty() {
+        frame.render_widget(
+            Paragraph::new("No category bars to render.").style(app.theme.footer_meta),
+            area,
+        );
+        return;
+    }
+
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(1)])
+        .split(area);
+
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(format!("{} ", payload.title), app.theme.section_heading),
+            Span::styled(payload.subtitle.clone(), app.theme.footer_meta),
+        ])),
+        sections[0],
+    );
+
+    let bars = payload
+        .points
+        .iter()
+        .map(|point| (truncate_text(&point.label, 18), point.total_major))
+        .collect::<Vec<_>>();
+    let bar_refs = bars
+        .iter()
+        .map(|(label, value)| (label.as_str(), *value))
+        .collect::<Vec<_>>();
+
+    let bar_chart = BarChart::default()
+        .data(bar_refs.as_slice())
+        .bar_width(8)
+        .bar_gap(1)
+        .bar_style(app.theme.body.fg(ACCENT_2))
+        .value_style(app.theme.body.fg(ACCENT_1))
+        .label_style(app.theme.footer_meta)
+        .max(
+            payload
+                .points
+                .iter()
+                .map(|point| point.total_major)
+                .max()
+                .unwrap_or(1),
+        );
+
+    frame.render_widget(bar_chart, sections[1]);
+}
+
 fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Min(10), Constraint::Length(76)])
+        .constraints([Constraint::Min(10), Constraint::Length(88)])
         .split(area);
 
     let hints = Paragraph::new(Line::from(vec![
@@ -296,12 +476,12 @@ fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Span::styled("focus ", app.theme.footer_meta),
         Span::styled("left/right ", app.theme.section_heading),
         Span::styled("tabs ", app.theme.footer_meta),
+        Span::styled("1-6 ", app.theme.section_heading),
+        Span::styled("routes ", app.theme.footer_meta),
         Span::styled("up/down ", app.theme.section_heading),
         Span::styled("rows ", app.theme.footer_meta),
         Span::styled("cmd/ctrl+f ", app.theme.section_heading),
         Span::styled("find ", app.theme.footer_meta),
-        Span::styled("pgup/pgdn ", app.theme.section_heading),
-        Span::styled("jump ", app.theme.footer_meta),
         Span::styled("cmd/ctrl+p ", app.theme.section_heading),
         Span::styled("palette ", app.theme.footer_meta),
         Span::styled("r ", app.theme.section_heading),
@@ -332,7 +512,7 @@ fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 fn render_palette(frame: &mut Frame<'_>, app: &App) {
-    let area = centered_rect_with_min(50, 50, 56, 16, frame.area());
+    let area = centered_rect_with_min(50, 50, 56, 18, frame.area());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
@@ -475,6 +655,39 @@ fn palette_two_column_line(
         Span::styled(" ".repeat(padding), left_style),
         Span::styled(right_text, right_style),
     ])
+}
+
+fn axis_labels(labels: &[String]) -> Vec<Span<'static>> {
+    if labels.is_empty() {
+        return vec![Span::raw(""), Span::raw(""), Span::raw("")];
+    }
+    let first = labels.first().cloned().unwrap_or_default();
+    let mid = labels
+        .get(labels.len() / 2)
+        .cloned()
+        .unwrap_or_else(|| first.clone());
+    let last = labels.last().cloned().unwrap_or_else(|| first.clone());
+    vec![Span::raw(first), Span::raw(mid), Span::raw(last)]
+}
+
+fn chart_tone_color(tone: ChartTone) -> ratatui::style::Color {
+    match tone {
+        ChartTone::Accent1 => ACCENT_1,
+        ChartTone::Accent2 => ACCENT_2,
+        ChartTone::Accent3 => ACCENT_3,
+        ChartTone::Accent4 => ACCENT_4,
+    }
+}
+
+fn format_major_axis(value: f64) -> String {
+    let abs = value.abs();
+    if abs >= 1_000_000.0 {
+        format!("{:.1}m", value / 1_000_000.0)
+    } else if abs >= 1_000.0 {
+        format!("{:.1}k", value / 1_000.0)
+    } else {
+        format!("{value:.0}")
+    }
 }
 
 fn truncate_text(value: &str, max_len: usize) -> String {

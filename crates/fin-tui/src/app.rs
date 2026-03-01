@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     cache::RouteCache,
-    fetch::{FetchClient, RoutePayload, transaction_matches_query},
+    fetch::{FetchClient, FetchContext, OverviewScope, RoutePayload, transaction_matches_query},
     palette::{
         PaletteAction, PaletteActionKind, PaletteRow, PaletteSection, PaletteState, build_rows,
         filtered_action_indices,
@@ -35,6 +35,8 @@ pub struct App {
     fetch_client: FetchClient,
     cache: RouteCache,
     selected_rows: BTreeMap<Route, usize>,
+    available_groups: Vec<String>,
+    fetch_context: FetchContext,
     transactions_search_query: String,
     transactions_search_active: bool,
 }
@@ -42,7 +44,7 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         let mut app = Self {
-            route: Route::Overview,
+            route: Route::Summary,
             should_quit: false,
             status: "Initializing".to_owned(),
             theme: Theme::default(),
@@ -56,6 +58,12 @@ impl App {
             fetch_client: FetchClient::new(),
             cache: RouteCache::new(),
             selected_rows: BTreeMap::new(),
+            available_groups: vec![
+                "business".to_owned(),
+                "joint".to_owned(),
+                "personal".to_owned(),
+            ],
+            fetch_context: FetchContext::default(),
             transactions_search_query: String::new(),
             transactions_search_active: false,
         };
@@ -81,7 +89,7 @@ impl App {
                 return;
             }
             KeyCode::Char('1') => {
-                self.set_route(Route::Overview);
+                self.set_route(Route::Summary);
                 return;
             }
             KeyCode::Char('2') => {
@@ -89,6 +97,18 @@ impl App {
                 return;
             }
             KeyCode::Char('3') => {
+                self.set_route(Route::Cashflow);
+                return;
+            }
+            KeyCode::Char('4') => {
+                self.set_route(Route::Overview);
+                return;
+            }
+            KeyCode::Char('5') => {
+                self.set_route(Route::Categories);
+                return;
+            }
+            KeyCode::Char('6') => {
                 self.set_route(Route::Reports);
                 return;
             }
@@ -133,7 +153,17 @@ impl App {
     }
 
     pub fn route_context(&self) -> String {
-        format!("finance/{}", self.route.id())
+        match self.route {
+            Route::Cashflow => format!("finance/cashflow/{}", self.fetch_context.cashflow_group),
+            Route::Overview => format!(
+                "finance/overview/{}",
+                self.fetch_context.overview_scope.id()
+            ),
+            Route::Categories => {
+                format!("finance/categories/{}", self.fetch_context.cashflow_group)
+            }
+            _ => format!("finance/{}", self.route.id()),
+        }
     }
 
     pub fn route_position(&self) -> (usize, usize) {
@@ -193,9 +223,19 @@ impl App {
     }
 
     fn refresh(&mut self) {
+        self.reconcile_fetch_context();
         self.status = format!("Loading {}...", self.route.label().to_ascii_lowercase());
-        match self.fetch_client.fetch_route(self.route) {
+        match self
+            .fetch_client
+            .fetch_route(self.route, &self.fetch_context)
+        {
             Ok(payload) => {
+                if let Ok(groups) = self.fetch_client.available_groups()
+                    && !groups.is_empty()
+                {
+                    self.available_groups = groups;
+                    self.reconcile_fetch_context();
+                }
                 self.cache.store(self.route, payload);
                 self.clamp_selected_row();
                 self.status = format!("Loaded {}", self.route.label().to_ascii_lowercase());
@@ -206,6 +246,29 @@ impl App {
                     .store(self.route, RoutePayload::Text(message.clone()));
                 self.status = message;
             }
+        }
+    }
+
+    fn reconcile_fetch_context(&mut self) {
+        if self.available_groups.is_empty() {
+            return;
+        }
+        if !self
+            .available_groups
+            .iter()
+            .any(|group| group == &self.fetch_context.cashflow_group)
+            && let Some(first) = self.available_groups.first()
+        {
+            self.fetch_context.cashflow_group = first.clone();
+        }
+
+        if let OverviewScope::Group(group) = &self.fetch_context.overview_scope
+            && !self
+                .available_groups
+                .iter()
+                .any(|candidate| candidate == group)
+        {
+            self.fetch_context.overview_scope = OverviewScope::All;
         }
     }
 
@@ -244,7 +307,10 @@ impl App {
                 .iter()
                 .filter(|row| transaction_matches_query(row, &self.transactions_search_query))
                 .count(),
-            Some(RoutePayload::Text(_)) | None => 0,
+            Some(RoutePayload::Text(_))
+            | Some(RoutePayload::LineChart(_))
+            | Some(RoutePayload::CategoryBars(_))
+            | None => 0,
         }
     }
 
@@ -425,6 +491,60 @@ impl App {
             keywords: vec!["refresh".to_owned(), "reload".to_owned()],
         }];
 
+        if matches!(self.route, Route::Cashflow | Route::Categories) {
+            for group in &self.available_groups {
+                let selected = if group == &self.fetch_context.cashflow_group {
+                    " (selected)"
+                } else {
+                    ""
+                };
+                actions.push(PaletteAction {
+                    title: format!("Set group: {group}{selected}"),
+                    context: self.route.label().to_ascii_lowercase(),
+                    section: PaletteSection::Context,
+                    kind: PaletteActionKind::SetCashflowGroup(group.clone()),
+                    keywords: vec![
+                        "group".to_owned(),
+                        "cashflow".to_owned(),
+                        "categories".to_owned(),
+                        group.clone(),
+                    ],
+                });
+            }
+        }
+
+        if self.route == Route::Overview {
+            let all_selected = matches!(self.fetch_context.overview_scope, OverviewScope::All);
+            let all_suffix = if all_selected { " (selected)" } else { "" };
+            actions.push(PaletteAction {
+                title: format!("Set overview scope: all{all_suffix}"),
+                context: "overview".to_owned(),
+                section: PaletteSection::Context,
+                kind: PaletteActionKind::SetOverviewScopeAll,
+                keywords: vec!["overview".to_owned(), "scope".to_owned(), "all".to_owned()],
+            });
+
+            for group in &self.available_groups {
+                let selected = matches!(
+                    &self.fetch_context.overview_scope,
+                    OverviewScope::Group(current) if current == group
+                );
+                let suffix = if selected { " (selected)" } else { "" };
+                actions.push(PaletteAction {
+                    title: format!("Set overview scope: {group}{suffix}"),
+                    context: "overview".to_owned(),
+                    section: PaletteSection::Context,
+                    kind: PaletteActionKind::SetOverviewScopeGroup(group.clone()),
+                    keywords: vec![
+                        "overview".to_owned(),
+                        "scope".to_owned(),
+                        "group".to_owned(),
+                        group.clone(),
+                    ],
+                });
+            }
+        }
+
         for route in Route::ALL {
             actions.push(PaletteAction {
                 title: format!("Go to {}", route.label()),
@@ -530,6 +650,34 @@ impl App {
                 self.close_palette();
                 self.request_refresh("palette refresh");
             }
+            PaletteActionKind::SetCashflowGroup(group) => {
+                self.close_palette();
+                self.fetch_context.cashflow_group = group;
+                if matches!(self.route, Route::Cashflow | Route::Categories) {
+                    self.request_refresh("group changed");
+                } else {
+                    self.status =
+                        format!("Set chart group to {}", self.fetch_context.cashflow_group);
+                }
+            }
+            PaletteActionKind::SetOverviewScopeAll => {
+                self.close_palette();
+                self.fetch_context.overview_scope = OverviewScope::All;
+                if self.route == Route::Overview {
+                    self.request_refresh("overview scope changed");
+                } else {
+                    self.status = "Set overview scope to all".to_owned();
+                }
+            }
+            PaletteActionKind::SetOverviewScopeGroup(group) => {
+                self.close_palette();
+                self.fetch_context.overview_scope = OverviewScope::Group(group.clone());
+                if self.route == Route::Overview {
+                    self.request_refresh("overview scope changed");
+                } else {
+                    self.status = format!("Set overview scope to {group}");
+                }
+            }
             PaletteActionKind::Quit => self.should_quit = true,
         }
     }
@@ -580,13 +728,13 @@ mod tests {
     #[test]
     fn left_and_right_cycle_routes() {
         let mut app = App::new();
-        assert_eq!(app.route, Route::Overview);
+        assert_eq!(app.route, Route::Summary);
 
         app.on_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
         assert_eq!(app.route, Route::Transactions);
 
         app.on_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-        assert_eq!(app.route, Route::Reports);
+        assert_eq!(app.route, Route::Cashflow);
 
         app.on_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
         assert_eq!(app.route, Route::Transactions);
@@ -675,5 +823,20 @@ mod tests {
         app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(app.route, Route::Transactions);
         assert!(!app.palette.open);
+    }
+
+    #[test]
+    fn palette_updates_cashflow_group_context() {
+        let mut app = App::new();
+        app.set_route(Route::Cashflow);
+        assert_eq!(app.fetch_context.cashflow_group, "business");
+
+        app.on_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+        for ch in "joint".chars() {
+            app.on_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+        }
+        app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert_eq!(app.fetch_context.cashflow_group, "joint");
     }
 }

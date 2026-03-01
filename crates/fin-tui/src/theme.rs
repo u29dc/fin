@@ -1,6 +1,6 @@
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::palette::{ACCENT, BORDER, FG, MUTED};
+use crate::palette::{ACCENT_1, BORDER_SUBTLE, TEXT_MUTED, TEXT_PRIMARY};
 
 #[derive(Debug, Clone, Copy)]
 pub struct HeaderContract {
@@ -39,23 +39,23 @@ pub struct Theme {
 impl Default for Theme {
     fn default() -> Self {
         Self {
-            root: Style::default().fg(FG),
-            border: Style::default().fg(BORDER),
-            brand: Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-            header_meta: Style::default().fg(MUTED),
-            section_heading: Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-            tabs: Style::default().fg(FG),
+            root: Style::default().fg(TEXT_PRIMARY),
+            border: Style::default().fg(BORDER_SUBTLE),
+            brand: Style::default().fg(ACCENT_1).add_modifier(Modifier::BOLD),
+            header_meta: Style::default().fg(TEXT_MUTED),
+            section_heading: Style::default().fg(ACCENT_1).add_modifier(Modifier::BOLD),
+            tabs: Style::default().fg(TEXT_PRIMARY),
             tabs_active: Style::default()
                 .fg(Color::Rgb(255, 255, 255))
-                .bg(ACCENT)
+                .bg(ACCENT_1)
                 .add_modifier(Modifier::BOLD),
             selected: Style::default()
                 .fg(Color::Rgb(255, 255, 255))
-                .bg(ACCENT)
+                .bg(ACCENT_1)
                 .add_modifier(Modifier::BOLD),
-            body: Style::default().fg(FG),
-            footer_meta: Style::default().fg(MUTED),
-            footer_status: Style::default().fg(MUTED),
+            body: Style::default().fg(TEXT_PRIMARY),
+            footer_meta: Style::default().fg(TEXT_MUTED),
+            footer_status: Style::default().fg(TEXT_MUTED),
         }
     }
 }
