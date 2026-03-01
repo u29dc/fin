@@ -60,6 +60,18 @@ impl App {
         self.header.render()
     }
 
+    pub fn route_context(&self) -> String {
+        format!("finance/{}", self.route.id())
+    }
+
+    pub fn route_position(&self) -> (usize, usize) {
+        (self.current_route_index() + 1, Route::ALL.len())
+    }
+
+    pub fn is_pending_refresh(&self) -> bool {
+        self.pending_refresh
+    }
+
     pub fn body_text(&self) -> &str {
         self.cache
             .get(self.route)
@@ -71,13 +83,6 @@ impl App {
                 }
             })
             .unwrap_or("No data loaded for this route.")
-    }
-
-    pub fn footer_text(&self) -> String {
-        format!(
-            "q quit | tab/shift+tab switch | 1 overview | 2 transactions | 3 reports | r refresh | {}",
-            self.status
-        )
     }
 
     fn set_route(&mut self, route: Route) {

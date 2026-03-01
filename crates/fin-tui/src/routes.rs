@@ -15,4 +15,12 @@ impl Route {
             Route::Reports => "Reports",
         }
     }
+
+    pub const fn id(self) -> &'static str {
+        match self {
+            Route::Overview => "overview",
+            Route::Transactions => "transactions",
+            Route::Reports => "reports",
+        }
+    }
 }

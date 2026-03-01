@@ -1,6 +1,6 @@
 use ratatui::style::{Modifier, Style};
 
-use crate::palette::{CYAN_100, CYAN_300, CYAN_500, CYAN_700, SLATE_200, SLATE_950};
+use crate::palette::{ACCENT, BORDER, FG, MUTED, SELECTED_FG};
 
 #[derive(Debug, Clone, Copy)]
 pub struct HeaderContract {
@@ -16,7 +16,7 @@ impl HeaderContract {
 }
 
 pub const HEADER_CONTRACT: HeaderContract = HeaderContract {
-    project_name: env!("CARGO_PKG_NAME"),
+    project_name: "fin",
     version: env!("CARGO_PKG_VERSION"),
     glyph: "■",
 };
@@ -25,26 +25,32 @@ pub const HEADER_CONTRACT: HeaderContract = HeaderContract {
 pub struct Theme {
     pub root: Style,
     pub border: Style,
-    pub header: Style,
+    pub brand: Style,
+    pub header_meta: Style,
     pub tabs: Style,
     pub tabs_active: Style,
     pub body: Style,
-    pub footer: Style,
+    pub footer_key: Style,
+    pub footer_meta: Style,
+    pub footer_status: Style,
 }
 
 impl Default for Theme {
     fn default() -> Self {
         Self {
-            root: Style::default().bg(SLATE_950).fg(SLATE_200),
-            border: Style::default().fg(CYAN_700),
-            header: Style::default().fg(CYAN_100).add_modifier(Modifier::BOLD),
-            tabs: Style::default().fg(CYAN_300),
+            root: Style::default().fg(FG),
+            border: Style::default().fg(BORDER),
+            brand: Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+            header_meta: Style::default().fg(MUTED),
+            tabs: Style::default().fg(FG),
             tabs_active: Style::default()
-                .fg(CYAN_100)
-                .bg(CYAN_500)
+                .fg(SELECTED_FG)
+                .bg(ACCENT)
                 .add_modifier(Modifier::BOLD),
-            body: Style::default().fg(SLATE_200),
-            footer: Style::default().fg(CYAN_300),
+            body: Style::default().fg(FG),
+            footer_key: Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+            footer_meta: Style::default().fg(MUTED),
+            footer_status: Style::default().fg(MUTED),
         }
     }
 }
