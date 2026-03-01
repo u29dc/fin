@@ -37,6 +37,8 @@ enum Command {
     Health,
     /// Configuration commands
     Config(ConfigArgs),
+    /// Rules file management commands
+    Rules(RulesArgs),
 }
 
 #[derive(Args, Debug)]
@@ -59,6 +61,39 @@ enum ConfigCommand {
     Validate,
 }
 
+#[derive(Args, Debug)]
+struct RulesArgs {
+    #[command(subcommand)]
+    command: RulesCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum RulesCommand {
+    /// Show merged rules metadata
+    Show(RulesPathArgs),
+    /// Validate TOML rules file
+    Validate(RulesPathArgs),
+    /// Migrate legacy TypeScript rules to TOML
+    MigrateTs(RulesMigrateArgs),
+}
+
+#[derive(Args, Debug)]
+struct RulesPathArgs {
+    /// Override rules file path
+    #[arg(long)]
+    path: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct RulesMigrateArgs {
+    /// Source TypeScript rules file path (default: $FIN_HOME/data/fin.rules.ts)
+    #[arg(long)]
+    source: Option<String>,
+    /// Target TOML rules file path (default: $FIN_HOME/data/fin.rules.toml)
+    #[arg(long)]
+    target: Option<String>,
+}
+
 fn execute(
     command: Option<Command>,
     options: &GlobalOptions,
@@ -71,14 +106,43 @@ fn execute(
             ConfigCommand::Show => commands::config::run_show(),
             ConfigCommand::Validate => commands::config::run_validate(),
         },
+        Some(Command::Rules(rules)) => match rules.command {
+            RulesCommand::Show(args) => commands::rules::run_show(args.path.as_deref()),
+            RulesCommand::Validate(args) => commands::rules::run_validate(args.path.as_deref()),
+            RulesCommand::MigrateTs(args) => {
+                commands::rules::run_migrate_ts(args.source.as_deref(), args.target.as_deref())
+            }
+        },
     }
 }
 
-fn should_delegate_to_legacy(raw_args: &[String]) -> bool {
+fn first_command_token(raw_args: &[String]) -> Option<&str> {
     if raw_args.len() <= 1 {
-        return false;
+        return None;
     }
-    !matches!(raw_args[1].as_str(), "version" | "--version" | "-V")
+
+    let mut idx = 1usize;
+    while idx < raw_args.len() {
+        let token = raw_args[idx].as_str();
+        if token == "--db" || token == "--format" {
+            idx += 2;
+            continue;
+        }
+        if token.starts_with('-') {
+            idx += 1;
+            continue;
+        }
+        return Some(token);
+    }
+
+    None
+}
+
+fn should_delegate_to_legacy(raw_args: &[String]) -> bool {
+    let Some(command) = first_command_token(raw_args) else {
+        return false;
+    };
+    !matches!(command, "version" | "rules")
 }
 
 fn delegate_to_legacy(args: &[String]) -> i32 {

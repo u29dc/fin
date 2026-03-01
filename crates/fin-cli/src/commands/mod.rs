@@ -1,5 +1,6 @@
 pub mod config;
 pub mod health;
+pub mod rules;
 pub mod tools;
 pub mod version;
 
