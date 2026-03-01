@@ -1,3 +1,3 @@
 export default {
-	'*': () => ['bun run quality'],
+	'*': () => ['bun run util:check'],
 };
