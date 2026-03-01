@@ -19,6 +19,7 @@
   - focus switching works on `tab`/`shift+tab`
   - route jumps work on `1..6`
   - command palette opens with `cmd+p` / `ctrl+p`
+  - `fin --json start` fails fast with a JSON error envelope (interactive-only command)
 
 ## Current Runtime Model
 

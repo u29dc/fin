@@ -31,6 +31,8 @@ Launch terminal UI when interactive exploration is useful:
 
     :fin start
 
+Do not use `--json` with `start`; it is interactive-only.
+
 ## Orientation
 
 1. Run base checks:

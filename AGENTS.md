@@ -6,7 +6,7 @@
   - `:fin tools --json`
   - `:fin health --json`
   - `:fin config show --json`
-- JSON contract: in `--json` mode, print exactly one envelope JSON object to stdout; logs/errors go to stderr.
+- JSON contract: in `--json` mode, print exactly one envelope JSON object to stdout; logs/errors go to stderr. `fin start` is interactive-only and returns an error when combined with `--json`.
 - Agent skill entry: `.claude/skills/fin/SKILL.md` (mirrored via `.agents/skills/fin`).
 - Primary references:
   - Rust: `https://doc.rust-lang.org/book/`
@@ -87,7 +87,7 @@
   - `fin view accounts|transactions|ledger|balance|void`
   - `fin edit transaction <id>`
   - `fin report cashflow|health|runway|reserves|categories|audit|summary`
-  - `fin start` (launch Ratatui terminal UI)
+  - `fin start` (launch Ratatui terminal UI, interactive-only)
 
 - TUI key contract:
   - `left`/`right` switch routes
