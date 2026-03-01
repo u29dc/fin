@@ -25,7 +25,7 @@ Build the binary if needed:
 Use `:fin` in agent workflows. If `:fin` is unavailable in the shell context,
 run commands with:
 
-    bun run run -- <command>
+    cargo run -p fin-cli -- <command>
 
 Launch terminal UI when interactive exploration is useful:
 
@@ -64,14 +64,16 @@ Treat this as the runtime source of truth.
 
 1. `:fin report runway --group=personal --json`
 2. `:fin report reserves --group=business --json`
-3. `:fin report health --json`
+3. `:fin report health --group=personal --json`
 
 ### Explore in TUI
 
 1. `:fin start`
-2. Use `tab`/`shift+tab` or `left`/`right` to change routes
-3. Use `cmd+p` or `ctrl+p` to open command palette
-4. Use `r` to refresh and `q` to quit
+2. Use `left`/`right` to change routes
+3. Use `tab`/`shift+tab` to switch navigation vs main focus
+4. Use `cmd+p` or `ctrl+p` to open command palette
+5. On Transactions, use `cmd+f` or `ctrl+f` to filter rows
+6. Use `r` to refresh and `q` to quit
 
 ### Import new data
 

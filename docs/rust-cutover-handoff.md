@@ -15,7 +15,9 @@
 - Rust quality gates pass through commit hooks (`bun run util:check`).
 - TUI smoke:
   - `cargo run -p fin-tui` launches and exits cleanly with `q`
-  - route switching works on `tab`/`shift+tab` and `left`/`right`
+  - route switching works on `left`/`right`
+  - focus switching works on `tab`/`shift+tab`
+  - route jumps work on `1..6`
   - command palette opens with `cmd+p` / `ctrl+p`
 
 ## Current Runtime Model

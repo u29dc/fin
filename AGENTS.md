@@ -90,8 +90,10 @@
   - `fin start` (launch Ratatui terminal UI)
 
 - TUI key contract:
-  - `tab`/`shift+tab` and `left`/`right` switch routes
-  - `1/2/3` jump to overview/transactions/reports
+  - `left`/`right` switch routes
+  - `tab`/`shift+tab` switch focus between navigation and main pane
+  - `1/2/3/4/5/6` jump to summary/transactions/cashflow/overview/categories/reports
+  - `cmd+f` or `ctrl+f` starts transactions filter mode on Transactions route
   - `cmd+p` or `ctrl+p` opens command palette
   - `r` refreshes current route
   - `q` exits TUI
