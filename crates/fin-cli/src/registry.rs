@@ -109,7 +109,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "tui.start",
             "fin start",
             "tui",
-            "Launch fin terminal UI",
+            "Launch fin terminal UI (interactive only; not supported with --json)",
             true,
             "fin start",
             vec![],

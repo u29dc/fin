@@ -331,7 +331,7 @@ fn execute(
 ) -> Result<CommandResult, CommandFailure> {
     match command {
         Some(Command::Version) | None => Ok(commands::version::run()),
-        Some(Command::Start) => commands::start::run(),
+        Some(Command::Start) => commands::start::run(options.json),
         Some(Command::Tools(args)) => commands::tools::run(args.name.as_deref()),
         Some(Command::Health) => commands::health::run(options),
         Some(Command::Config(config)) => match config.command {
@@ -450,6 +450,7 @@ fn main() {
     let cli = Cli::parse();
     let options = GlobalOptions {
         db: cli.db.clone(),
+        json: cli.json,
         format: cli.format.clone(),
     };
     let start = Instant::now();

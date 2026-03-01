@@ -20,6 +20,7 @@ use crate::error::{CliError, ErrorCode, ExitCode};
 #[derive(Debug, Clone, Default)]
 pub struct GlobalOptions {
     pub db: Option<String>,
+    pub json: bool,
     #[allow(dead_code)]
     pub format: Option<String>,
 }
