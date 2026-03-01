@@ -2,10 +2,15 @@ use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Tabs},
+    widgets::{Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Tabs, Wrap},
 };
 
-use crate::{app::App, palette::PaletteRow, routes::Route};
+use crate::{
+    app::App,
+    fetch::{RoutePayload, TransactionsPayload},
+    palette::PaletteRow,
+    routes::Route,
+};
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
     let root = Block::default().style(app.theme.root);
@@ -34,7 +39,7 @@ fn render_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .constraints([
             Constraint::Length(24),
             Constraint::Min(10),
-            Constraint::Length(28),
+            Constraint::Length(36),
         ])
         .split(area);
 
@@ -49,7 +54,7 @@ fn render_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
     frame.render_widget(center, chunks[1]);
 
     let right = Paragraph::new(Line::from(Span::styled(
-        "cmd+p | ctrl+p palette",
+        "cmd+p | ctrl+p command palette",
         app.theme.header_meta,
     )))
     .alignment(Alignment::Right);
@@ -59,8 +64,26 @@ fn render_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
 fn render_body(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let sections = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(1)])
+        .constraints([Constraint::Length(3), Constraint::Min(1)])
         .split(area);
+
+    render_navigation(frame, app, sections[0]);
+    render_main(frame, app, sections[1]);
+}
+
+fn render_navigation(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let border_style = if app.is_navigation_focused() {
+        app.theme.brand
+    } else {
+        app.theme.border
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(Span::styled(" Navigation ", app.theme.header_meta))
+        .border_style(border_style);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
 
     let titles = Route::ALL
         .iter()
@@ -76,50 +99,181 @@ fn render_body(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .style(app.theme.tabs)
         .highlight_style(app.theme.tabs_active)
         .divider(" | ");
-    frame.render_widget(tabs, sections[0]);
+    frame.render_widget(tabs, inner);
+}
 
+fn render_main(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let border_style = if app.is_navigation_focused() {
+        app.theme.border
+    } else {
+        app.theme.brand
+    };
     let title = if app.is_pending_refresh() {
         format!(" {} [loading] ", app.route.label())
     } else {
         format!(" {} ", app.route.label())
     };
-    let body = Paragraph::new(app.body_text()).style(app.theme.body).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(Span::styled(title, app.theme.header_meta))
-            .border_style(app.theme.border),
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(Span::styled(title, app.theme.header_meta))
+        .border_style(border_style);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let Some(payload) = app.route_payload() else {
+        let placeholder = if app.is_pending_refresh() {
+            "Loading route data..."
+        } else {
+            "No data loaded for this route."
+        };
+        frame.render_widget(
+            Paragraph::new(placeholder).style(app.theme.footer_meta),
+            inner,
+        );
+        return;
+    };
+
+    match payload {
+        RoutePayload::Text(text) => {
+            frame.render_widget(
+                Paragraph::new(text.clone())
+                    .style(app.theme.body)
+                    .wrap(Wrap { trim: false }),
+                inner,
+            );
+        }
+        RoutePayload::Transactions(payload) => {
+            render_transactions_table(frame, inner, app.selected_row(), payload, app);
+        }
+    }
+}
+
+fn render_transactions_table(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    selected_row: usize,
+    payload: &TransactionsPayload,
+    app: &App,
+) {
+    if payload.rows.is_empty() {
+        frame.render_widget(
+            Paragraph::new("No rows.").style(app.theme.footer_meta),
+            area,
+        );
+        return;
+    }
+
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(1)])
+        .split(area);
+
+    let visible_rows = sections[1].height.saturating_sub(2) as usize;
+    let selected = selected_row.min(payload.rows.len().saturating_sub(1));
+    let offset = if visible_rows == 0 {
+        0
+    } else if selected >= visible_rows {
+        selected + 1 - visible_rows
+    } else {
+        0
+    };
+    let end = if visible_rows == 0 {
+        payload.rows.len()
+    } else {
+        (offset + visible_rows).min(payload.rows.len())
+    };
+
+    let summary = format!(
+        "rows={} has_more={} preview_limit={} range {}-{}",
+        payload.rows.len(),
+        payload.has_more,
+        payload.limit,
+        offset + 1,
+        end
     );
-    frame.render_widget(body, sections[1]);
+    frame.render_widget(
+        Paragraph::new(Span::styled(summary, app.theme.footer_meta)),
+        sections[0],
+    );
+
+    let header = Row::new(vec![
+        Cell::from("date").style(app.theme.section_heading),
+        Cell::from("from").style(app.theme.section_heading),
+        Cell::from("to").style(app.theme.section_heading),
+        Cell::from("amount").style(app.theme.section_heading),
+        Cell::from("description").style(app.theme.section_heading),
+        Cell::from("counterparty").style(app.theme.section_heading),
+    ]);
+
+    let widths = [
+        Constraint::Length(20),
+        Constraint::Percentage(20),
+        Constraint::Percentage(20),
+        Constraint::Length(12),
+        Constraint::Percentage(24),
+        Constraint::Percentage(16),
+    ];
+
+    let rows = payload.rows[offset..end]
+        .iter()
+        .enumerate()
+        .map(|(local, row)| {
+            let row_index = offset + local;
+            let mut rendered = Row::new(vec![
+                Cell::from(truncate_text(&row.posted_at, 19)),
+                Cell::from(truncate_text(&row.from_account, 30)),
+                Cell::from(truncate_text(&row.to_account, 30)),
+                Cell::from(row.amount_minor.to_string()),
+                Cell::from(truncate_text(&row.description, 38)),
+                Cell::from(truncate_text(&row.counterparty, 24)),
+            ]);
+            if row_index == selected {
+                rendered = rendered.style(app.theme.selected);
+            }
+            rendered
+        });
+
+    let table = Table::new(rows, widths).header(header).column_spacing(1);
+    frame.render_widget(table, sections[1]);
 }
 
 fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Min(10), Constraint::Length(60)])
+        .constraints([Constraint::Min(10), Constraint::Length(76)])
         .split(area);
 
     let hints = Paragraph::new(Line::from(vec![
-        Span::styled("tab ", app.theme.footer_key),
-        Span::styled("switch ", app.theme.footer_meta),
-        Span::styled("1/2/3 ", app.theme.footer_key),
-        Span::styled("routes ", app.theme.footer_meta),
-        Span::styled("cmd/ctrl+p ", app.theme.footer_key),
+        Span::styled("tab ", app.theme.section_heading),
+        Span::styled("focus ", app.theme.footer_meta),
+        Span::styled("left/right ", app.theme.section_heading),
+        Span::styled("tabs ", app.theme.footer_meta),
+        Span::styled("up/down ", app.theme.section_heading),
+        Span::styled("rows ", app.theme.footer_meta),
+        Span::styled("pgup/pgdn ", app.theme.section_heading),
+        Span::styled("jump ", app.theme.footer_meta),
+        Span::styled("cmd/ctrl+p ", app.theme.section_heading),
         Span::styled("palette ", app.theme.footer_meta),
-        Span::styled("r ", app.theme.footer_key),
+        Span::styled("r ", app.theme.section_heading),
         Span::styled("refresh ", app.theme.footer_meta),
-        Span::styled("q ", app.theme.footer_key),
+        Span::styled("q ", app.theme.section_heading),
         Span::styled("quit", app.theme.footer_meta),
     ]));
     frame.render_widget(hints, chunks[0]);
 
     let (route_index, route_total) = app.route_position();
+    let focus = if app.is_navigation_focused() {
+        "nav"
+    } else {
+        "main"
+    };
     let fetch_state = if app.is_pending_refresh() {
         "busy"
     } else {
         "idle"
     };
     let status = format!(
-        "fetch:{fetch_state} | route:{route_index}/{route_total} | {}",
+        "focus:{focus} | fetch:{fetch_state} | route:{route_index}/{route_total} | {}",
         app.status
     );
     let right = Paragraph::new(Line::from(Span::styled(status, app.theme.footer_status)))
@@ -134,7 +288,7 @@ fn render_palette(frame: &mut Frame<'_>, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(app.theme.brand)
-        .title(Span::styled(" Command Palette ", app.theme.footer_key));
+        .title(Span::styled(" Command Palette ", app.theme.section_heading));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -144,7 +298,7 @@ fn render_palette(frame: &mut Frame<'_>, app: &App) {
         .split(inner);
 
     let input = Paragraph::new(Line::from(vec![
-        Span::styled("> ", app.theme.footer_key),
+        Span::styled("> ", app.theme.section_heading),
         Span::styled(app.palette.query.clone(), app.theme.body),
     ]));
     frame.render_widget(input, sections[0]);
@@ -177,7 +331,7 @@ fn render_palette(frame: &mut Frame<'_>, app: &App) {
             PaletteRow::Section(section) => {
                 let line = Line::from(Span::styled(
                     format!("{}:", section.label()),
-                    app.theme.footer_key,
+                    app.theme.section_heading,
                 ));
                 items.push(ListItem::new(line));
             }
@@ -192,12 +346,12 @@ fn render_palette(frame: &mut Frame<'_>, app: &App) {
                 };
 
                 let style = if Some(*index) == selected_source {
-                    app.theme.tabs_active
+                    app.theme.selected
                 } else {
                     app.theme.body
                 };
                 let context_style = if Some(*index) == selected_source {
-                    app.theme.tabs_active
+                    app.theme.selected
                 } else {
                     app.theme.footer_meta
                 };

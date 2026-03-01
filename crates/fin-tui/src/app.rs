@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     cache::RouteCache,
-    fetch::FetchClient,
+    fetch::{FetchClient, RoutePayload},
     palette::{
         PaletteAction, PaletteActionKind, PaletteRow, PaletteSection, PaletteState, build_rows,
         filtered_action_indices,
@@ -11,6 +13,12 @@ use crate::{
     theme::{HEADER_CONTRACT, HeaderContract, Theme},
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusTarget {
+    Navigation,
+    Main,
+}
+
 #[derive(Debug)]
 pub struct App {
     pub route: Route,
@@ -18,12 +26,15 @@ pub struct App {
     pub status: String,
     pub theme: Theme,
     pub header: HeaderContract,
+    pub focus: FocusTarget,
+    pub nav_cursor: usize,
     pub palette: PaletteState,
     pub palette_actions: Vec<PaletteAction>,
     pub palette_filtered: Vec<usize>,
     pending_refresh: bool,
     fetch_client: FetchClient,
     cache: RouteCache,
+    selected_rows: BTreeMap<Route, usize>,
 }
 
 impl App {
@@ -34,12 +45,15 @@ impl App {
             status: "Initializing".to_owned(),
             theme: Theme::default(),
             header: HEADER_CONTRACT,
+            focus: FocusTarget::Navigation,
+            nav_cursor: 0,
             palette: PaletteState::default(),
             palette_actions: Vec::new(),
             palette_filtered: Vec::new(),
             pending_refresh: false,
             fetch_client: FetchClient::new(),
             cache: RouteCache::new(),
+            selected_rows: BTreeMap::new(),
         };
         app.request_refresh("startup");
         app
@@ -55,14 +69,47 @@ impl App {
         }
 
         match key_event.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
-            KeyCode::Char('1') => self.set_route(Route::Overview),
-            KeyCode::Char('2') => self.set_route(Route::Transactions),
-            KeyCode::Char('3') => self.set_route(Route::Reports),
-            KeyCode::Tab | KeyCode::Right => self.next_route(),
-            KeyCode::BackTab | KeyCode::Left => self.prev_route(),
-            KeyCode::Char('r') => self.request_refresh("manual refresh"),
+            KeyCode::Char('q') => {
+                self.should_quit = true;
+                return;
+            }
+            KeyCode::Char('1') => {
+                self.set_route(Route::Overview);
+                return;
+            }
+            KeyCode::Char('2') => {
+                self.set_route(Route::Transactions);
+                return;
+            }
+            KeyCode::Char('3') => {
+                self.set_route(Route::Reports);
+                return;
+            }
+            KeyCode::Left => {
+                self.prev_route();
+                return;
+            }
+            KeyCode::Right => {
+                self.next_route();
+                return;
+            }
+            KeyCode::Tab | KeyCode::BackTab => {
+                self.focus = match self.focus {
+                    FocusTarget::Navigation => FocusTarget::Main,
+                    FocusTarget::Main => FocusTarget::Navigation,
+                };
+                return;
+            }
+            KeyCode::Char('r') => {
+                self.request_refresh("manual refresh");
+                return;
+            }
             _ => {}
+        }
+
+        match self.focus {
+            FocusTarget::Navigation => self.handle_navigation_key(key_event),
+            FocusTarget::Main => self.handle_main_key(key_event),
         }
     }
 
@@ -94,35 +141,52 @@ impl App {
         build_rows(&self.palette_actions, &self.palette_filtered)
     }
 
-    pub fn body_text(&self) -> &str {
-        self.cache
-            .get(self.route)
-            .or({
-                if self.pending_refresh {
-                    Some("Loading route data...")
-                } else {
-                    None
-                }
-            })
-            .unwrap_or("No data loaded for this route.")
+    pub fn route_payload(&self) -> Option<&RoutePayload> {
+        self.cache.get(self.route)
+    }
+
+    pub fn selected_row(&self) -> usize {
+        self.selected_rows.get(&self.route).copied().unwrap_or(0)
+    }
+
+    pub fn is_navigation_focused(&self) -> bool {
+        self.focus == FocusTarget::Navigation
+    }
+
+    pub fn set_selected_row(&mut self, row: usize) {
+        self.selected_rows.insert(self.route, row);
     }
 
     fn set_route(&mut self, route: Route) {
-        if self.route != route {
-            self.route = route;
+        if self.route == route {
+            return;
+        }
+        self.route = route;
+        self.nav_cursor = self.current_route_index();
+        self.clamp_selected_row();
+
+        if self.cache.get(route).is_some() {
+            self.status = format!("Loaded {}", route.label().to_ascii_lowercase());
+        } else {
             self.request_refresh("route changed");
         }
     }
 
     fn refresh(&mut self) {
         self.status = format!("Loading {}...", self.route.label().to_ascii_lowercase());
-        let payload = self.fetch_client.fetch_route(self.route);
-        if payload.starts_with("Route unavailable:") {
-            self.status = payload.clone();
-        } else {
-            self.status = format!("Loaded {}", self.route.label().to_ascii_lowercase());
+        match self.fetch_client.fetch_route(self.route) {
+            Ok(payload) => {
+                self.cache.store(self.route, payload);
+                self.clamp_selected_row();
+                self.status = format!("Loaded {}", self.route.label().to_ascii_lowercase());
+            }
+            Err(error) => {
+                let message = format!("Route unavailable: {error}");
+                self.cache
+                    .store(self.route, RoutePayload::Text(message.clone()));
+                self.status = message;
+            }
         }
-        self.cache.store(self.route, payload);
     }
 
     fn request_refresh(&mut self, reason: &str) {
@@ -151,6 +215,59 @@ impl App {
             .iter()
             .position(|candidate| *candidate == self.route)
             .unwrap_or(0)
+    }
+
+    fn current_row_count(&self) -> usize {
+        match self.cache.get(self.route) {
+            Some(RoutePayload::Transactions(payload)) => payload.rows.len(),
+            Some(RoutePayload::Text(_)) | None => 0,
+        }
+    }
+
+    fn clamp_selected_row(&mut self) {
+        let len = self.current_row_count();
+        let selected = self.selected_row();
+        if len == 0 {
+            self.selected_rows.insert(self.route, 0);
+        } else if selected >= len {
+            self.selected_rows.insert(self.route, len - 1);
+        }
+    }
+
+    fn handle_navigation_key(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Char('h') => self.prev_route(),
+            KeyCode::Char('l') => self.next_route(),
+            KeyCode::Enter => self.focus = FocusTarget::Main,
+            _ => {}
+        }
+    }
+
+    fn handle_main_key(&mut self, key_event: KeyEvent) {
+        let len = self.current_row_count();
+        if len == 0 {
+            return;
+        }
+
+        match key_event.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.set_selected_row(self.selected_row().saturating_sub(1));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let next = (self.selected_row() + 1).min(len - 1);
+                self.set_selected_row(next);
+            }
+            KeyCode::PageUp => {
+                self.set_selected_row(self.selected_row().saturating_sub(10));
+            }
+            KeyCode::PageDown => {
+                let next = (self.selected_row() + 10).min(len - 1);
+                self.set_selected_row(next);
+            }
+            KeyCode::Home => self.set_selected_row(0),
+            KeyCode::End => self.set_selected_row(len - 1),
+            _ => {}
+        }
     }
 
     fn open_palette(&mut self) {
@@ -318,25 +435,78 @@ fn is_palette_trigger(key_event: KeyEvent) -> bool {
 mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-    use super::App;
-    use crate::routes::Route;
+    use super::{App, FocusTarget};
+    use crate::{
+        fetch::{RoutePayload, TransactionTableRow, TransactionsPayload},
+        routes::Route,
+    };
+
+    fn seed_transactions(app: &mut App, count: usize) {
+        let rows = (0..count)
+            .map(|index| TransactionTableRow {
+                posted_at: format!("2026-03-{:02}T10:00:00", (index % 28) + 1),
+                from_account: "Assets:Personal:Monzo".to_owned(),
+                to_account: "Expenses:Food:Groceries".to_owned(),
+                amount_minor: index as i64,
+                description: format!("Test {index}"),
+                counterparty: "Demo".to_owned(),
+            })
+            .collect::<Vec<_>>();
+        app.cache.store(
+            Route::Transactions,
+            RoutePayload::Transactions(TransactionsPayload {
+                rows,
+                limit: 1000,
+                has_more: false,
+            }),
+        );
+    }
 
     #[test]
-    fn tab_and_backtab_cycle_routes() {
+    fn left_and_right_cycle_routes() {
         let mut app = App::new();
         assert_eq!(app.route, Route::Overview);
 
-        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
         assert_eq!(app.route, Route::Transactions);
 
-        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
         assert_eq!(app.route, Route::Reports);
 
-        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-        assert_eq!(app.route, Route::Overview);
+        app.on_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        assert_eq!(app.route, Route::Transactions);
+    }
 
-        app.on_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
-        assert_eq!(app.route, Route::Reports);
+    #[test]
+    fn tab_toggles_focus() {
+        let mut app = App::new();
+        assert_eq!(app.focus, FocusTarget::Navigation);
+
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.focus, FocusTarget::Main);
+
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.focus, FocusTarget::Navigation);
+    }
+
+    #[test]
+    fn main_focus_moves_transaction_selection() {
+        let mut app = App::new();
+        seed_transactions(&mut app, 5);
+        app.set_route(Route::Transactions);
+
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.focus, FocusTarget::Main);
+        assert_eq!(app.selected_row(), 0);
+
+        app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.selected_row(), 1);
+
+        app.on_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        assert_eq!(app.selected_row(), 4);
+
+        app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.selected_row(), 4);
     }
 
     #[test]

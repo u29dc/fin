@@ -1,4 +1,4 @@
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 
 use crate::palette::{ACCENT, BORDER, FG, MUTED, SELECTED_FG};
 
@@ -27,10 +27,11 @@ pub struct Theme {
     pub border: Style,
     pub brand: Style,
     pub header_meta: Style,
+    pub section_heading: Style,
     pub tabs: Style,
     pub tabs_active: Style,
+    pub selected: Style,
     pub body: Style,
-    pub footer_key: Style,
     pub footer_meta: Style,
     pub footer_status: Style,
 }
@@ -42,13 +43,17 @@ impl Default for Theme {
             border: Style::default().fg(BORDER),
             brand: Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
             header_meta: Style::default().fg(MUTED),
+            section_heading: Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
             tabs: Style::default().fg(FG),
             tabs_active: Style::default()
                 .fg(SELECTED_FG)
                 .bg(ACCENT)
                 .add_modifier(Modifier::BOLD),
+            selected: Style::default()
+                .fg(Color::Rgb(255, 255, 255))
+                .bg(ACCENT)
+                .add_modifier(Modifier::BOLD),
             body: Style::default().fg(FG),
-            footer_key: Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
             footer_meta: Style::default().fg(MUTED),
             footer_status: Style::default().fg(MUTED),
         }

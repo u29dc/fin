@@ -5,6 +5,31 @@ use rusqlite::Connection;
 
 use crate::routes::Route;
 
+pub const TUI_TRANSACTIONS_PREVIEW_LIMIT: usize = 1000;
+
+#[derive(Debug, Clone)]
+pub struct TransactionTableRow {
+    pub posted_at: String,
+    pub from_account: String,
+    pub to_account: String,
+    pub amount_minor: i64,
+    pub description: String,
+    pub counterparty: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionsPayload {
+    pub rows: Vec<TransactionTableRow>,
+    pub limit: usize,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum RoutePayload {
+    Text(String),
+    Transactions(TransactionsPayload),
+}
+
 #[derive(Debug)]
 struct RuntimeContext {
     connection: Connection,
@@ -37,12 +62,10 @@ impl FetchClient {
         Self { runtime: None }
     }
 
-    pub fn fetch_route(&mut self, route: Route) -> String {
-        if let Err(error) = self.ensure_runtime() {
-            return format!("Route unavailable: {error}");
-        }
+    pub fn fetch_route(&mut self, route: Route) -> Result<RoutePayload, String> {
+        self.ensure_runtime()?;
         let Some(runtime) = self.runtime.as_ref() else {
-            return "Route unavailable: runtime not initialized".to_owned();
+            return Err("runtime not initialized".to_owned());
         };
 
         match route {
@@ -50,7 +73,6 @@ impl FetchClient {
             Route::Transactions => fetch_transactions(runtime),
             Route::Reports => fetch_reports(runtime),
         }
-        .unwrap_or_else(|error| format!("Route unavailable: {error}"))
     }
 
     fn ensure_runtime(&mut self) -> Result<(), String> {
@@ -61,7 +83,7 @@ impl FetchClient {
     }
 }
 
-fn fetch_overview(runtime: &RuntimeContext) -> Result<String, String> {
+fn fetch_overview(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
     let summary = report_summary(&runtime.connection, &runtime.loaded.config, 12)
         .map_err(|error| error.to_string())?;
 
@@ -94,11 +116,10 @@ fn fetch_overview(runtime: &RuntimeContext) -> Result<String, String> {
         ));
     }
 
-    Ok(lines.join("\n"))
+    Ok(RoutePayload::Text(lines.join("\n")))
 }
 
-fn fetch_transactions(runtime: &RuntimeContext) -> Result<String, String> {
-    const TUI_TRANSACTIONS_PREVIEW_LIMIT: usize = 1000;
+fn fetch_transactions(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
     let rows = view_transactions(
         &runtime.connection,
         &TransactionQueryOptions {
@@ -108,30 +129,41 @@ fn fetch_transactions(runtime: &RuntimeContext) -> Result<String, String> {
     )
     .map_err(|error| error.to_string())?;
 
-    if rows.is_empty() {
-        return Ok("Transactions\nNo rows.".to_owned());
-    }
+    let has_more = rows.len() == TUI_TRANSACTIONS_PREVIEW_LIMIT;
+    let mapped = rows
+        .into_iter()
+        .map(|row| {
+            let primary = summarize_accounts(&row.chart_account_id);
+            let pair = summarize_accounts(&row.pair_account_id);
+            let (from_account, to_account) = if row.amount_minor < 0 {
+                (primary, pair)
+            } else {
+                (pair, primary)
+            };
 
-    let mut lines = vec![format!("Transactions (latest {})", rows.len())];
-    for row in &rows {
-        lines.push(format!(
-            "{} | {:<30} | {:>10} | {}",
-            row.posted_at,
-            truncate_account(&row.chart_account_id),
-            row.amount_minor,
-            truncate_text(&row.clean_description, 36)
-        ));
-    }
-    if rows.len() == TUI_TRANSACTIONS_PREVIEW_LIMIT {
-        lines.push(
-            "... preview limit reached (use `:fin view transactions --limit N` for larger slices)"
-                .to_owned(),
-        );
-    }
-    Ok(lines.join("\n"))
+            TransactionTableRow {
+                posted_at: row.posted_at,
+                from_account,
+                to_account,
+                amount_minor: row.amount_minor,
+                description: if row.clean_description.trim().is_empty() {
+                    row.raw_description
+                } else {
+                    row.clean_description
+                },
+                counterparty: row.counterparty.unwrap_or_default(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok(RoutePayload::Transactions(TransactionsPayload {
+        rows: mapped,
+        limit: TUI_TRANSACTIONS_PREVIEW_LIMIT,
+        has_more,
+    }))
 }
 
-fn fetch_reports(runtime: &RuntimeContext) -> Result<String, String> {
+fn fetch_reports(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
     let selected_group = runtime
         .loaded
         .config
@@ -152,7 +184,9 @@ fn fetch_reports(runtime: &RuntimeContext) -> Result<String, String> {
     .map_err(|error| error.to_string())?;
 
     if series.is_empty() {
-        return Ok(format!("Cashflow ({selected_group})\nNo series points."));
+        return Ok(RoutePayload::Text(format!(
+            "Cashflow ({selected_group})\nNo series points."
+        )));
     }
 
     let mut lines = vec![
@@ -171,21 +205,20 @@ fn fetch_reports(runtime: &RuntimeContext) -> Result<String, String> {
             point.month, point.income_minor, point.expense_minor, point.net_minor, savings
         ));
     }
-    Ok(lines.join("\n"))
+    Ok(RoutePayload::Text(lines.join("\n")))
 }
 
-fn truncate_account(value: &str) -> String {
-    truncate_text(value, 30)
-}
-
-fn truncate_text(value: &str, max: usize) -> String {
-    if value.chars().count() <= max {
-        return value.to_owned();
+fn summarize_accounts(accounts: &str) -> String {
+    let parts = accounts
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.is_empty() {
+        return "n/a".to_owned();
     }
-    if max <= 3 {
-        return value.chars().take(max).collect();
+    if parts.len() == 1 {
+        return parts[0].to_owned();
     }
-    let mut out = value.chars().take(max - 3).collect::<String>();
-    out.push_str("...");
-    out
+    format!("{} (+{})", parts[0], parts.len() - 1)
 }
