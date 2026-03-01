@@ -14,6 +14,7 @@
 		"init---------------------------------": "",
 		"prepare": "husky",
 		"build:cli": "bun build --compile packages/cli/src/index.ts --outfile \"${FIN_HOME:-${TOOLS_HOME:-$HOME/.tools}/fin}/fin\" && rm -f .*.bun-build",
+		"build:cli:rust": "./scripts/rust/install_fin.sh",
 		"build:cli:linux": "bun build --compile --target=bun-linux-x64 packages/cli/src/index.ts --outfile bin/fin_linux64 && rm -f .*.bun-build",
 		"dev----------------------------------": "",
 		"dev": "bun run --filter @fin/web dev",
@@ -41,6 +42,7 @@
 		"util:rust:check": "cargo check --workspace",
 		"util:rust:test": "cargo test --workspace",
 		"util:rust:build:release": "cargo build --workspace --release",
+		"util:verify:cli-path": "./scripts/rust/verify_fin_path.sh",
 		"util:clean": "rm -rf .svelte-kit dist build packages/**/.svelte-kit packages/**/dist packages/**/build packages/**/node_modules/.vite",
 		"util:check": "STATUS=0; bun run util:format || STATUS=1; bun run util:lint || STATUS=1; bun run util:types || STATUS=1; bun run util:types:svelte || STATUS=1; bun run util:types:zvelte || STATUS=1; bun test || STATUS=1; bun run util:rust:fmt:check || STATUS=1; bun run util:rust:lint || STATUS=1; bun run util:rust:check || STATUS=1; bun run util:rust:test || STATUS=1; exit $STATUS"
 	},
