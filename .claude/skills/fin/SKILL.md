@@ -6,70 +6,82 @@ description: >-
     runway and reserves, investigate transactions, and produce comprehensive
     financial reports across personal, business, and joint accounts.
 compatibility: >-
-    Designed for Claude Code with Bash access. Requires fin config at
-    $FIN_HOME/data/fin.config.toml and database at $FIN_HOME/data/fin.db.
+    Designed for Claude Code with Bash access. Requires runtime files at
+    $FIN_HOME/data/fin.config.toml, $FIN_HOME/data/fin.rules.toml, and
+    $FIN_HOME/data/fin.db.
 allowed-tools: Bash Read Write WebSearch
 ---
 
 ## Invocation
 
-`:fin` is a shell alias for the compiled binary. Use it directly in bash:
+`:fin` is the shell alias for the compiled binary:
 
     :fin <command>
 
-NEVER use `bun run fin` in agent workflows -- that is the dev entrypoint.
+Build the binary if needed:
 
-If `:fin` is not found, build it first: `bun run build:cli` (in the repo root).
+    bun run build:cli
+
+Use `:fin` in agent workflows. Do not rely on `bun run fin` unless explicitly
+working on legacy parity internals.
 
 ## Orientation
 
-> If `:fin` is not found, run `bun run build:cli`.
-
-1. Run the base checks:
+1. Run base checks:
 
 - `:fin tools --json`
 - `:fin health --json`
 - `:fin config show --json`
 
-If health is blocked, follow the fix guidance in each check's `fix` field.
+2. If health is blocked, follow each check's `fix` guidance.
 
-## Self-describing CLI
+## Self-Describing CLI
 
-Run `:fin tools --json` whenever you're uncertain about parameters
-or command signatures. Treat it as the source of truth.
+Run `:fin tools --json` when uncertain about command signatures or parameters.
+Treat this as the runtime source of truth.
 
-## Common workflows
+## Common Workflows
 
 ### Quick financial snapshot
 
-1. `:fin report summary --json` -- comprehensive overview
-2. Analyze the data and present key metrics to the user
+1. `:fin report summary --json`
+2. `:fin report runway --group=personal --json`
+3. `:fin report cashflow --group=personal --months=6 --json`
 
 ### Investigate spending
 
 1. `:fin report categories --group=personal --mode=median --json`
-2. `:fin report audit --account=<category> --json` for drill-down
-3. `:fin view transactions --group=personal --from=<date> --json`
+2. `:fin report audit --account=<category-account-id> --json`
+3. `:fin view transactions --group=personal --from=<YYYY-MM-DD> --json`
 
 ### Check financial health
 
-1. `:fin report runway --group=personal --json` -- how long cash lasts
-2. `:fin report reserves --group=business --json` -- tax/expense reserves
-3. `:fin report cashflow --group=personal --months=6 --json`
+1. `:fin report runway --group=personal --json`
+2. `:fin report reserves --group=business --json`
+3. `:fin report health --json`
 
 ### Import new data
 
-1. User drops CSVs into `$FIN_HOME/imports/inbox/<folder>/`
+1. User drops files into `$FIN_HOME/imports/inbox/<folder>/`
 2. `:fin import --json`
-3. `:fin sanitize discover --unmapped --json` -- check for unmapped
-4. `:fin sanitize migrate --dry-run --json` -- preview rule application
-5. `:fin sanitize migrate --json` -- apply rules
+3. `:fin sanitize discover --unmapped --json`
+4. `:fin sanitize migrate --dry-run --json`
+5. `:fin sanitize migrate --json`
+6. `:fin sanitize recategorize --dry-run --json`
+7. `:fin sanitize recategorize --json`
 
-## Expected output
+## Rules and Privacy
 
-When the user asks you to analyze their finances, return:
+- Primary rules file: `$FIN_HOME/data/fin.rules.toml`.
+- Legacy migration source: `$FIN_HOME/data/fin.rules.ts`.
+- Keep personal rule sets in home-folder runtime only.
+- Repository should contain only sanitized examples (for example `fin.rules.example.toml`).
+
+## Expected Output
+
+When returning financial analysis, include:
 
 - Key metrics (runway, net worth, monthly burn, savings rate)
-- Trends (MoM changes, seasonal patterns)
-- Actionable insights (spending anomalies, categorization gaps)
-- Clear data source references (which accounts, what time period)
+- Trends (month-over-month and period comparisons)
+- Actionable insights (anomalies, concentration, reserve gaps)
+- Explicit scope (group, accounts, date range, command outputs used)
