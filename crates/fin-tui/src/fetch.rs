@@ -98,10 +98,11 @@ fn fetch_overview(runtime: &RuntimeContext) -> Result<String, String> {
 }
 
 fn fetch_transactions(runtime: &RuntimeContext) -> Result<String, String> {
+    const TUI_TRANSACTIONS_PREVIEW_LIMIT: usize = 1000;
     let rows = view_transactions(
         &runtime.connection,
         &TransactionQueryOptions {
-            limit: 20,
+            limit: TUI_TRANSACTIONS_PREVIEW_LIMIT,
             ..TransactionQueryOptions::default()
         },
     )
@@ -111,8 +112,8 @@ fn fetch_transactions(runtime: &RuntimeContext) -> Result<String, String> {
         return Ok("Transactions\nNo rows.".to_owned());
     }
 
-    let mut lines = vec![format!("Transactions ({})", rows.len())];
-    for row in rows.iter().take(15) {
+    let mut lines = vec![format!("Transactions (latest {})", rows.len())];
+    for row in &rows {
         lines.push(format!(
             "{} | {:<30} | {:>10} | {}",
             row.posted_at,
@@ -120,6 +121,12 @@ fn fetch_transactions(runtime: &RuntimeContext) -> Result<String, String> {
             row.amount_minor,
             truncate_text(&row.clean_description, 36)
         ));
+    }
+    if rows.len() == TUI_TRANSACTIONS_PREVIEW_LIMIT {
+        lines.push(
+            "... preview limit reached (use `:fin view transactions --limit N` for larger slices)"
+                .to_owned(),
+        );
     }
     Ok(lines.join("\n"))
 }
