@@ -3,6 +3,8 @@ mod envelope;
 mod error;
 mod registry;
 
+use std::io::{self, Write};
+use std::process::Command as ProcessCommand;
 use std::time::Instant;
 
 use clap::{Args, Parser, Subcommand};
@@ -10,6 +12,7 @@ use fin_sdk::SDK_VERSION;
 
 use crate::commands::{CommandFailure, CommandResult, GlobalOptions};
 use crate::envelope::{emit_error, emit_success, print_text_error};
+use crate::error::ExitCode;
 
 #[derive(Parser, Debug)]
 #[command(name = "fin", version = SDK_VERSION, about = "fin rust cli")]
@@ -71,7 +74,48 @@ fn execute(
     }
 }
 
+fn should_delegate_to_legacy(raw_args: &[String]) -> bool {
+    if raw_args.len() <= 1 {
+        return false;
+    }
+    !matches!(raw_args[1].as_str(), "version" | "--version" | "-V")
+}
+
+fn delegate_to_legacy(args: &[String]) -> i32 {
+    let output = ProcessCommand::new("bun")
+        .arg("run")
+        .arg("packages/cli/src/index.ts")
+        .args(args)
+        .output();
+
+    match output {
+        Ok(output) => {
+            if let Err(error) = io::stdout().write_all(&output.stdout) {
+                eprintln!("failed to write delegated stdout: {error}");
+                return ExitCode::Runtime.as_i32();
+            }
+            if let Err(error) = io::stderr().write_all(&output.stderr) {
+                eprintln!("failed to write delegated stderr: {error}");
+                return ExitCode::Runtime.as_i32();
+            }
+            output
+                .status
+                .code()
+                .unwrap_or_else(|| ExitCode::Runtime.as_i32())
+        }
+        Err(error) => {
+            eprintln!("failed to execute delegated legacy CLI via bun: {error}");
+            ExitCode::Runtime.as_i32()
+        }
+    }
+}
+
 fn main() {
+    let raw_args: Vec<String> = std::env::args().collect();
+    if should_delegate_to_legacy(&raw_args) {
+        std::process::exit(delegate_to_legacy(&raw_args[1..]));
+    }
+
     let cli = Cli::parse();
     let options = GlobalOptions {
         db: cli.db.clone(),
