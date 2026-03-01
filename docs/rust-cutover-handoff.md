@@ -13,7 +13,10 @@
 ## Validation Evidence
 
 - Rust quality gates pass through commit hooks (`bun run util:check`).
-- TUI smoke: `cargo run -p fin-tui` launches and exits cleanly with `q`.
+- TUI smoke:
+  - `cargo run -p fin-tui` launches and exits cleanly with `q`
+  - route switching works on `tab`/`shift+tab` and `left`/`right`
+  - command palette opens with `cmd+p` / `ctrl+p`
 
 ## Current Runtime Model
 

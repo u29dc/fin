@@ -74,6 +74,7 @@
 - Install binary: `bun run build`.
 - Dev run CLI: `cargo run -p fin-cli -- <command>`.
 - Dev run TUI: `cargo run -p fin-tui --`.
+- Runtime TUI: `:fin start`.
 - Full quality gate: `bun run util:check`.
 
 - Runtime command groups:
@@ -86,6 +87,14 @@
   - `fin view accounts|transactions|ledger|balance|void`
   - `fin edit transaction <id>`
   - `fin report cashflow|health|runway|reserves|categories|audit|summary`
+  - `fin start` (launch Ratatui terminal UI)
+
+- TUI key contract:
+  - `tab`/`shift+tab` and `left`/`right` switch routes
+  - `1/2/3` jump to overview/transactions/reports
+  - `cmd+p` or `ctrl+p` opens command palette
+  - `r` refreshes current route
+  - `q` exits TUI
 
 - Common flags: `--json`, `--db`, `--format`.
 - Common filters: `--group`, `--from`, `--to`, `--months`, `--limit`, `--account`.
@@ -97,7 +106,7 @@
 - Boundaries:
   - `fin-sdk`: all financial domain behavior (ingestion, sanitize, queries/reports, mutations, config/db/rules/health).
   - `fin-cli`: clap command tree + envelope + exit code contracts + tool metadata.
-  - `fin-tui`: Ratatui app shell/routes/theme; fetches data through Rust CLI binary path.
+  - `fin-tui`: Ratatui app shell/routes/theme; fetches read models directly through Rust SDK services.
 
 - Path precedence:
   - FIN home: `FIN_HOME` -> `TOOLS_HOME/fin` -> `$HOME/.tools/fin`.
