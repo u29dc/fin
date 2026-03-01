@@ -1,8 +1,12 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     cache::RouteCache,
     fetch::FetchClient,
+    palette::{
+        PaletteAction, PaletteActionKind, PaletteRow, PaletteSection, PaletteState, build_rows,
+        filtered_action_indices,
+    },
     routes::Route,
     theme::{HEADER_CONTRACT, HeaderContract, Theme},
 };
@@ -14,6 +18,9 @@ pub struct App {
     pub status: String,
     pub theme: Theme,
     pub header: HeaderContract,
+    pub palette: PaletteState,
+    pub palette_actions: Vec<PaletteAction>,
+    pub palette_filtered: Vec<usize>,
     pending_refresh: bool,
     fetch_client: FetchClient,
     cache: RouteCache,
@@ -27,6 +34,9 @@ impl App {
             status: "Initializing".to_owned(),
             theme: Theme::default(),
             header: HEADER_CONTRACT,
+            palette: PaletteState::default(),
+            palette_actions: Vec::new(),
+            palette_filtered: Vec::new(),
             pending_refresh: false,
             fetch_client: FetchClient::new(),
             cache: RouteCache::new(),
@@ -36,6 +46,14 @@ impl App {
     }
 
     pub fn on_key(&mut self, key_event: KeyEvent) {
+        if self.handle_palette_key(key_event) {
+            return;
+        }
+        if is_palette_trigger(key_event) {
+            self.open_palette();
+            return;
+        }
+
         match key_event.code {
             KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
             KeyCode::Char('1') => self.set_route(Route::Overview),
@@ -70,6 +88,10 @@ impl App {
 
     pub fn is_pending_refresh(&self) -> bool {
         self.pending_refresh
+    }
+
+    pub fn palette_rows(&self) -> Vec<PaletteRow> {
+        build_rows(&self.palette_actions, &self.palette_filtered)
     }
 
     pub fn body_text(&self) -> &str {
@@ -129,5 +151,165 @@ impl App {
             .iter()
             .position(|candidate| *candidate == self.route)
             .unwrap_or(0)
+    }
+
+    fn open_palette(&mut self) {
+        self.palette.open = true;
+        self.palette.query.clear();
+        self.palette.selected = 0;
+        self.rebuild_palette_actions();
+    }
+
+    fn close_palette(&mut self) {
+        self.palette.open = false;
+        self.palette.query.clear();
+        self.palette.selected = 0;
+        self.palette_filtered.clear();
+        self.palette_actions.clear();
+    }
+
+    fn rebuild_palette_actions(&mut self) {
+        self.palette_actions = self.build_palette_actions();
+        self.palette_filtered = filtered_action_indices(&self.palette_actions, &self.palette.query);
+        self.clamp_palette_selection();
+    }
+
+    fn clamp_palette_selection(&mut self) {
+        if self.palette_filtered.is_empty() {
+            self.palette.selected = 0;
+            return;
+        }
+        if self.palette.selected >= self.palette_filtered.len() {
+            self.palette.selected = self.palette_filtered.len().saturating_sub(1);
+        }
+    }
+
+    fn build_palette_actions(&self) -> Vec<PaletteAction> {
+        let mut actions = vec![PaletteAction {
+            title: "Refresh current page".to_owned(),
+            context: self.route.label().to_ascii_lowercase(),
+            section: PaletteSection::Context,
+            kind: PaletteActionKind::Refresh,
+            keywords: vec!["refresh".to_owned(), "reload".to_owned()],
+        }];
+
+        for route in Route::ALL {
+            actions.push(PaletteAction {
+                title: format!("Go to {}", route.label()),
+                context: "finance".to_owned(),
+                section: PaletteSection::Navigate,
+                kind: PaletteActionKind::Navigate(route),
+                keywords: vec![
+                    "navigate".to_owned(),
+                    route.id().to_owned(),
+                    route.label().to_ascii_lowercase(),
+                ],
+            });
+        }
+
+        actions.push(PaletteAction {
+            title: "Refresh".to_owned(),
+            context: "global".to_owned(),
+            section: PaletteSection::Global,
+            kind: PaletteActionKind::Refresh,
+            keywords: vec!["refresh".to_owned(), "reload".to_owned()],
+        });
+        actions.push(PaletteAction {
+            title: "Quit".to_owned(),
+            context: "global".to_owned(),
+            section: PaletteSection::Global,
+            kind: PaletteActionKind::Quit,
+            keywords: vec!["quit".to_owned(), "exit".to_owned()],
+        });
+
+        actions
+    }
+
+    fn handle_palette_key(&mut self, key_event: KeyEvent) -> bool {
+        if !self.palette.open {
+            return false;
+        }
+
+        match key_event.code {
+            KeyCode::Esc => self.close_palette(),
+            KeyCode::Up => {
+                if self.palette.selected > 0 {
+                    self.palette.selected -= 1;
+                }
+            }
+            KeyCode::Down => {
+                if self.palette.selected + 1 < self.palette_filtered.len() {
+                    self.palette.selected += 1;
+                }
+            }
+            KeyCode::PageUp => {
+                self.palette.selected = self.palette.selected.saturating_sub(10);
+            }
+            KeyCode::PageDown => {
+                if self.palette_filtered.is_empty() {
+                    self.palette.selected = 0;
+                } else {
+                    let max_index = self.palette_filtered.len() - 1;
+                    self.palette.selected = (self.palette.selected + 10).min(max_index);
+                }
+            }
+            KeyCode::Home => self.palette.selected = 0,
+            KeyCode::End => {
+                if self.palette_filtered.is_empty() {
+                    self.palette.selected = 0;
+                } else {
+                    self.palette.selected = self.palette_filtered.len() - 1;
+                }
+            }
+            KeyCode::Enter => self.execute_selected_palette_action(),
+            KeyCode::Backspace => {
+                self.palette.query.pop();
+                self.rebuild_palette_actions();
+            }
+            KeyCode::Char(character) => {
+                if key_event.modifiers.contains(KeyModifiers::CONTROL)
+                    || key_event.modifiers.contains(KeyModifiers::SUPER)
+                {
+                    return true;
+                }
+                self.palette.query.push(character);
+                self.rebuild_palette_actions();
+            }
+            _ => {}
+        }
+
+        true
+    }
+
+    fn execute_selected_palette_action(&mut self) {
+        let Some(source_index) = self.palette_filtered.get(self.palette.selected).copied() else {
+            return;
+        };
+        let Some(action) = self.palette_actions.get(source_index).cloned() else {
+            return;
+        };
+
+        match action.kind {
+            PaletteActionKind::Navigate(route) => {
+                self.close_palette();
+                self.set_route(route);
+            }
+            PaletteActionKind::Refresh => {
+                self.close_palette();
+                self.request_refresh("palette refresh");
+            }
+            PaletteActionKind::Quit => self.should_quit = true,
+        }
+    }
+}
+
+fn is_palette_trigger(key_event: KeyEvent) -> bool {
+    match key_event.code {
+        KeyCode::Char(character) => {
+            character.eq_ignore_ascii_case(&'p')
+                && (key_event.modifiers.contains(KeyModifiers::SUPER)
+                    || key_event.modifiers.contains(KeyModifiers::CONTROL))
+        }
+        _ => false,
     }
 }
