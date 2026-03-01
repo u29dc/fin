@@ -1,0 +1,3 @@
+Transaction ID,Date,Time,Amount,Currency,Name,Description,Category,Balance
+txn_b_001,15/01/2024,08:10:00,-42.00,GBP,Stationery Co,Office supplies,office,958.00
+txn_b_002,16/01/2024,13:00:00,600.00,GBP,Client Corp,Project payment,invoice,1558.00
