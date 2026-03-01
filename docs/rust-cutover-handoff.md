@@ -12,8 +12,7 @@
 
 ## Validation Evidence
 
-- Rust quality gates pass through commit hooks (`bun run quality`).
-- Full command certification: `scripts/cert/certify_commands.sh` -> `30/30` passing.
+- Rust quality gates pass through commit hooks (`bun run util:check`).
 - TUI smoke: `cargo run -p fin-tui` launches and exits cleanly with `q`.
 
 ## Current Runtime Model

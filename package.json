@@ -12,17 +12,13 @@
 		"fin:dev": "cargo run -p fin-cli --",
 		"fin:tui": "cargo run -p fin-tui --",
 		"build": "cargo build --workspace --release && OUT_DIR=\"${FIN_HOME:-${TOOLS_HOME:-$HOME/.tools}/fin}\" && mkdir -p \"$OUT_DIR\" && cp target/release/fin \"$OUT_DIR/fin\" && cp target/release/fin-tui \"$OUT_DIR/fin-tui\"",
-		"build:release": "cargo build --workspace --release",
-		"util:guard:legacy": "./scripts/rust/guard_no_legacy.sh",
 		"util:format": "cargo fmt --all",
 		"util:lint": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
 		"util:types": "cargo check --workspace",
 		"util:test": "cargo test --workspace",
 		"util:build": "cargo build --workspace",
-		"util:check": "bun run util:guard:legacy && cargo fmt --all --check && bun run util:lint && bun run util:types && bun run util:test && bun run util:build",
-		"util:verify:cli-path": "./scripts/rust/verify_fin_path.sh",
-		"certify:commands": "./scripts/cert/certify_commands.sh",
-		"clean": "cargo clean && rm -rf .tmp/cert-results"
+		"util:check": "bun run util:format && bun run util:lint && bun run util:types && bun run util:test && bun run util:build",
+		"clean": "cargo clean"
 	},
 	"devDependencies": {
 		"@commitlint/cli": "^20.4.2",

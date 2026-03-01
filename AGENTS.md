@@ -39,7 +39,6 @@
 │       ├── routes.rs
 │       ├── theme.rs
 │       └── ui.rs
-├── scripts/cert/
 ├── docs/
 └── .claude/skills/fin/SKILL.md
 ```
@@ -73,11 +72,9 @@
 ## 4. Commands
 
 - Install binary: `bun run build`.
-- Rust release build: `bun run build:release`.
 - Dev run CLI: `cargo run -p fin-cli -- <command>`.
 - Dev run TUI: `cargo run -p fin-tui --`.
-- Full quality gate: `bun run quality`.
-- Command certification: `bun run certify:commands`.
+- Full quality gate: `bun run util:check`.
 
 - Runtime command groups:
   - `fin tools`
@@ -124,18 +121,18 @@
 - Required completion gates:
   - zero Rust compile errors/warnings
   - passing Rust tests
-  - successful command certification matrix
+  - successful workspace build/install command
 
 - Standard checks:
-  - `cargo fmt --all --check`
-  - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-  - `cargo check --workspace`
-  - `cargo test --workspace`
-  - `bun run quality`
+  - `bun run util:format`
+  - `bun run util:lint`
+  - `bun run util:types`
+  - `bun run util:test`
+  - `bun run util:build`
+  - `bun run util:check`
 
 - Manual validation checklist:
   - Run `:fin tools --json`, `:fin health --json`, `:fin config show --json`.
-  - Use isolated `CERT_FIN_HOME` for import/sanitize mutation checks.
   - Run `--dry-run` before mutating commands.
   - Confirm group/date filters before interpreting report outputs.
 

@@ -1,3 +1,0 @@
-Transaction ID,Date,Time,Amount,Currency,Name,Description,Category,Balance
-txn_p_001,15/01/2024,10:30:45,-25.50,GBP,Tesco,Card payment,groceries,150.00
-txn_p_002,16/01/2024,09:30:45,1500.00,GBP,Employer,Salary,salary,1650.00

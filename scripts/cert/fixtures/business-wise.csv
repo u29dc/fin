@@ -1,3 +1,0 @@
-TransferWise ID,Date Time,Date,Amount,Currency,Description,Payment Reference,Payee Name,Payer Name,Transaction Type,Running Balance
-TXN-BW-001,15-01-2024 10:30:00.123,15-01-2024,-1000.50,GBP,Office rent,RENT-JAN,Landlord,,DIRECT_DEBIT,5000.00
-TXN-BW-002,16-01-2024 12:00:00.000,16-01-2024,2500.00,GBP,Client payment,INV-001,,Client Corp,CREDIT,7500.00
