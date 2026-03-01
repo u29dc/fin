@@ -54,7 +54,7 @@ pub fn map_fin_error(tool: &'static str, error: FinError) -> CommandFailure {
         FinError::RulesNotFound { path } => CliError::new(
             ErrorCode::InvalidConfig,
             format!("Rules file not found: {}", path.display()),
-            "Create fin.rules.toml or run `fin rules migrate-ts`",
+            "Create fin.rules.json or run `fin rules migrate-ts`",
         ),
         FinError::RulesInvalid { path, message } => CliError::new(
             ErrorCode::InvalidConfig,

@@ -56,4 +56,4 @@ FIN_HOME=${FIN_HOME:-$HOME/.tools/fin} "$FIN_HOME/fin" tools --json
 ## Notes
 
 - Personal runtime data and personal rules should remain outside the repository.
-- Use `fin.rules.example.toml` as the repository-safe template.
+- Use `fin.rules.example.json` as the repository-safe template.

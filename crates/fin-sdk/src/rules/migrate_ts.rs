@@ -155,10 +155,10 @@ pub fn parse_ts_rules(source: &str) -> Result<NameMappingConfig> {
     })
 }
 
-pub fn render_rules_toml(config: &NameMappingConfig) -> Result<String> {
-    let mut rendered = toml::to_string_pretty(config).map_err(|error| FinError::Parse {
-        context: "fin.rules.toml",
-        message: format!("failed to render TOML: {error}"),
+pub fn render_rules_json(config: &NameMappingConfig) -> Result<String> {
+    let mut rendered = serde_json::to_string_pretty(config).map_err(|error| FinError::Parse {
+        context: "fin.rules.json",
+        message: format!("failed to render JSON: {error}"),
     })?;
     if !rendered.ends_with('\n') {
         rendered.push('\n');
@@ -174,7 +174,7 @@ pub fn migrate_ts_rules_file(
         message: format!("{}: {}", source_path.display(), error),
     })?;
     let config = parse_ts_rules(&source)?;
-    let rendered = render_rules_toml(&config)?;
+    let rendered = render_rules_json(&config)?;
     if let Some(parent) = target_path.parent() {
         fs::create_dir_all(parent).map_err(|error| FinError::Io {
             message: format!("{}: {}", parent.display(), error),
@@ -198,7 +198,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        extract_name_mapping_object, migrate_ts_rules_file, parse_ts_rules, render_rules_toml,
+        extract_name_mapping_object, migrate_ts_rules_file, parse_ts_rules, render_rules_json,
     };
 
     #[test]
@@ -218,7 +218,7 @@ export const NAME_MAPPING_CONFIG = {
     }
 
     #[test]
-    fn parses_ts_object_and_renders_toml() {
+    fn parses_ts_object_and_renders_json() {
         let ts = r#"
 export const NAME_MAPPING_CONFIG = {
   rules: [{ match: "UBER", replace: "Uber", category: "Expenses:Travel" }],
@@ -229,16 +229,16 @@ export const NAME_MAPPING_CONFIG = {
         let parsed = parse_ts_rules(ts).expect("parse ts rules");
         assert_eq!(parsed.rules.len(), 1);
         assert!(!parsed.warn_on_unmapped);
-        let toml = render_rules_toml(&parsed).expect("render toml");
-        assert!(toml.contains("warn_on_unmapped = false"));
-        assert!(toml.contains("target = \"Uber\""));
+        let json = render_rules_json(&parsed).expect("render json");
+        assert!(json.contains("\"warn_on_unmapped\": false"));
+        assert!(json.contains("\"target\": \"Uber\""));
     }
 
     #[test]
-    fn migrates_rules_file_from_ts_to_toml() {
+    fn migrates_rules_file_from_ts_to_json() {
         let temp = tempdir().expect("tempdir");
         let source = temp.path().join("fin.rules.ts");
-        let target = temp.path().join("fin.rules.toml");
+        let target = temp.path().join("fin.rules.json");
         std::fs::write(
             &source,
             r#"
@@ -253,8 +253,8 @@ export const NAME_MAPPING_CONFIG = {
 
         let summary = migrate_ts_rules_file(&source, &target).expect("migrate file");
         assert_eq!(summary.rule_count, 1);
-        let output = std::fs::read_to_string(&target).expect("read toml");
-        assert!(output.contains("[[rules]]"));
-        assert!(output.contains("target = \"Wise\""));
+        let output = std::fs::read_to_string(&target).expect("read json");
+        assert!(output.contains("\"rules\""));
+        assert!(output.contains("\"target\": \"Wise\""));
     }
 }

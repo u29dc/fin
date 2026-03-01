@@ -242,7 +242,7 @@ fn check_rules_exists(path: &Path) -> HealthCheck {
             severity: Severity::Degraded,
             detail: Some(path.display().to_string()),
             fix: Some(vec![
-                format!("cp fin.rules.example.toml {}", path.display()),
+                format!("cp fin.rules.example.json {}", path.display()),
                 format!(
                     "fin rules migrate-ts --source {} --target {}",
                     path.with_extension("ts").display(),
@@ -376,15 +376,17 @@ description = "Description"
 amount = "Amount"
 
 [sanitization]
-rules = "data/fin.rules.toml"
+rules = "data/fin.rules.json"
 "#,
         )
         .expect("write config");
         std::fs::write(
             &paths.rules_file,
             r#"
-warn_on_unmapped = true
-fallback_to_raw = true
+{
+  "warn_on_unmapped": true,
+  "fallback_to_raw": true
+}
 "#,
         )
         .expect("write rules");

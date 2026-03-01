@@ -7,7 +7,7 @@ description: >-
     financial reports across personal, business, and joint accounts.
 compatibility: >-
     Designed for Claude Code with Bash access. Requires runtime files at
-    $FIN_HOME/data/fin.config.toml, $FIN_HOME/data/fin.rules.toml, and
+    $FIN_HOME/data/fin.config.toml, $FIN_HOME/data/fin.rules.json, and
     $FIN_HOME/data/fin.db.
 allowed-tools: Bash Read Write WebSearch
 ---
@@ -85,10 +85,10 @@ Treat this as the runtime source of truth.
 
 ## Rules and Privacy
 
-- Primary rules file: `$FIN_HOME/data/fin.rules.toml`.
+- Primary rules file: `$FIN_HOME/data/fin.rules.json`.
 - Legacy migration source: `$FIN_HOME/data/fin.rules.ts`.
 - Keep personal rule sets in home-folder runtime only.
-- Repository should contain only sanitized examples (for example `fin.rules.example.toml`).
+- Repository should contain only sanitized examples (for example `fin.rules.example.json`).
 
 ## Expected Output
 

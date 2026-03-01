@@ -56,7 +56,7 @@ pub fn resolve_fin_paths_from_home(home: PathBuf) -> FinPaths {
         data_dir: data_dir.clone(),
         config_file: data_dir.join("fin.config.toml"),
         db_file: data_dir.join("fin.db"),
-        rules_file: data_dir.join("fin.rules.toml"),
+        rules_file: data_dir.join("fin.rules.json"),
         legacy_rules_file: data_dir.join("fin.rules.ts"),
         backups_dir: data_dir.join("backups"),
         inbox_dir: home.join("imports").join("inbox"),

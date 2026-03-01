@@ -128,9 +128,9 @@ mod tests {
     fn resolve_relative_path_from_fin_home() {
         let resolved = resolve_relative_to_fin_home(
             Path::new("/tmp/fin/data"),
-            Path::new("data/fin.rules.toml"),
+            Path::new("data/fin.rules.json"),
         );
-        assert_eq!(resolved, Path::new("/tmp/fin/data/fin.rules.toml"));
+        assert_eq!(resolved, Path::new("/tmp/fin/data/fin.rules.json"));
     }
 
     #[test]

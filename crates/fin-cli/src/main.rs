@@ -89,9 +89,9 @@ struct RulesArgs {
 enum RulesCommand {
     /// Show merged rules metadata
     Show(RulesPathArgs),
-    /// Validate TOML rules file
+    /// Validate JSON rules file
     Validate(RulesPathArgs),
-    /// Migrate legacy TypeScript rules to TOML
+    /// Migrate legacy TypeScript rules to JSON
     MigrateTs(RulesMigrateArgs),
 }
 
@@ -107,7 +107,7 @@ struct RulesMigrateArgs {
     /// Source TypeScript rules file path (default: $FIN_HOME/data/fin.rules.ts)
     #[arg(long)]
     source: Option<String>,
-    /// Target TOML rules file path (default: $FIN_HOME/data/fin.rules.toml)
+    /// Target JSON rules file path (default: $FIN_HOME/data/fin.rules.json)
     #[arg(long)]
     target: Option<String>,
 }

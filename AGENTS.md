@@ -44,7 +44,7 @@
 ```
 
 - External runtime directories (`$FIN_HOME`):
-  - `$FIN_HOME/data/{fin.config.toml,fin.rules.toml,fin.db}`
+  - `$FIN_HOME/data/{fin.config.toml,fin.rules.json,fin.db}`
   - `$FIN_HOME/data/fin.rules.ts` (migration source only for `fin rules migrate-ts`)
   - `$FIN_HOME/imports/{inbox,archive}`
   - `$FIN_HOME/fin` (installed binary)
@@ -66,7 +66,7 @@
 | Repo tooling | Bun scripts + commit tooling | packaging/check orchestration only |
 
 - Rules direction:
-  - Primary runtime rules: TOML (`$FIN_HOME/data/fin.rules.toml`)
+  - Primary runtime rules: JSON (`$FIN_HOME/data/fin.rules.json`)
   - Optional migration source: TS (`$FIN_HOME/data/fin.rules.ts`)
 
 ## 4. Commands
@@ -112,7 +112,7 @@
   - FIN home: `FIN_HOME` -> `TOOLS_HOME/fin` -> `$HOME/.tools/fin`.
   - Config: explicit -> `FIN_CONFIG_PATH` -> `$FIN_HOME/data/fin.config.toml`.
   - DB: explicit (`--db`) -> `DB_PATH` -> config dir `fin.db` -> `$FIN_HOME/data/fin.db`.
-  - Rules: explicit -> `FIN_RULES_PATH` -> config `sanitization.rules` -> `$FIN_HOME/data/fin.rules.toml`.
+  - Rules: explicit -> `FIN_RULES_PATH` -> config `sanitization.rules` -> `$FIN_HOME/data/fin.rules.json`.
 
 - Ledger model:
   - `chart_of_accounts`

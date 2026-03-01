@@ -118,9 +118,9 @@ impl RawRule {
     }
 }
 
-pub fn parse_toml_rules(raw: &str) -> Result<RulesOverrides> {
-    let parsed: RawRulesConfig = toml::from_str(raw).map_err(|error| FinError::Parse {
-        context: "fin.rules.toml",
+pub fn parse_json_rules(raw: &str) -> Result<RulesOverrides> {
+    let parsed: RawRulesConfig = serde_json::from_str(raw).map_err(|error| FinError::Parse {
+        context: "fin.rules.json",
         message: error.to_string(),
     })?;
     let rules = parsed
@@ -156,20 +156,24 @@ pub fn merge_rule_overrides(
 #[cfg(test)]
 mod tests {
     use crate::rules::model::{
-        default_name_mapping_config, merge_rule_overrides, parse_toml_rules,
+        default_name_mapping_config, merge_rule_overrides, parse_json_rules,
     };
 
     #[test]
-    fn parses_rules_toml_with_match_replace_shape() {
-        let parsed = parse_toml_rules(
+    fn parses_rules_json_with_match_replace_shape() {
+        let parsed = parse_json_rules(
             r#"
-warn_on_unmapped = true
-fallback_to_raw = false
-
-[[rules]]
-match = "AMAZON"
-replace = "Amazon"
-category = "Expenses:Shopping"
+{
+  "warn_on_unmapped": true,
+  "fallback_to_raw": false,
+  "rules": [
+    {
+      "match": "AMAZON",
+      "replace": "Amazon",
+      "category": "Expenses:Shopping"
+    }
+  ]
+}
 "#,
         )
         .expect("rules parse");
@@ -183,11 +187,16 @@ category = "Expenses:Shopping"
     #[test]
     fn merge_places_external_rules_first() {
         let base = default_name_mapping_config();
-        let overrides = parse_toml_rules(
+        let overrides = parse_json_rules(
             r#"
-[[rules]]
-patterns = ["WISE"]
-target = "Wise"
+{
+  "rules": [
+    {
+      "patterns": ["WISE"],
+      "target": "Wise"
+    }
+  ]
+}
 "#,
         )
         .expect("rules parse");

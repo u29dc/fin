@@ -6,7 +6,7 @@ use crate::config::loader::{LoadedConfig, resolve_relative_to_fin_home};
 use crate::config::paths::resolve_fin_paths;
 use crate::error::{FinError, Result};
 use crate::rules::model::{
-    NameMappingConfig, default_name_mapping_config, merge_rule_overrides, parse_toml_rules,
+    NameMappingConfig, default_name_mapping_config, merge_rule_overrides, parse_json_rules,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,7 +89,7 @@ pub fn load_rules(
         return Err(FinError::RulesInvalid {
             path,
             message:
-                "TypeScript rules are not supported directly; migrate to fin.rules.toml first."
+                "TypeScript rules are not supported directly; migrate to fin.rules.json first."
                     .to_owned(),
         });
     }
@@ -97,7 +97,7 @@ pub fn load_rules(
     let raw = fs::read_to_string(&path).map_err(|error| FinError::Io {
         message: format!("{}: {}", path.display(), error),
     })?;
-    let overrides = parse_toml_rules(&raw).map_err(|error| FinError::RulesInvalid {
+    let overrides = parse_json_rules(&raw).map_err(|error| FinError::RulesInvalid {
         path: path.clone(),
         message: error.to_string(),
     })?;
@@ -122,49 +122,53 @@ mod tests {
     #[test]
     fn rules_path_precedence_works() {
         let explicit = resolve_rules_path_with(
-            Some(Path::new("explicit.toml")),
-            Some(Path::new("env.toml")),
-            Some(Path::new("config.toml")),
+            Some(Path::new("explicit.json")),
+            Some(Path::new("env.json")),
+            Some(Path::new("config.json")),
             Some(Path::new("/tmp/fin/data")),
-            Path::new("/tmp/default.toml"),
+            Path::new("/tmp/default.json"),
             Path::new("/cwd"),
         );
-        assert_eq!(explicit, PathBuf::from("/cwd/explicit.toml"));
+        assert_eq!(explicit, PathBuf::from("/cwd/explicit.json"));
 
         let from_env = resolve_rules_path_with(
             None,
-            Some(Path::new("env.toml")),
-            Some(Path::new("config.toml")),
+            Some(Path::new("env.json")),
+            Some(Path::new("config.json")),
             Some(Path::new("/tmp/fin/data")),
-            Path::new("/tmp/default.toml"),
+            Path::new("/tmp/default.json"),
             Path::new("/cwd"),
         );
-        assert_eq!(from_env, PathBuf::from("/cwd/env.toml"));
+        assert_eq!(from_env, PathBuf::from("/cwd/env.json"));
 
         let from_config = resolve_rules_path_with(
             None,
             None,
-            Some(Path::new("data/fin.rules.toml")),
+            Some(Path::new("data/fin.rules.json")),
             Some(Path::new("/tmp/fin/data")),
-            Path::new("/tmp/default.toml"),
+            Path::new("/tmp/default.json"),
             Path::new("/cwd"),
         );
-        assert_eq!(from_config, PathBuf::from("/tmp/fin/data/fin.rules.toml"));
+        assert_eq!(from_config, PathBuf::from("/tmp/fin/data/fin.rules.json"));
     }
 
     #[test]
     fn load_rules_merges_external_over_base() {
         let temp = tempdir().expect("tempdir");
-        let rules_path = temp.path().join("fin.rules.toml");
+        let rules_path = temp.path().join("fin.rules.json");
         std::fs::write(
             &rules_path,
             r#"
-warn_on_unmapped = false
-
-[[rules]]
-patterns = ["UBER"]
-target = "Uber"
-category = "Expenses:Travel"
+{
+  "warn_on_unmapped": false,
+  "rules": [
+    {
+      "patterns": ["UBER"],
+      "target": "Uber",
+      "category": "Expenses:Travel"
+    }
+  ]
+}
 "#,
         )
         .expect("write rules");
@@ -178,7 +182,7 @@ category = "Expenses:Travel"
 
     #[test]
     fn missing_rules_falls_back_to_base() {
-        let loaded = load_rules(Some(Path::new("/tmp/non-existent-rules.toml")), None, None)
+        let loaded = load_rules(Some(Path::new("/tmp/non-existent-rules.json")), None, None)
             .expect("load base");
         assert!(!loaded.external_loaded);
         assert_eq!(loaded.config, default_name_mapping_config());

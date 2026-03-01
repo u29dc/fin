@@ -53,9 +53,9 @@ impl FinError {
             }
             Self::ConfigInvalid { .. } => Some("Validate TOML syntax and required sections."),
             Self::RulesNotFound { .. } => {
-                Some("Create data/fin.rules.toml or run rules migration from TypeScript.")
+                Some("Create data/fin.rules.json or run rules migration from TypeScript.")
             }
-            Self::RulesInvalid { .. } => Some("Fix fin.rules.toml schema fields and retry."),
+            Self::RulesInvalid { .. } => Some("Fix fin.rules.json schema fields and retry."),
             Self::Database { .. } => Some("Check DB path, file permissions, and schema version."),
             Self::Migration { .. } => Some("Open DB read/write and retry migration."),
             Self::Io { .. } | Self::Parse { .. } | Self::InvalidInput { .. } => None,
