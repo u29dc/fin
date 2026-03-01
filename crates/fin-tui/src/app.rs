@@ -11,8 +11,10 @@ use crate::{
 pub struct App {
     pub route: Route,
     pub should_quit: bool,
+    pub status: String,
     pub theme: Theme,
     pub header: HeaderContract,
+    pending_refresh: bool,
     fetch_client: FetchClient,
     cache: RouteCache,
 }
@@ -22,12 +24,14 @@ impl App {
         let mut app = Self {
             route: Route::Overview,
             should_quit: false,
+            status: "Initializing".to_owned(),
             theme: Theme::default(),
             header: HEADER_CONTRACT,
+            pending_refresh: false,
             fetch_client: FetchClient::new(),
             cache: RouteCache::new(),
         };
-        app.refresh();
+        app.request_refresh("startup");
         app
     }
 
@@ -39,9 +43,17 @@ impl App {
             KeyCode::Char('3') => self.set_route(Route::Reports),
             KeyCode::Tab | KeyCode::Right => self.next_route(),
             KeyCode::BackTab | KeyCode::Left => self.prev_route(),
-            KeyCode::Char('r') => self.refresh(),
+            KeyCode::Char('r') => self.request_refresh("manual refresh"),
             _ => {}
         }
+    }
+
+    pub fn on_tick(&mut self) {
+        if !self.pending_refresh {
+            return;
+        }
+        self.pending_refresh = false;
+        self.refresh();
     }
 
     pub fn header_text(&self) -> String {
@@ -51,23 +63,44 @@ impl App {
     pub fn body_text(&self) -> &str {
         self.cache
             .get(self.route)
+            .or({
+                if self.pending_refresh {
+                    Some("Loading route data...")
+                } else {
+                    None
+                }
+            })
             .unwrap_or("No data loaded for this route.")
     }
 
-    pub fn footer_text(&self) -> &'static str {
-        "q quit | 1 overview | 2 transactions | 3 reports | r refresh"
+    pub fn footer_text(&self) -> String {
+        format!(
+            "q quit | tab/shift+tab switch | 1 overview | 2 transactions | 3 reports | r refresh | {}",
+            self.status
+        )
     }
 
     fn set_route(&mut self, route: Route) {
         if self.route != route {
             self.route = route;
-            self.refresh();
+            self.request_refresh("route changed");
         }
     }
 
     fn refresh(&mut self) {
+        self.status = format!("Loading {}...", self.route.label().to_ascii_lowercase());
         let payload = self.fetch_client.fetch_route(self.route);
+        if payload.starts_with("Route unavailable:") {
+            self.status = payload.clone();
+        } else {
+            self.status = format!("Loaded {}", self.route.label().to_ascii_lowercase());
+        }
         self.cache.store(self.route, payload);
+    }
+
+    fn request_refresh(&mut self, reason: &str) {
+        self.pending_refresh = true;
+        self.status = format!("{reason}: {}", self.route.label().to_ascii_lowercase());
     }
 
     fn next_route(&mut self) {

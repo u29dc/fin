@@ -23,6 +23,7 @@ use crate::app::App;
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
     while !app.should_quit {
         terminal.draw(|frame| ui::draw(frame, app))?;
+        app.on_tick();
 
         if event::poll(Duration::from_millis(200))?
             && let Event::Key(key_event) = event::read()?
