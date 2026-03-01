@@ -313,3 +313,46 @@ fn is_palette_trigger(key_event: KeyEvent) -> bool {
         _ => false,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    use super::App;
+    use crate::routes::Route;
+
+    #[test]
+    fn tab_and_backtab_cycle_routes() {
+        let mut app = App::new();
+        assert_eq!(app.route, Route::Overview);
+
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.route, Route::Transactions);
+
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.route, Route::Reports);
+
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.route, Route::Overview);
+
+        app.on_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
+        assert_eq!(app.route, Route::Reports);
+    }
+
+    #[test]
+    fn palette_trigger_opens_and_navigates_to_filtered_route() {
+        let mut app = App::new();
+        assert!(!app.palette.open);
+
+        app.on_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+        assert!(app.palette.open);
+
+        for ch in "transactions".chars() {
+            app.on_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+        }
+
+        app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.route, Route::Transactions);
+        assert!(!app.palette.open);
+    }
+}
