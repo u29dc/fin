@@ -117,10 +117,17 @@ pub fn open_database(options: OpenDatabaseOptions) -> Result<Connection> {
     }
 
     if options.migrate && options.readonly {
-        let needs_migration = {
-            let probe = open_connection(&db_path, true, false)?;
-            apply_connection_pragmas(&probe, true)?;
-            get_user_version(&probe)? < SCHEMA_VERSION
+        let needs_migration = match open_connection(&db_path, true, false) {
+            Ok(probe) => {
+                apply_connection_pragmas(&probe, true)?;
+                get_user_version(&probe)? < SCHEMA_VERSION
+            }
+            Err(error) => {
+                if !options.create {
+                    return Err(error);
+                }
+                true
+            }
         };
 
         if needs_migration {

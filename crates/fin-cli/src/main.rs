@@ -28,6 +28,8 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Launch the terminal UI
+    Start,
     /// Print version and sdk information
     Version,
     /// Capability discovery from the tool registry
@@ -329,6 +331,7 @@ fn execute(
 ) -> Result<CommandResult, CommandFailure> {
     match command {
         Some(Command::Version) | None => Ok(commands::version::run()),
+        Some(Command::Start) => commands::start::run(),
         Some(Command::Tools(args)) => commands::tools::run(args.name.as_deref()),
         Some(Command::Health) => commands::health::run(options),
         Some(Command::Config(config)) => match config.command {

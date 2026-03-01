@@ -106,6 +106,16 @@ fn flag(name: &str, description: &str, required: bool) -> ParameterMeta {
 pub fn tool_registry() -> Vec<ToolMeta> {
     let mut tools = vec![
         tool(
+            "tui.start",
+            "fin start",
+            "tui",
+            "Launch fin terminal UI",
+            true,
+            "fin start",
+            vec![],
+            &["binary", "exitCode"],
+        ),
+        tool(
             "config.show",
             "fin config show",
             "config",

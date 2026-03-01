@@ -25,7 +25,7 @@ fn resolve_db(
         path: Some(db_path),
         config_dir: Some(loaded.config_dir()),
         readonly,
-        create: !readonly,
+        create: true,
         migrate: true,
     })
     .map_err(|error| map_fin_error(tool, error))?;

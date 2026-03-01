@@ -5,6 +5,7 @@ pub mod import;
 pub mod report;
 pub mod rules;
 pub mod sanitize;
+pub mod start;
 pub mod tools;
 pub mod version;
 pub mod view;
@@ -63,7 +64,7 @@ pub fn map_fin_error(tool: &'static str, error: FinError) -> CommandFailure {
         FinError::Database { message } => CliError::new(
             ErrorCode::Db,
             format!("Database error: {message}"),
-            "Check database path and file integrity",
+            "Run `fin health --json` and verify FIN_HOME/data is writable",
         ),
         FinError::InvalidInput { code, message } => {
             let error_code = if code == "NOT_FOUND" {
