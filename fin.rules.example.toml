@@ -1,0 +1,51 @@
+# Transaction Sanitization Rules (TOML)
+# Copy this file to $FIN_HOME/data/fin.rules.toml and customize locally.
+# Do not commit personal merchant/payee mappings to the repository.
+
+warn_on_unmapped = true
+fallback_to_raw = true
+
+# Income
+[[rules]]
+patterns = ["YOUR EMPLOYER NAME"]
+target = "Salary"
+category = "Income"
+
+[[rules]]
+patterns = ["DIVIDEND PAYMENT"]
+target = "Dividends"
+category = "Income"
+
+# Groceries
+[[rules]]
+patterns = ["TESCO", "SAINSBURY", "WAITROSE", "LIDL", "ALDI"]
+target = "Groceries"
+category = "Groceries"
+
+# Shopping
+[[rules]]
+patterns = ["AMAZON", "EBAY"]
+target = "Shopping"
+category = "Shopping"
+
+# Local businesses
+[[rules]]
+patterns = ["LOCAL COFFEE SHOP"]
+target = "Coffee Shop"
+category = "Food"
+
+# Internal transfers
+[[rules]]
+patterns = ["YOUR BUSINESS NAME", "Sent money to Your Name"]
+target = "Internal Transfer"
+
+# Direct debits and bills
+[[rules]]
+patterns = ["LOCAL COUNCIL"]
+target = "Council Tax"
+category = "CouncilTax"
+
+[[rules]]
+patterns = ["LANDLORD NAME"]
+target = "Rent"
+category = "Rent"

@@ -13,8 +13,9 @@
 	"scripts": {
 		"init---------------------------------": "",
 		"prepare": "husky",
-		"build:cli": "bun build --compile packages/cli/src/index.ts --outfile \"${FIN_HOME:-${TOOLS_HOME:-$HOME/.tools}/fin}/fin\" && rm -f .*.bun-build",
+		"build:cli": "./scripts/rust/install_fin.sh",
 		"build:cli:rust": "./scripts/rust/install_fin.sh",
+		"build:cli:ts": "bun build --compile packages/cli/src/index.ts --outfile \"${FIN_HOME:-${TOOLS_HOME:-$HOME/.tools}/fin}/fin\" && rm -f .*.bun-build",
 		"build:cli:linux": "bun build --compile --target=bun-linux-x64 packages/cli/src/index.ts --outfile bin/fin_linux64 && rm -f .*.bun-build",
 		"dev----------------------------------": "",
 		"dev": "bun run --filter @fin/web dev",
