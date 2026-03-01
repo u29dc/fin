@@ -17,6 +17,20 @@ pub struct TransactionTableRow {
     pub counterparty: String,
 }
 
+pub fn transaction_matches_query(row: &TransactionTableRow, query: &str) -> bool {
+    let needle = query.trim().to_ascii_lowercase();
+    if needle.is_empty() {
+        return true;
+    }
+
+    row.posted_at.to_ascii_lowercase().contains(&needle)
+        || row.from_account.to_ascii_lowercase().contains(&needle)
+        || row.to_account.to_ascii_lowercase().contains(&needle)
+        || row.amount_minor.to_string().contains(&needle)
+        || row.description.to_ascii_lowercase().contains(&needle)
+        || row.counterparty.to_ascii_lowercase().contains(&needle)
+}
+
 #[derive(Debug, Clone)]
 pub struct TransactionsPayload {
     pub rows: Vec<TransactionTableRow>,

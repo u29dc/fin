@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     cache::RouteCache,
-    fetch::{FetchClient, RoutePayload},
+    fetch::{FetchClient, RoutePayload, transaction_matches_query},
     palette::{
         PaletteAction, PaletteActionKind, PaletteRow, PaletteSection, PaletteState, build_rows,
         filtered_action_indices,
@@ -35,6 +35,8 @@ pub struct App {
     fetch_client: FetchClient,
     cache: RouteCache,
     selected_rows: BTreeMap<Route, usize>,
+    transactions_search_query: String,
+    transactions_search_active: bool,
 }
 
 impl App {
@@ -54,6 +56,8 @@ impl App {
             fetch_client: FetchClient::new(),
             cache: RouteCache::new(),
             selected_rows: BTreeMap::new(),
+            transactions_search_query: String::new(),
+            transactions_search_active: false,
         };
         app.request_refresh("startup");
         app
@@ -65,6 +69,9 @@ impl App {
         }
         if is_palette_trigger(key_event) {
             self.open_palette();
+            return;
+        }
+        if self.handle_transactions_search_key(key_event) {
             return;
         }
 
@@ -153,6 +160,14 @@ impl App {
         self.focus == FocusTarget::Navigation
     }
 
+    pub fn transactions_search_query(&self) -> &str {
+        &self.transactions_search_query
+    }
+
+    pub fn transactions_search_visible(&self) -> bool {
+        self.transactions_search_active || !self.transactions_search_query.is_empty()
+    }
+
     pub fn set_selected_row(&mut self, row: usize) {
         self.selected_rows.insert(self.route, row);
     }
@@ -169,6 +184,11 @@ impl App {
             self.status = format!("Loaded {}", route.label().to_ascii_lowercase());
         } else {
             self.request_refresh("route changed");
+        }
+
+        if route != Route::Transactions {
+            self.transactions_search_query.clear();
+            self.transactions_search_active = false;
         }
     }
 
@@ -219,7 +239,11 @@ impl App {
 
     fn current_row_count(&self) -> usize {
         match self.cache.get(self.route) {
-            Some(RoutePayload::Transactions(payload)) => payload.rows.len(),
+            Some(RoutePayload::Transactions(payload)) => payload
+                .rows
+                .iter()
+                .filter(|row| transaction_matches_query(row, &self.transactions_search_query))
+                .count(),
             Some(RoutePayload::Text(_)) | None => 0,
         }
     }
@@ -250,10 +274,10 @@ impl App {
         }
 
         match key_event.code {
-            KeyCode::Up | KeyCode::Char('k') => {
+            KeyCode::Up => {
                 self.set_selected_row(self.selected_row().saturating_sub(1));
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            KeyCode::Down => {
                 let next = (self.selected_row() + 1).min(len - 1);
                 self.set_selected_row(next);
             }
@@ -267,6 +291,97 @@ impl App {
             KeyCode::Home => self.set_selected_row(0),
             KeyCode::End => self.set_selected_row(len - 1),
             _ => {}
+        }
+    }
+
+    fn handle_transactions_search_key(&mut self, key_event: KeyEvent) -> bool {
+        let is_transactions_main =
+            self.route == Route::Transactions && self.focus == FocusTarget::Main;
+        if !is_transactions_main {
+            return false;
+        }
+
+        if matches!(key_event.code, KeyCode::Char(c) if c.eq_ignore_ascii_case(&'f'))
+            && (key_event.modifiers.contains(KeyModifiers::CONTROL)
+                || key_event.modifiers.contains(KeyModifiers::SUPER))
+        {
+            self.transactions_search_active = true;
+            if self.transactions_search_query.is_empty() {
+                self.status = "Search transactions".to_owned();
+            } else {
+                self.status = format!("Filtered transactions: {}", self.transactions_search_query);
+            }
+            return true;
+        }
+
+        if self.transactions_search_active {
+            match key_event.code {
+                KeyCode::Esc => {
+                    self.transactions_search_query.clear();
+                    self.transactions_search_active = false;
+                    self.clamp_selected_row();
+                    self.status = "Cleared transaction search".to_owned();
+                    return true;
+                }
+                KeyCode::Enter => {
+                    self.transactions_search_active = false;
+                    return true;
+                }
+                KeyCode::Backspace => {
+                    self.transactions_search_query.pop();
+                    if self.transactions_search_query.is_empty() {
+                        self.transactions_search_active = false;
+                        self.status = "Cleared transaction search".to_owned();
+                    } else {
+                        self.status =
+                            format!("Filtered transactions: {}", self.transactions_search_query);
+                    }
+                    self.clamp_selected_row();
+                    return true;
+                }
+                KeyCode::Char(character)
+                    if !key_event.modifiers.contains(KeyModifiers::CONTROL)
+                        && !key_event.modifiers.contains(KeyModifiers::SUPER)
+                        && !key_event.modifiers.contains(KeyModifiers::ALT)
+                        && !character.is_control() =>
+                {
+                    self.transactions_search_query.push(character);
+                    self.status =
+                        format!("Filtered transactions: {}", self.transactions_search_query);
+                    self.clamp_selected_row();
+                    return true;
+                }
+                _ => return false,
+            }
+        }
+
+        match key_event.code {
+            KeyCode::Backspace if !self.transactions_search_query.is_empty() => {
+                self.transactions_search_query.pop();
+                if self.transactions_search_query.is_empty() {
+                    self.transactions_search_active = false;
+                    self.status = "Cleared transaction search".to_owned();
+                } else {
+                    self.status =
+                        format!("Filtered transactions: {}", self.transactions_search_query);
+                }
+                self.clamp_selected_row();
+                true
+            }
+            KeyCode::Char(character)
+                if !key_event.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key_event.modifiers.contains(KeyModifiers::SUPER)
+                    && !key_event.modifiers.contains(KeyModifiers::ALT)
+                    && !character.is_control()
+                    && character != 'q' =>
+            {
+                self.transactions_search_active = true;
+                self.transactions_search_query.push(character);
+                self.status = format!("Filtered transactions: {}", self.transactions_search_query);
+                self.clamp_selected_row();
+                true
+            }
+            _ => false,
         }
     }
 
@@ -507,6 +622,42 @@ mod tests {
 
         app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(app.selected_row(), 4);
+    }
+
+    #[test]
+    fn typing_in_transactions_main_starts_search() {
+        let mut app = App::new();
+        seed_transactions(&mut app, 5);
+        app.set_route(Route::Transactions);
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.focus, FocusTarget::Main);
+
+        app.on_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE));
+
+        assert_eq!(app.transactions_search_query(), "rent");
+        assert!(app.transactions_search_visible());
+    }
+
+    #[test]
+    fn cmd_f_and_backspace_clear_search_state() {
+        let mut app = App::new();
+        seed_transactions(&mut app, 5);
+        app.set_route(Route::Transactions);
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.focus, FocusTarget::Main);
+
+        app.on_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL));
+        assert!(app.transactions_search_visible());
+        assert_eq!(app.transactions_search_query(), "");
+
+        app.on_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert_eq!(app.transactions_search_query(), "a");
+        app.on_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.transactions_search_query(), "");
+        assert!(!app.transactions_search_visible());
     }
 
     #[test]

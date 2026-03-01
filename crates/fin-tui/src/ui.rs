@@ -7,7 +7,7 @@ use ratatui::{
 
 use crate::{
     app::App,
-    fetch::{RoutePayload, TransactionsPayload},
+    fetch::{RoutePayload, TransactionsPayload, transaction_matches_query},
     palette::PaletteRow,
     routes::Route,
 };
@@ -163,13 +163,34 @@ fn render_transactions_table(
         return;
     }
 
+    let search_query = app.transactions_search_query();
+    let show_search = app.transactions_search_visible();
+    let filtered = payload
+        .rows
+        .iter()
+        .filter(|row| transaction_matches_query(row, search_query))
+        .collect::<Vec<_>>();
+
     let sections = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(1)])
+        .constraints(if show_search {
+            vec![
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Min(1),
+            ]
+        } else {
+            vec![Constraint::Length(1), Constraint::Min(1)]
+        })
         .split(area);
 
-    let visible_rows = sections[1].height.saturating_sub(2) as usize;
-    let selected = selected_row.min(payload.rows.len().saturating_sub(1));
+    let table_area = if show_search {
+        sections[2]
+    } else {
+        sections[1]
+    };
+    let visible_rows = table_area.height.saturating_sub(2) as usize;
+    let selected = selected_row.min(filtered.len().saturating_sub(1));
     let offset = if visible_rows == 0 {
         0
     } else if selected >= visible_rows {
@@ -178,13 +199,14 @@ fn render_transactions_table(
         0
     };
     let end = if visible_rows == 0 {
-        payload.rows.len()
+        filtered.len()
     } else {
-        (offset + visible_rows).min(payload.rows.len())
+        (offset + visible_rows).min(filtered.len())
     };
 
     let summary = format!(
-        "rows={} has_more={} preview_limit={} range {}-{}",
+        "rows={} total={} has_more={} preview_limit={} range {}-{}",
+        filtered.len(),
         payload.rows.len(),
         payload.has_more,
         payload.limit,
@@ -195,6 +217,32 @@ fn render_transactions_table(
         Paragraph::new(Span::styled(summary, app.theme.footer_meta)),
         sections[0],
     );
+
+    if show_search {
+        let search_line = if search_query.is_empty() {
+            Line::from(vec![
+                Span::styled("find: ", app.theme.section_heading),
+                Span::styled(
+                    "type to filter, enter close, esc clear",
+                    app.theme.footer_meta,
+                ),
+            ])
+        } else {
+            Line::from(vec![
+                Span::styled("find: ", app.theme.section_heading),
+                Span::styled(search_query.to_owned(), app.theme.body),
+            ])
+        };
+        frame.render_widget(Paragraph::new(search_line), sections[1]);
+    }
+
+    if filtered.is_empty() {
+        frame.render_widget(
+            Paragraph::new("No matching rows for current filter.").style(app.theme.footer_meta),
+            table_area,
+        );
+        return;
+    }
 
     let header = Row::new(vec![
         Cell::from("date").style(app.theme.section_heading),
@@ -214,7 +262,7 @@ fn render_transactions_table(
         Constraint::Percentage(16),
     ];
 
-    let rows = payload.rows[offset..end]
+    let rows = filtered[offset..end]
         .iter()
         .enumerate()
         .map(|(local, row)| {
@@ -234,7 +282,7 @@ fn render_transactions_table(
         });
 
     let table = Table::new(rows, widths).header(header).column_spacing(1);
-    frame.render_widget(table, sections[1]);
+    frame.render_widget(table, table_area);
 }
 
 fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -250,6 +298,8 @@ fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Span::styled("tabs ", app.theme.footer_meta),
         Span::styled("up/down ", app.theme.section_heading),
         Span::styled("rows ", app.theme.footer_meta),
+        Span::styled("cmd/ctrl+f ", app.theme.section_heading),
+        Span::styled("find ", app.theme.footer_meta),
         Span::styled("pgup/pgdn ", app.theme.section_heading),
         Span::styled("jump ", app.theme.footer_meta),
         Span::styled("cmd/ctrl+p ", app.theme.section_heading),

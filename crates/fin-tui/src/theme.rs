@@ -1,6 +1,6 @@
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::palette::{ACCENT, BORDER, FG, MUTED, SELECTED_FG};
+use crate::palette::{ACCENT, BORDER, FG, MUTED};
 
 #[derive(Debug, Clone, Copy)]
 pub struct HeaderContract {
@@ -46,7 +46,7 @@ impl Default for Theme {
             section_heading: Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
             tabs: Style::default().fg(FG),
             tabs_active: Style::default()
-                .fg(SELECTED_FG)
+                .fg(Color::Rgb(255, 255, 255))
                 .bg(ACCENT)
                 .add_modifier(Modifier::BOLD),
             selected: Style::default()
