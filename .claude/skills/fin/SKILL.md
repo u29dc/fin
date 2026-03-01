@@ -20,10 +20,12 @@ allowed-tools: Bash Read Write WebSearch
 
 Build the binary if needed:
 
-    bun run build:cli
+    bun run build
 
-Use `:fin` in agent workflows. Do not rely on `bun run fin` unless explicitly
-working on legacy parity internals.
+Use `:fin` in agent workflows. If `:fin` is unavailable in the shell context,
+run commands with:
+
+    bun run run -- <command>
 
 ## Orientation
 

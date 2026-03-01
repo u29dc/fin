@@ -1,7 +1,0 @@
-tools --json
-health --json
-config show --json
-config validate --json
-view accounts --json
-view balance --json
-report summary --json
