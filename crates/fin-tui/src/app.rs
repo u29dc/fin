@@ -64,7 +64,7 @@ impl App {
     }
 
     fn refresh(&mut self) {
-        let payload = self.fetch_client.fetch_stub(self.route);
+        let payload = self.fetch_client.fetch_route(self.route);
         self.cache.store(self.route, payload);
     }
 }
