@@ -12,7 +12,7 @@ use std::{io, time::Duration};
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, Event},
+    event::{self, Event, KeyEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -26,6 +26,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
 
         if event::poll(Duration::from_millis(200))?
             && let Event::Key(key_event) = event::read()?
+            && key_event.kind == KeyEventKind::Press
         {
             app.on_key(key_event);
         }

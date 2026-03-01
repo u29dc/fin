@@ -37,6 +37,8 @@ impl App {
             KeyCode::Char('1') => self.set_route(Route::Overview),
             KeyCode::Char('2') => self.set_route(Route::Transactions),
             KeyCode::Char('3') => self.set_route(Route::Reports),
+            KeyCode::Tab | KeyCode::Right => self.next_route(),
+            KeyCode::BackTab | KeyCode::Left => self.prev_route(),
             KeyCode::Char('r') => self.refresh(),
             _ => {}
         }
@@ -66,5 +68,28 @@ impl App {
     fn refresh(&mut self) {
         let payload = self.fetch_client.fetch_route(self.route);
         self.cache.store(self.route, payload);
+    }
+
+    fn next_route(&mut self) {
+        let current = self.current_route_index();
+        let next = (current + 1) % Route::ALL.len();
+        self.set_route(Route::ALL[next]);
+    }
+
+    fn prev_route(&mut self) {
+        let current = self.current_route_index();
+        let previous = if current == 0 {
+            Route::ALL.len() - 1
+        } else {
+            current - 1
+        };
+        self.set_route(Route::ALL[previous]);
+    }
+
+    fn current_route_index(&self) -> usize {
+        Route::ALL
+            .iter()
+            .position(|candidate| *candidate == self.route)
+            .unwrap_or(0)
     }
 }
