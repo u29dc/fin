@@ -7,6 +7,8 @@
 - Runtime binary target: `$FIN_HOME/fin`
 - Archive reference branch: `archive`
 - Archive snapshot tag: `archive-snapshot-e2a70c1`
+- Rust cutover tag: `rust-cutover-20260301`
+- Strict-native final tag: `rust-strict-native-20260301`
 
 ## Validation Evidence
 
