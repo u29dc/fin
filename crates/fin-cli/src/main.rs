@@ -1,10 +1,10 @@
+#![forbid(unsafe_code)]
+
 mod commands;
 mod envelope;
 mod error;
 mod registry;
 
-use std::io::{self, Write};
-use std::process::Command as ProcessCommand;
 use std::time::Instant;
 
 use clap::{Args, Parser, Subcommand};
@@ -12,7 +12,6 @@ use fin_sdk::SDK_VERSION;
 
 use crate::commands::{CommandFailure, CommandResult, GlobalOptions};
 use crate::envelope::{emit_error, emit_success, print_text_error};
-use crate::error::ExitCode;
 
 #[derive(Parser, Debug)]
 #[command(name = "fin", version = SDK_VERSION, about = "fin rust cli")]
@@ -39,12 +38,29 @@ enum Command {
     Config(ConfigArgs),
     /// Rules file management commands
     Rules(RulesArgs),
+    /// Import inbox statements and create journal entries
+    Import(ImportArgs),
+    /// Sanitization commands
+    Sanitize(SanitizeArgs),
+    /// View accounts, transactions, ledger, and balance
+    View(ViewArgs),
+    /// Edit commands
+    Edit(EditArgs),
+    /// Financial reports
+    Report(ReportArgs),
 }
 
 #[derive(Args, Debug)]
 struct ToolsArgs {
     /// Tool name to show detail for (e.g. config.show)
     name: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct ImportArgs {
+    /// Override inbox directory
+    #[arg(long)]
+    inbox: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -94,6 +110,219 @@ struct RulesMigrateArgs {
     target: Option<String>,
 }
 
+#[derive(Args, Debug)]
+struct SanitizeArgs {
+    #[command(subcommand)]
+    command: SanitizeCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum SanitizeCommand {
+    /// Find description patterns in journal entries
+    Discover(SanitizeDiscoverArgs),
+    /// Apply description sanitization rules
+    Migrate(SanitizeApplyArgs),
+    /// Reclassify uncategorized postings using rules
+    Recategorize(SanitizeApplyArgs),
+}
+
+#[derive(Args, Debug)]
+struct SanitizeDiscoverArgs {
+    #[arg(long, default_value_t = false)]
+    unmapped: bool,
+    #[arg(long, default_value_t = 2)]
+    min: usize,
+    #[arg(long)]
+    account: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct SanitizeApplyArgs {
+    #[arg(long = "dry-run", default_value_t = false)]
+    dry_run: bool,
+}
+
+#[derive(Args, Debug)]
+struct ViewArgs {
+    #[command(subcommand)]
+    command: ViewCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum ViewCommand {
+    /// List accounts with balances
+    Accounts(ViewAccountsArgs),
+    /// List transactions
+    Transactions(ViewTransactionsArgs),
+    /// List ledger entries with postings
+    Ledger(ViewLedgerArgs),
+    /// Show balance sheet
+    Balance(ViewBalanceArgs),
+    /// Create reversing journal entry for an entry id
+    Void(ViewVoidArgs),
+}
+
+#[derive(Args, Debug)]
+struct ViewAccountsArgs {
+    #[arg(long)]
+    group: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct ViewTransactionsArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    group: Option<String>,
+    #[arg(long)]
+    from: Option<String>,
+    #[arg(long)]
+    to: Option<String>,
+    #[arg(long)]
+    search: Option<String>,
+    #[arg(long, default_value_t = 50)]
+    limit: usize,
+}
+
+#[derive(Args, Debug)]
+struct ViewLedgerArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    from: Option<String>,
+    #[arg(long)]
+    to: Option<String>,
+    #[arg(long, default_value_t = 50)]
+    limit: usize,
+}
+
+#[derive(Args, Debug)]
+struct ViewBalanceArgs {
+    #[arg(long = "as-of")]
+    as_of: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct ViewVoidArgs {
+    id: String,
+    #[arg(long = "dry-run", default_value_t = false)]
+    dry_run: bool,
+}
+
+#[derive(Args, Debug)]
+struct EditArgs {
+    #[command(subcommand)]
+    command: EditCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum EditCommand {
+    /// Edit a journal entry description and/or expense account
+    Transaction(EditTransactionArgs),
+}
+
+#[derive(Args, Debug)]
+struct EditTransactionArgs {
+    id: String,
+    #[arg(long)]
+    description: Option<String>,
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long = "dry-run", default_value_t = false)]
+    dry_run: bool,
+}
+
+#[derive(Args, Debug)]
+struct ReportArgs {
+    #[command(subcommand)]
+    command: ReportCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum ReportCommand {
+    Cashflow(ReportCashflowArgs),
+    Health(ReportHealthArgs),
+    Runway(ReportRunwayArgs),
+    Reserves(ReportReservesArgs),
+    Categories(ReportCategoriesArgs),
+    Audit(ReportAuditArgs),
+    Summary(ReportSummaryArgs),
+}
+
+#[derive(Args, Debug)]
+struct ReportCashflowArgs {
+    #[arg(long)]
+    group: String,
+    #[arg(long, default_value_t = 12)]
+    months: usize,
+    #[arg(long)]
+    from: Option<String>,
+    #[arg(long)]
+    to: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct ReportHealthArgs {
+    #[arg(long)]
+    group: String,
+    #[arg(long)]
+    from: Option<String>,
+    #[arg(long)]
+    to: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct ReportRunwayArgs {
+    #[arg(long)]
+    group: Option<String>,
+    #[arg(long, default_value_t = false)]
+    consolidated: bool,
+    #[arg(long)]
+    include: Option<String>,
+    #[arg(long)]
+    from: Option<String>,
+    #[arg(long)]
+    to: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct ReportReservesArgs {
+    #[arg(long)]
+    group: String,
+    #[arg(long)]
+    from: Option<String>,
+    #[arg(long)]
+    to: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct ReportCategoriesArgs {
+    #[arg(long)]
+    group: String,
+    #[arg(long, default_value = "breakdown")]
+    mode: String,
+    #[arg(long, default_value_t = 3)]
+    months: usize,
+    #[arg(long, default_value_t = 10)]
+    limit: usize,
+}
+
+#[derive(Args, Debug)]
+struct ReportAuditArgs {
+    #[arg(long)]
+    account: String,
+    #[arg(long, default_value_t = 6)]
+    months: usize,
+    #[arg(long, default_value_t = 50)]
+    limit: usize,
+}
+
+#[derive(Args, Debug)]
+struct ReportSummaryArgs {
+    #[arg(long, default_value_t = 12)]
+    months: usize,
+}
+
 fn execute(
     command: Option<Command>,
     options: &GlobalOptions,
@@ -113,73 +342,108 @@ fn execute(
                 commands::rules::run_migrate_ts(args.source.as_deref(), args.target.as_deref())
             }
         },
-    }
-}
-
-fn first_command_token(raw_args: &[String]) -> Option<&str> {
-    if raw_args.len() <= 1 {
-        return None;
-    }
-
-    let mut idx = 1usize;
-    while idx < raw_args.len() {
-        let token = raw_args[idx].as_str();
-        if token == "--db" || token == "--format" {
-            idx += 2;
-            continue;
+        Some(Command::Import(args)) => {
+            commands::import::run(args.inbox.as_deref(), options.db.as_deref())
         }
-        if token.starts_with('-') {
-            idx += 1;
-            continue;
-        }
-        return Some(token);
-    }
-
-    None
-}
-
-fn should_delegate_to_legacy(raw_args: &[String]) -> bool {
-    let Some(command) = first_command_token(raw_args) else {
-        return false;
-    };
-    !matches!(command, "version" | "rules")
-}
-
-fn delegate_to_legacy(args: &[String]) -> i32 {
-    let output = ProcessCommand::new("bun")
-        .arg("run")
-        .arg("packages/cli/src/index.ts")
-        .args(args)
-        .output();
-
-    match output {
-        Ok(output) => {
-            if let Err(error) = io::stdout().write_all(&output.stdout) {
-                eprintln!("failed to write delegated stdout: {error}");
-                return ExitCode::Runtime.as_i32();
+        Some(Command::Sanitize(sanitize)) => match sanitize.command {
+            SanitizeCommand::Discover(args) => commands::sanitize::run_discover(
+                options.db.as_deref(),
+                args.unmapped,
+                args.min,
+                args.account.as_deref(),
+            ),
+            SanitizeCommand::Migrate(args) => {
+                commands::sanitize::run_migrate(options.db.as_deref(), args.dry_run)
             }
-            if let Err(error) = io::stderr().write_all(&output.stderr) {
-                eprintln!("failed to write delegated stderr: {error}");
-                return ExitCode::Runtime.as_i32();
+            SanitizeCommand::Recategorize(args) => {
+                commands::sanitize::run_recategorize(options.db.as_deref(), args.dry_run)
             }
-            output
-                .status
-                .code()
-                .unwrap_or_else(|| ExitCode::Runtime.as_i32())
-        }
-        Err(error) => {
-            eprintln!("failed to execute delegated legacy CLI via bun: {error}");
-            ExitCode::Runtime.as_i32()
-        }
+        },
+        Some(Command::View(view)) => match view.command {
+            ViewCommand::Accounts(args) => {
+                commands::view::run_accounts(options.db.as_deref(), args.group.as_deref())
+            }
+            ViewCommand::Transactions(args) => commands::view::run_transactions(
+                options.db.as_deref(),
+                args.account.as_deref(),
+                args.group.as_deref(),
+                args.from.as_deref(),
+                args.to.as_deref(),
+                args.search.as_deref(),
+                args.limit,
+            ),
+            ViewCommand::Ledger(args) => commands::view::run_ledger(
+                options.db.as_deref(),
+                args.account.as_deref(),
+                args.from.as_deref(),
+                args.to.as_deref(),
+                args.limit,
+            ),
+            ViewCommand::Balance(args) => {
+                commands::view::run_balance(options.db.as_deref(), args.as_of.as_deref())
+            }
+            ViewCommand::Void(args) => {
+                commands::view::run_void(options.db.as_deref(), &args.id, args.dry_run)
+            }
+        },
+        Some(Command::Edit(edit)) => match edit.command {
+            EditCommand::Transaction(args) => commands::edit::run_transaction(
+                options.db.as_deref(),
+                &args.id,
+                args.description.as_deref(),
+                args.account.as_deref(),
+                args.dry_run,
+            ),
+        },
+        Some(Command::Report(report)) => match report.command {
+            ReportCommand::Cashflow(args) => commands::report::run_cashflow(
+                options.db.as_deref(),
+                &args.group,
+                args.months,
+                args.from.as_deref(),
+                args.to.as_deref(),
+            ),
+            ReportCommand::Health(args) => commands::report::run_health(
+                options.db.as_deref(),
+                &args.group,
+                args.from.as_deref(),
+                args.to.as_deref(),
+            ),
+            ReportCommand::Runway(args) => commands::report::run_runway(
+                options.db.as_deref(),
+                args.group.as_deref(),
+                args.consolidated,
+                args.include.as_deref(),
+                args.from.as_deref(),
+                args.to.as_deref(),
+            ),
+            ReportCommand::Reserves(args) => commands::report::run_reserves(
+                options.db.as_deref(),
+                &args.group,
+                args.from.as_deref(),
+                args.to.as_deref(),
+            ),
+            ReportCommand::Categories(args) => commands::report::run_categories(
+                options.db.as_deref(),
+                &args.group,
+                &args.mode,
+                args.months,
+                args.limit,
+            ),
+            ReportCommand::Audit(args) => commands::report::run_audit(
+                options.db.as_deref(),
+                &args.account,
+                args.months,
+                args.limit,
+            ),
+            ReportCommand::Summary(args) => {
+                commands::report::run_summary(options.db.as_deref(), args.months)
+            }
+        },
     }
 }
 
 fn main() {
-    let raw_args: Vec<String> = std::env::args().collect();
-    if should_delegate_to_legacy(&raw_args) {
-        std::process::exit(delegate_to_legacy(&raw_args[1..]));
-    }
-
     let cli = Cli::parse();
     let options = GlobalOptions {
         db: cli.db.clone(),

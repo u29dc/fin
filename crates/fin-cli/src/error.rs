@@ -7,6 +7,7 @@ pub enum ErrorCode {
     NoConfig,
     InvalidConfig,
     NoDatabase,
+    Db,
     SchemaMismatch,
     Runtime,
 }
@@ -18,6 +19,7 @@ impl ErrorCode {
             Self::NoConfig => "NO_CONFIG",
             Self::InvalidConfig => "INVALID_CONFIG",
             Self::NoDatabase => "NO_DATABASE",
+            Self::Db => "DB_ERROR",
             Self::SchemaMismatch => "SCHEMA_MISMATCH",
             Self::Runtime => "RUNTIME_ERROR",
         }

@@ -35,9 +35,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_postings_provider_txn
 "#;
 
 const MIGRATION_V3_SQL: &str = r#"
--- SDK scaffold parity marker.
--- The TS migration seeds bill accounts after chart seeding; Rust SDK keeps seeding out-of-scope.
-SELECT 1;
+INSERT OR IGNORE INTO chart_of_accounts (id, name, account_type, parent_id, is_placeholder)
+SELECT 'Expenses:Bills:Energy', 'Energy', 'expense', 'Expenses:Bills', 0
+WHERE EXISTS (SELECT 1 FROM chart_of_accounts WHERE id = 'Expenses:Bills');
+
+INSERT OR IGNORE INTO chart_of_accounts (id, name, account_type, parent_id, is_placeholder)
+SELECT 'Expenses:Bills:Water', 'Water', 'expense', 'Expenses:Bills', 0
+WHERE EXISTS (SELECT 1 FROM chart_of_accounts WHERE id = 'Expenses:Bills');
+
+INSERT OR IGNORE INTO chart_of_accounts (id, name, account_type, parent_id, is_placeholder)
+SELECT 'Expenses:Bills:CouncilTax', 'Council Tax', 'expense', 'Expenses:Bills', 0
+WHERE EXISTS (SELECT 1 FROM chart_of_accounts WHERE id = 'Expenses:Bills');
+
+INSERT OR IGNORE INTO chart_of_accounts (id, name, account_type, parent_id, is_placeholder)
+SELECT 'Expenses:Bills:Internet', 'Internet', 'expense', 'Expenses:Bills', 0
+WHERE EXISTS (SELECT 1 FROM chart_of_accounts WHERE id = 'Expenses:Bills');
+
+INSERT OR IGNORE INTO chart_of_accounts (id, name, account_type, parent_id, is_placeholder)
+SELECT 'Expenses:Bills:Insurance', 'Insurance', 'expense', 'Expenses:Bills', 0
+WHERE EXISTS (SELECT 1 FROM chart_of_accounts WHERE id = 'Expenses:Bills');
 "#;
 
 const MIGRATION_V4_SQL: &str = r#"

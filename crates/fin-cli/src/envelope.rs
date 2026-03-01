@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::error::{CliError, ExitCode};
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Meta {
     pub tool: String,
     pub elapsed: u64,

@@ -1,13 +1,20 @@
 pub mod config;
+pub mod edit;
 pub mod health;
+pub mod import;
+pub mod report;
 pub mod rules;
+pub mod sanitize;
 pub mod tools;
 pub mod version;
+pub mod view;
 
 use serde_json::Value as JsonValue;
 
+use fin_sdk::error::FinError;
+
 use crate::envelope::MetaExtras;
-use crate::error::{CliError, ExitCode};
+use crate::error::{CliError, ErrorCode, ExitCode};
 
 #[derive(Debug, Clone, Default)]
 pub struct GlobalOptions {
@@ -29,4 +36,52 @@ pub struct CommandResult {
 pub struct CommandFailure {
     pub tool: &'static str,
     pub error: CliError,
+}
+
+pub fn map_fin_error(tool: &'static str, error: FinError) -> CommandFailure {
+    let cli_error = match error {
+        FinError::ConfigNotFound { path } => CliError::new(
+            ErrorCode::NoConfig,
+            format!("Config file not found: {}", path.display()),
+            "Copy fin.config.template.toml into your FIN_HOME data directory",
+        ),
+        FinError::ConfigInvalid { path, message } => CliError::new(
+            ErrorCode::InvalidConfig,
+            format!("Invalid config at {}: {message}", path.display()),
+            "Validate fin.config.toml and retry",
+        ),
+        FinError::RulesNotFound { path } => CliError::new(
+            ErrorCode::InvalidConfig,
+            format!("Rules file not found: {}", path.display()),
+            "Create fin.rules.toml or run `fin rules migrate-ts`",
+        ),
+        FinError::RulesInvalid { path, message } => CliError::new(
+            ErrorCode::InvalidConfig,
+            format!("Invalid rules file at {}: {message}", path.display()),
+            "Fix the rules file syntax and required fields",
+        ),
+        FinError::Database { message } => CliError::new(
+            ErrorCode::Db,
+            format!("Database error: {message}"),
+            "Check database path and file integrity",
+        ),
+        FinError::InvalidInput { code, message } => {
+            let error_code = if code == "NOT_FOUND" {
+                ErrorCode::NotFound
+            } else {
+                ErrorCode::Runtime
+            };
+            CliError::new(error_code, message, "Review command arguments and retry")
+        }
+        other => CliError::new(
+            ErrorCode::Runtime,
+            format!("{tool} failed: {other}"),
+            "Review error details and retry",
+        ),
+    };
+
+    CommandFailure {
+        tool,
+        error: cli_error,
+    }
 }

@@ -1,156 +1,184 @@
-use std::process::Command;
-
-use serde_json::Value;
+use fin_sdk::config::{LoadedConfig, load_config};
+use fin_sdk::db::{OpenDatabaseOptions, open_database, resolve_db_path};
+use fin_sdk::{TransactionQueryOptions, report_cashflow, report_summary, view_transactions};
+use rusqlite::Connection;
 
 use crate::routes::Route;
 
+#[derive(Debug)]
+struct RuntimeContext {
+    connection: Connection,
+    loaded: LoadedConfig,
+}
+
+impl RuntimeContext {
+    fn open() -> Result<Self, String> {
+        let loaded = load_config(None).map_err(|error| error.to_string())?;
+        let db_path = resolve_db_path(None, Some(&loaded.config_dir()));
+        let connection = open_database(OpenDatabaseOptions {
+            path: Some(db_path),
+            config_dir: Some(loaded.config_dir()),
+            readonly: true,
+            create: false,
+            migrate: true,
+        })
+        .map_err(|error| error.to_string())?;
+        Ok(Self { connection, loaded })
+    }
+}
+
 #[derive(Debug, Default)]
-pub struct FetchClient;
+pub struct FetchClient {
+    runtime: Option<RuntimeContext>,
+}
 
 impl FetchClient {
     pub fn new() -> Self {
-        Self
+        Self { runtime: None }
     }
 
-    pub fn fetch_route(&self, route: Route) -> String {
+    pub fn fetch_route(&mut self, route: Route) -> String {
+        if let Err(error) = self.ensure_runtime() {
+            return format!("Route unavailable: {error}");
+        }
+        let Some(runtime) = self.runtime.as_ref() else {
+            return "Route unavailable: runtime not initialized".to_owned();
+        };
+
         match route {
-            Route::Overview => self.fetch_overview(),
-            Route::Transactions => self.fetch_transactions(),
-            Route::Reports => self.fetch_reports(),
+            Route::Overview => fetch_overview(runtime),
+            Route::Transactions => fetch_transactions(runtime),
+            Route::Reports => fetch_reports(runtime),
         }
+        .unwrap_or_else(|error| format!("Route unavailable: {error}"))
     }
 
-    fn fetch_overview(&self) -> String {
-        match run_cli_json(["report", "summary"]) {
-            Ok(payload) => format_overview(payload),
-            Err(error) => format!("Overview unavailable: {error}"),
+    fn ensure_runtime(&mut self) -> Result<(), String> {
+        if self.runtime.is_none() {
+            self.runtime = Some(RuntimeContext::open()?);
         }
-    }
-
-    fn fetch_transactions(&self) -> String {
-        match run_cli_json(["view", "transactions", "--limit=20"]) {
-            Ok(payload) => format_transactions(payload),
-            Err(error) => format!("Transactions unavailable: {error}"),
-        }
-    }
-
-    fn fetch_reports(&self) -> String {
-        match run_cli_json(["report", "cashflow", "--group=personal", "--months=6"]) {
-            Ok(payload) => format_cashflow(payload),
-            Err(error) => format!("Reports unavailable: {error}"),
-        }
+        Ok(())
     }
 }
 
-fn run_cli_json<const N: usize>(args: [&str; N]) -> Result<Value, String> {
-    let output = Command::new("bun")
-        .arg("run")
-        .arg("packages/cli/src/index.ts")
-        .args(args)
-        .arg("--json")
-        .output()
-        .map_err(|error| format!("failed to launch bun runtime: {error}"))?;
+fn fetch_overview(runtime: &RuntimeContext) -> Result<String, String> {
+    let summary = report_summary(&runtime.connection, &runtime.loaded.config, 12)
+        .map_err(|error| error.to_string())?;
 
-    if output.stdout.is_empty() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "no JSON payload produced (exit {}) stderr: {}",
-            output.status.code().unwrap_or(1),
-            stderr.trim()
+    let mut lines = vec![
+        "Overview".to_owned(),
+        format!("Generated: {}", summary.generated_at),
+        format!("Period (months): {}", summary.period_months),
+        format!(
+            "Consolidated net worth (minor): {}",
+            summary.consolidated.net_worth_minor
+        ),
+        String::new(),
+        "Group snapshots".to_owned(),
+    ];
+
+    for (group_id, group) in &summary.groups {
+        let runway = group
+            .latest_runway_months
+            .map(|value| format!("{value:.2}"))
+            .unwrap_or_else(|| "n/a".to_owned());
+        let health = group
+            .latest_health_minor
+            .map_or_else(|| "n/a".to_owned(), |value| value.to_string());
+        let available = group
+            .latest_available_minor
+            .map_or_else(|| "n/a".to_owned(), |value| value.to_string());
+        lines.push(format!(
+            "{group_id:>9} | nw {net:>12} | runway {runway:>7} | health {health:>12} | available {available:>12}",
+            net = group.net_worth_minor,
         ));
     }
 
-    serde_json::from_slice(&output.stdout).map_err(|error| {
-        format!(
-            "failed to parse CLI JSON output: {error}. raw={}",
-            String::from_utf8_lossy(&output.stdout)
-        )
-    })
+    Ok(lines.join("\n"))
 }
 
-fn format_overview(payload: Value) -> String {
-    let Some(data) = payload.get("data") else {
-        return "Overview payload missing data".to_owned();
-    };
-    let generated_at = data
-        .get("generatedAt")
-        .and_then(Value::as_str)
-        .unwrap_or("n/a");
-    let period = data
-        .get("periodMonths")
-        .and_then(Value::as_u64)
-        .map_or_else(|| "n/a".to_owned(), |value| value.to_string());
-
-    let group_count = data
-        .get("groups")
-        .and_then(Value::as_object)
-        .map_or(0usize, |groups| groups.len());
-
-    let net_worth = data
-        .get("consolidated")
-        .and_then(|value| value.get("netWorthMinor"))
-        .and_then(Value::as_i64)
-        .unwrap_or(0);
-
-    format!(
-        "Overview\\nGenerated: {generated_at}\\nPeriod (months): {period}\\nGroups: {group_count}\\nConsolidated net worth (minor): {net_worth}"
+fn fetch_transactions(runtime: &RuntimeContext) -> Result<String, String> {
+    let rows = view_transactions(
+        &runtime.connection,
+        &TransactionQueryOptions {
+            limit: 20,
+            ..TransactionQueryOptions::default()
+        },
     )
-}
+    .map_err(|error| error.to_string())?;
 
-fn format_transactions(payload: Value) -> String {
-    let Some(transactions) = payload
-        .get("data")
-        .and_then(|value| value.get("transactions"))
-        .and_then(Value::as_array)
-    else {
-        return "Transactions payload missing data.transactions".to_owned();
-    };
-
-    if transactions.is_empty() {
-        return "Transactions\\nNo rows.".to_owned();
+    if rows.is_empty() {
+        return Ok("Transactions\nNo rows.".to_owned());
     }
 
-    let mut lines = vec![format!("Transactions ({})", transactions.len())];
-    for item in transactions.iter().take(12) {
-        let date = item.get("date").and_then(Value::as_str).unwrap_or("n/a");
-        let account = item.get("account").and_then(Value::as_str).unwrap_or("n/a");
-        let amount = item.get("amount").and_then(Value::as_i64).unwrap_or(0);
-        let description = item
-            .get("description")
-            .and_then(Value::as_str)
-            .unwrap_or("n/a");
-        lines.push(format!("{date} | {account} | {amount:>8} | {description}"));
+    let mut lines = vec![format!("Transactions ({})", rows.len())];
+    for row in rows.iter().take(15) {
+        lines.push(format!(
+            "{} | {:<30} | {:>10} | {}",
+            row.posted_at,
+            truncate_account(&row.chart_account_id),
+            row.amount_minor,
+            truncate_text(&row.clean_description, 36)
+        ));
     }
-    lines.join("\n")
+    Ok(lines.join("\n"))
 }
 
-fn format_cashflow(payload: Value) -> String {
-    let Some(series) = payload
-        .get("data")
-        .and_then(|value| value.get("series"))
-        .and_then(Value::as_array)
-    else {
-        return "Reports payload missing data.series".to_owned();
-    };
+fn fetch_reports(runtime: &RuntimeContext) -> Result<String, String> {
+    let selected_group = runtime
+        .loaded
+        .config
+        .group_ids()
+        .into_iter()
+        .find(|group| group == "personal")
+        .or_else(|| runtime.loaded.config.group_ids().into_iter().next())
+        .ok_or_else(|| "No groups configured".to_owned())?;
+
+    let (series, totals) = report_cashflow(
+        &runtime.connection,
+        &runtime.loaded.config,
+        &selected_group,
+        6,
+        None,
+        None,
+    )
+    .map_err(|error| error.to_string())?;
 
     if series.is_empty() {
-        return "Cashflow\\nNo series points.".to_owned();
+        return Ok(format!("Cashflow ({selected_group})\nNo series points."));
     }
 
-    let mut lines = vec![format!("Cashflow ({})", series.len())];
+    let mut lines = vec![
+        format!("Cashflow ({selected_group}, {} points)", series.len()),
+        format!(
+            "Totals | income {:>10} | expenses {:>10} | net {:>10}",
+            totals.income_minor, totals.expense_minor, totals.net_minor
+        ),
+    ];
     for point in series.iter().take(12) {
-        let month = point.get("month").and_then(Value::as_str).unwrap_or("n/a");
-        let income = point.get("income").and_then(Value::as_i64).unwrap_or(0);
-        let expenses = point.get("expenses").and_then(Value::as_i64).unwrap_or(0);
-        let net = point.get("net").and_then(Value::as_i64).unwrap_or(0);
-        let savings_rate = point
-            .get("savingsRate")
-            .and_then(Value::as_f64)
+        let savings = point
+            .savings_rate_pct
             .map_or_else(|| "n/a".to_owned(), |value| format!("{value:.2}%"));
-
         lines.push(format!(
-            "{month} | income {income:>8} | expenses {expenses:>8} | net {net:>8} | savings {savings_rate}"
+            "{} | income {:>10} | expenses {:>10} | net {:>10} | savings {:>8}",
+            point.month, point.income_minor, point.expense_minor, point.net_minor, savings
         ));
     }
-    lines.join("\n")
+    Ok(lines.join("\n"))
+}
+
+fn truncate_account(value: &str) -> String {
+    truncate_text(value, 30)
+}
+
+fn truncate_text(value: &str, max: usize) -> String {
+    if value.chars().count() <= max {
+        return value.to_owned();
+    }
+    if max <= 3 {
+        return value.chars().take(max).collect();
+    }
+    let mut out = value.chars().take(max - 3).collect::<String>();
+    out.push_str("...");
+    out
 }

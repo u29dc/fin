@@ -3,47 +3,11 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use fin_sdk::config::{load_config, resolve_fin_paths};
-use fin_sdk::error::FinError;
 use fin_sdk::rules::{load_rules, migrate_ts_rules_file};
 
-use crate::commands::{CommandFailure, CommandResult};
+use crate::commands::{CommandFailure, CommandResult, map_fin_error};
 use crate::envelope::MetaExtras;
-use crate::error::{CliError, ErrorCode, ExitCode};
-
-fn map_fin_error(tool: &'static str, error: FinError) -> CommandFailure {
-    let cli_error = match error {
-        FinError::ConfigNotFound { path } => CliError::new(
-            ErrorCode::NoConfig,
-            format!("Config file not found: {}", path.display()),
-            "Copy fin.config.template.toml into your FIN_HOME data directory",
-        ),
-        FinError::ConfigInvalid { path, message } => CliError::new(
-            ErrorCode::InvalidConfig,
-            format!("Invalid config at {}: {message}", path.display()),
-            "Validate fin.config.toml and retry",
-        ),
-        FinError::RulesNotFound { path } => CliError::new(
-            ErrorCode::InvalidConfig,
-            format!("Rules file not found: {}", path.display()),
-            "Create fin.rules.toml or run `fin rules migrate-ts`",
-        ),
-        FinError::RulesInvalid { path, message } => CliError::new(
-            ErrorCode::InvalidConfig,
-            format!("Invalid rules file at {}: {message}", path.display()),
-            "Fix the rules file syntax and required fields",
-        ),
-        other => CliError::new(
-            ErrorCode::Runtime,
-            format!("{tool} failed: {other}"),
-            "Review error details and retry",
-        ),
-    };
-
-    CommandFailure {
-        tool,
-        error: cli_error,
-    }
-}
+use crate::error::ExitCode;
 
 fn as_opt_path(path: Option<&str>) -> Option<PathBuf> {
     path.and_then(|value| {

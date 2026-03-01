@@ -1,3 +1,5 @@
+use std::collections::{BTreeMap, BTreeSet};
+
 use serde::{Deserialize, Serialize};
 use toml::Table;
 
@@ -35,6 +37,85 @@ impl FinConfig {
         }
         Ok(())
     }
+
+    #[must_use]
+    pub fn group_ids(&self) -> Vec<String> {
+        let mut groups = BTreeSet::new();
+        for account in &self.accounts {
+            groups.insert(account.group.clone());
+        }
+        groups.into_iter().collect()
+    }
+
+    #[must_use]
+    pub fn account_ids_by_group(&self, group_id: &str) -> Vec<String> {
+        self.accounts
+            .iter()
+            .filter(|account| account.group == group_id)
+            .map(|account| account.id.clone())
+            .collect()
+    }
+
+    #[must_use]
+    pub fn account_by_id(&self, account_id: &str) -> Option<&AccountConfig> {
+        self.accounts
+            .iter()
+            .find(|account| account.id == account_id)
+    }
+
+    #[must_use]
+    pub fn account_map_by_group(&self) -> BTreeMap<String, Vec<AccountConfig>> {
+        let mut groups = BTreeMap::new();
+        for account in &self.accounts {
+            groups
+                .entry(account.group.clone())
+                .or_insert_with(Vec::new)
+                .push(account.clone());
+        }
+        groups
+    }
+
+    #[must_use]
+    pub fn provider_for_account(&self, account_id: &str) -> Option<&str> {
+        self.account_by_id(account_id)
+            .map(|account| account.provider.as_str())
+    }
+
+    #[must_use]
+    pub fn bank_preset(&self, provider: &str) -> Option<&BankPreset> {
+        self.banks.iter().find(|bank| bank.name == provider)
+    }
+
+    #[must_use]
+    pub fn resolve_group_metadata(&self, group_id: &str) -> ResolvedGroupMetadata {
+        let configured = self
+            .groups
+            .as_ref()
+            .and_then(|groups| groups.iter().find(|group| group.id == group_id));
+        if let Some(group) = configured {
+            return ResolvedGroupMetadata {
+                id: group.id.clone(),
+                label: group.label.clone(),
+                icon: group.icon.clone().unwrap_or_else(|| "wallet".to_owned()),
+                tax_type: group.tax_type.clone().unwrap_or_else(|| "none".to_owned()),
+                expense_reserve_months: group.expense_reserve_months.unwrap_or(3),
+            };
+        }
+
+        let default = match group_id {
+            "personal" => ("Personal", "user", "income", 3),
+            "joint" => ("Joint", "heart", "none", 3),
+            "business" => ("Business", "briefcase", "corp", 1),
+            _ => (group_id, "wallet", "none", 3),
+        };
+        ResolvedGroupMetadata {
+            id: group_id.to_owned(),
+            label: default.0.to_owned(),
+            icon: default.1.to_owned(),
+            tax_type: default.2.to_owned(),
+            expense_reserve_months: default.3,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,6 +134,15 @@ pub struct GroupMetadata {
     pub tax_type: Option<String>,
     #[serde(default)]
     pub expense_reserve_months: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedGroupMetadata {
+    pub id: String,
+    pub label: String,
+    pub icon: String,
+    pub tax_type: String,
+    pub expense_reserve_months: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -241,12 +241,14 @@ fn check_rules_exists(path: &Path) -> HealthCheck {
             status: CheckStatus::Missing,
             severity: Severity::Degraded,
             detail: Some(path.display().to_string()),
-            fix: Some(vec![format!(
-                "cp fin.rules.template.ts {} && fin rules migrate-ts --source {} --target {}",
-                path.with_extension("ts").display(),
-                path.with_extension("ts").display(),
-                path.display()
-            )]),
+            fix: Some(vec![
+                format!("cp fin.rules.example.toml {}", path.display()),
+                format!(
+                    "fin rules migrate-ts --source {} --target {}",
+                    path.with_extension("ts").display(),
+                    path.display()
+                ),
+            ]),
         };
     }
     HealthCheck {

@@ -1,10 +1,18 @@
+#![forbid(unsafe_code)]
+
+pub mod categories;
 pub mod compat;
 pub mod config;
 pub mod contracts;
 pub mod db;
 pub mod error;
 pub mod health;
+pub mod import;
+pub mod mutations;
+pub mod queries;
+pub mod reports;
 pub mod rules;
+pub mod sanitize;
 pub mod units;
 
 pub use compat::{
@@ -16,6 +24,26 @@ pub use error::{FinError, Result};
 pub use health::{
     CheckStatus, HealthCheck, HealthCheckOptions, HealthReport, HealthStatus, HealthSummary,
     Severity, run_health_checks,
+};
+pub use import::{ImportInboxOptions, ImportResult, SkippedFile, import_inbox};
+pub use mutations::{EditTransactionPreview, VoidPreview, edit_transaction, void_entry};
+pub use queries::{
+    AccountBalanceRow, AuditPayeePoint, BalanceSheet, CategoryBreakdownPoint, CategoryMedianPoint,
+    JournalEntryRow, LedgerQueryOptions, MonthlyCashflowPoint, PostingRow, TransactionQueryOptions,
+    TransactionRow, all_group_ids, audit_payees, get_balance_sheet, group_asset_account_ids,
+    group_category_breakdown, group_category_monthly_median, group_monthly_cashflow,
+    ledger_entry_count, transaction_counts_by_group, view_accounts, view_ledger, view_transactions,
+};
+pub use reports::{
+    CashflowTotals, ConsolidatedSummary, GroupSummary, HealthPoint, ReserveBreakdownPoint,
+    RunwayPoint, SummaryReport, report_cashflow, report_health, report_reserves, report_runway,
+    report_summary,
+};
+pub use sanitize::{
+    DescriptionSummary, MigrationCandidate, MigrationError, MigrationPlan, MigrationResult,
+    RecategorizeCandidate, RecategorizePlan, RecategorizeResult, discover_descriptions,
+    discover_unmapped_descriptions, execute_migration, execute_recategorize, plan_migration,
+    plan_recategorize, sanitize_description,
 };
 
 pub const SDK_NAME: &str = "fin-sdk";
