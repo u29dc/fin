@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, Stdio};
 
 use serde_json::json;
@@ -40,15 +40,17 @@ fn launch_child(program: PathBuf) -> Result<i32, CommandFailure> {
     Ok(status.code().unwrap_or(1))
 }
 
-pub fn run() -> Result<CommandResult, CommandFailure> {
-    let program = sibling_tui_binary().unwrap_or_else(|| PathBuf::from(tui_binary_name()));
-
-    let exit_status = launch_child(program.clone())?;
-    let exit_code = if exit_status == 0 {
-        ExitCode::Success
-    } else {
-        ExitCode::Runtime
-    };
+fn map_start_result(program: &Path, exit_status: i32) -> Result<CommandResult, CommandFailure> {
+    if exit_status != 0 {
+        return Err(CommandFailure {
+            tool: "tui.start",
+            error: CliError::new(
+                ErrorCode::Runtime,
+                format!("{} exited with status {exit_status}", program.display()),
+                "Run `fin start` from an interactive terminal and inspect stderr output",
+            ),
+        });
+    }
 
     Ok(CommandResult {
         tool: "tui.start",
@@ -58,6 +60,35 @@ pub fn run() -> Result<CommandResult, CommandFailure> {
         }),
         text: String::new(),
         meta: MetaExtras::default(),
-        exit_code,
+        exit_code: ExitCode::Success,
     })
+}
+
+pub fn run() -> Result<CommandResult, CommandFailure> {
+    let program = sibling_tui_binary().unwrap_or_else(|| PathBuf::from(tui_binary_name()));
+
+    let exit_status = launch_child(program.clone())?;
+    map_start_result(&program, exit_status)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::map_start_result;
+    use crate::error::ExitCode;
+
+    #[test]
+    fn non_zero_tui_exit_is_reported_as_error() {
+        let result = map_start_result(std::path::Path::new("fin-tui"), 1);
+        let failure = result.expect_err("expected failure");
+        assert_eq!(failure.tool, "tui.start");
+        assert!(failure.error.message.contains("exited with status 1"));
+    }
+
+    #[test]
+    fn zero_tui_exit_is_success_result() {
+        let result = map_start_result(std::path::Path::new("fin-tui"), 0);
+        let command = result.expect("expected success");
+        assert_eq!(command.tool, "tui.start");
+        assert_eq!(command.exit_code, ExitCode::Success);
+    }
 }
