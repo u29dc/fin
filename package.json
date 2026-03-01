@@ -35,8 +35,14 @@
 		"util:types": "bunx --bun tsgo --noEmit",
 		"util:types:svelte": "bunx svelte-check-rs --workspace ./packages/web --tsconfig ./tsconfig.svelte.json",
 		"util:types:zvelte": "zvelte-check --tsconfig ./tsconfig.json",
+		"util:rust:fmt": "cargo fmt --all",
+		"util:rust:fmt:check": "cargo fmt --all --check",
+		"util:rust:lint": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+		"util:rust:check": "cargo check --workspace",
+		"util:rust:test": "cargo test --workspace",
+		"util:rust:build:release": "cargo build --workspace --release",
 		"util:clean": "rm -rf .svelte-kit dist build packages/**/.svelte-kit packages/**/dist packages/**/build packages/**/node_modules/.vite",
-		"util:check": "STATUS=0; bun run util:format || STATUS=1; bun run util:lint || STATUS=1; bun run util:types || STATUS=1; bun run util:types:svelte || STATUS=1; bun run util:types:zvelte || STATUS=1; bun test || STATUS=1; exit $STATUS"
+		"util:check": "STATUS=0; bun run util:format || STATUS=1; bun run util:lint || STATUS=1; bun run util:types || STATUS=1; bun run util:types:svelte || STATUS=1; bun run util:types:zvelte || STATUS=1; bun test || STATUS=1; bun run util:rust:fmt:check || STATUS=1; bun run util:rust:lint || STATUS=1; bun run util:rust:check || STATUS=1; bun run util:rust:test || STATUS=1; exit $STATUS"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.4",

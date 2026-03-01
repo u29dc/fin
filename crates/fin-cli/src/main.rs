@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use fin_sdk::{sdk_banner, SDK_VERSION};
+use fin_sdk::{SDK_VERSION, sdk_banner};
 use serde::Serialize;
 
 #[derive(Parser, Debug)]
