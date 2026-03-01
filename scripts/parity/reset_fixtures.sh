@@ -22,6 +22,9 @@ if [[ "${RESET_DB:-1}" == "1" ]]; then
 fi
 
 cp "$repo_root/fin.config.template.toml" "$data_dir/fin.config.toml"
+# The current certification flow still exercises legacy TS command execution,
+# so pin sanitization.rules to the TS file in parity fixtures.
+perl -0pi -e 's|rules\s*=\s*"data/fin\.rules\.toml"|rules = "data/fin.rules.ts"|g' "$data_dir/fin.config.toml"
 
 # Provide a local minimal TS rules file for current runtime compatibility.
 cat > "$data_dir/fin.rules.ts" <<'RULES_TS'
