@@ -18,6 +18,7 @@ pub mod runtime;
 pub mod sanitize;
 mod stats;
 pub mod testing;
+pub mod timeseries;
 pub mod units;
 
 pub use allocation::{
@@ -59,6 +60,12 @@ pub use sanitize::{
     RecategorizeCandidate, RecategorizePlan, RecategorizeResult, discover_descriptions,
     discover_unmapped_descriptions, execute_migration, execute_recategorize, plan_migration,
     plan_recategorize, sanitize_description,
+};
+pub use timeseries::{
+    BalanceSeriesQueryOptions, ContributionPoint, DailyBalancePoint, account_daily_balance_series,
+    all_accounts_daily_balance_series, cumulative_contribution_series,
+    group_account_balance_series, group_daily_balance_series, merge_balance_series_by_date,
+    merged_accounts_daily_balance_series,
 };
 
 pub const SDK_NAME: &str = "fin-sdk";
