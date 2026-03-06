@@ -11,6 +11,8 @@ Use this document for shared rules, sequencing, constraints, and acceptance note
 
 - `tickets.csv`: machine-friendly backlog with sequence, dependencies, status, success criteria, validation, instructions, and watch-outs.
 - `PLAN.md`: shared operating rules and domain decisions for the roadmap.
+- `docs/fin-api.md`: operator-facing daemon usage and troubleshooting notes.
+- `docs/benchmarks/api-007-fin-api.md`: recorded fin-api benchmark interpretation and artifact links.
 
 ## Status Rules
 

@@ -15,6 +15,7 @@
 		"build": "cargo build --workspace --release && OUT_DIR=\"${FIN_HOME:-${TOOLS_HOME:-$HOME/.tools}/fin}\" && mkdir -p \"$OUT_DIR\" && cp target/release/fin \"$OUT_DIR/fin\" && cp target/release/fin-tui \"$OUT_DIR/fin-tui\" && cp target/release/fin-api \"$OUT_DIR/fin-api\"",
 		"util:fixtures:generate": "cargo run -q -p fin-sdk --example build_fixture -- target/bench-fixtures/benchmark-runtime",
 		"util:bench:baseline": "bash scripts/benchmarks/baseline.sh",
+		"util:bench:api": "bash scripts/benchmarks/fin-api.sh",
 		"util:format": "cargo fmt --all",
 		"util:lint": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
 		"util:types": "cargo check --workspace",

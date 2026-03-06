@@ -1,0 +1,10 @@
+endpoint,mean_ms,min_ms,max_ms,runs
+view.transactions,4.20,3,8,20
+report.summary,11.00,10,12,20
+dashboard.kpis,3.50,3,4,20
+dashboard.allocation,3.90,3,5,20
+dashboard.hierarchy,3.05,3,4,20
+dashboard.flow,3.95,3,4,20
+dashboard.balances,1.30,1,2,20
+dashboard.contributions,1.05,1,2,20
+dashboard.projection,4.05,4,5,20
