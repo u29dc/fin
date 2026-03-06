@@ -18,15 +18,15 @@ Recorded on 2026-03-06 against the committed synthetic fixture.
 
 | Endpoint | Mean ms | Min ms | Max ms | Runs |
 | --- | ---: | ---: | ---: | ---: |
-| `view.transactions?group=personal&limit=1000` | 4.20 | 3 | 8 | 20 |
-| `report.summary?months=12` | 11.00 | 10 | 12 | 20 |
-| `dashboard.kpis?group=business&months=24` | 3.50 | 3 | 4 | 20 |
-| `dashboard.allocation?group=personal&month=2026-03` | 3.90 | 3 | 5 | 20 |
-| `dashboard.hierarchy?group=business&months=6&mode=monthly_average` | 3.05 | 3 | 4 | 20 |
-| `dashboard.flow?group=business&months=6&mode=monthly_average` | 3.95 | 3 | 4 | 20 |
-| `dashboard.balances?account=Assets:Personal:Checking&downsampleMinStepDays=30` | 1.30 | 1 | 2 | 20 |
-| `dashboard.contributions?account=Assets:Personal:Investments&downsampleMinStepDays=30` | 1.05 | 1 | 2 | 20 |
-| `dashboard.projection?group=business&months=12` | 4.05 | 4 | 5 | 20 |
+| `view.transactions?group=personal&limit=1000` | 4.05 | 4 | 5 | 20 |
+| `report.summary?months=12` | 11.70 | 11 | 15 | 20 |
+| `dashboard.kpis?group=business&months=24` | 4.00 | 3 | 5 | 20 |
+| `dashboard.allocation?group=personal&month=2026-03` | 4.05 | 4 | 5 | 20 |
+| `dashboard.hierarchy?group=business&months=6&mode=monthly_average` | 3.45 | 3 | 5 | 20 |
+| `dashboard.flow?group=business&months=6&mode=monthly_average` | 4.15 | 4 | 5 | 20 |
+| `dashboard.balances?account=Assets:Personal:Checking&downsampleMinStepDays=30` | 2.00 | 1 | 3 | 20 |
+| `dashboard.contributions?account=Assets:Personal:Investments&downsampleMinStepDays=30` | 1.10 | 1 | 2 | 20 |
+| `dashboard.projection?group=business&months=12` | 4.55 | 4 | 6 | 20 |
 
 Result:
 
@@ -37,15 +37,15 @@ Result:
 
 | Endpoint | Mean ms |
 | --- | ---: |
-| `view.transactions` | 11.53 |
-| `report.summary` | 18.94 |
-| `dashboard.kpis` | 14.92 |
-| `dashboard.allocation` | 11.95 |
-| `dashboard.hierarchy` | 11.41 |
-| `dashboard.flow` | 9.97 |
-| `dashboard.balances` | 8.69 |
-| `dashboard.contributions` | 7.55 |
-| `dashboard.projection` | 12.28 |
+| `view.transactions` | 11.74 |
+| `report.summary` | 16.89 |
+| `dashboard.kpis` | 10.54 |
+| `dashboard.allocation` | 10.59 |
+| `dashboard.hierarchy` | 9.35 |
+| `dashboard.flow` | 9.99 |
+| `dashboard.balances` | 7.64 |
+| `dashboard.contributions` | 6.82 |
+| `dashboard.projection` | 9.55 |
 
 Interpretation:
 

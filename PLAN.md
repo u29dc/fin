@@ -13,6 +13,7 @@ Use this document for shared rules, sequencing, constraints, and acceptance note
 - `PLAN.md`: shared operating rules and domain decisions for the roadmap.
 - `docs/fin-api.md`: operator-facing daemon usage and troubleshooting notes.
 - `docs/benchmarks/api-007-fin-api.md`: recorded fin-api benchmark interpretation and artifact links.
+- `docs/benchmarks/qa-002-final.md`: final end-to-end validation record for the completed roadmap.
 
 ## Status Rules
 
@@ -142,3 +143,5 @@ The roadmap is done only when all of the following are true:
 - `packages/web` is back on `main` and uses `fin-api`, not the archived core
 - `bun run dev` starts the full stack cleanly
 - quality gates, benchmarks, and manual validation are recorded and passing or explicitly documented
+
+Final completion evidence is recorded in `docs/benchmarks/qa-002-final.md`.
