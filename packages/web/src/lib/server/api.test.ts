@@ -86,6 +86,35 @@ describe("createFinApiClient", () => {
 
 		await expect(client.configShow()).rejects.toBeInstanceOf(FinApiError);
 	});
+
+	test("uses camelCase query keys for dashboard endpoints", async () => {
+		const calls: string[] = [];
+		const client = createFinApiClient({
+			env: { FIN_API_BASE_URL: "http://127.0.0.1:7414" },
+			fetch: async (url) => {
+				calls.push(String(url));
+				return jsonResponse({
+					ok: true,
+					data: {
+						scopeKind: "account",
+						scopeId: "Assets:Personal:Monzo",
+						scopeLabel: "Personal Monzo",
+						series: [],
+					},
+					meta: { tool: "dashboard.balances", elapsed: 1 },
+				});
+			},
+		});
+
+		await client.dashboardBalances({
+			account: "Assets:Personal:Monzo",
+			downsampleMinStepDays: 14,
+			limit: 90,
+		});
+
+		expect(calls[0]).toContain("downsampleMinStepDays=14");
+		expect(calls[0]).not.toContain("downsample_min_step_days");
+	});
 });
 
 describe("loadShellState", () => {

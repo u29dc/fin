@@ -1,10 +1,5 @@
-import { loadShellState } from "$lib/server/api";
-import { resolveGroup } from "$lib/server/skeleton";
+import { loadDashboardPageData } from "$lib/server/dashboard";
 
 export async function load({ url }: { url: URL }) {
-	const shell = await loadShellState();
-	return {
-		...shell,
-		initialGroup: resolveGroup(url, shell.availableGroups),
-	};
+	return loadDashboardPageData({ url });
 }
