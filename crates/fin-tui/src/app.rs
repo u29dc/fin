@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use fin_sdk::{SortDirection, TransactionSortField};
 
 use crate::{
     cache::{RouteCache, RouteViewKey},
@@ -268,6 +269,7 @@ impl App {
             &mut self.fetch_context.reports.group_id,
             first_group.as_deref(),
         );
+        let previous_transactions_group = self.fetch_context.transactions.group_id.clone();
         if let Some(group_id) = &mut self.fetch_context.transactions.group_id
             && !self
                 .available_groups
@@ -278,6 +280,9 @@ impl App {
         }
         if self.fetch_context.transactions.group_id.as_deref() == Some("") {
             self.fetch_context.transactions.group_id = None;
+        }
+        if self.fetch_context.transactions.group_id != previous_transactions_group {
+            self.reset_transactions_paging();
         }
 
         if let OverviewScope::Group(group) = &self.fetch_context.overview.scope
@@ -319,12 +324,78 @@ impl App {
                 self.fetch_context.reports.group_id = group;
                 true
             }
-            Route::Transactions => {
-                self.fetch_context.transactions.group_id = Some(group);
-                true
-            }
+            Route::Transactions => self.set_transactions_group(Some(group)),
             Route::Summary | Route::Overview => false,
         }
+    }
+
+    fn set_transactions_group(&mut self, group_id: Option<String>) -> bool {
+        if self.fetch_context.transactions.group_id == group_id {
+            return false;
+        }
+        self.fetch_context.transactions.group_id = group_id;
+        self.reset_transactions_paging();
+        true
+    }
+
+    fn set_transactions_sort_field(&mut self, sort_field: TransactionSortField) -> bool {
+        if self.fetch_context.transactions.sort_field == sort_field {
+            return false;
+        }
+        self.fetch_context.transactions.sort_field = sort_field;
+        self.reset_transactions_paging();
+        true
+    }
+
+    fn set_transactions_sort_direction(&mut self, direction: SortDirection) -> bool {
+        if self.fetch_context.transactions.sort_direction == direction {
+            return false;
+        }
+        self.fetch_context.transactions.sort_direction = direction;
+        self.reset_transactions_paging();
+        true
+    }
+
+    fn reset_transactions_paging(&mut self) {
+        self.fetch_context.transactions.page_after = None;
+        self.fetch_context.transactions.previous_pages.clear();
+        if self.route == Route::Transactions {
+            self.set_selected_row(0);
+        }
+    }
+
+    fn advance_transactions_page(&mut self) -> bool {
+        let (has_more, next_cursor) = match self.route_payload() {
+            Some(RoutePayload::Transactions(payload)) => {
+                (payload.has_more, payload.next_cursor.clone())
+            }
+            _ => return false,
+        };
+        if !has_more {
+            return false;
+        }
+        let Some(next_cursor) = next_cursor else {
+            return false;
+        };
+        let current_cursor = self.fetch_context.transactions.page_after.clone();
+        self.fetch_context
+            .transactions
+            .previous_pages
+            .push(current_cursor);
+        self.fetch_context.transactions.page_after = Some(next_cursor);
+        self.set_selected_row(0);
+        self.request_refresh("transactions page changed");
+        true
+    }
+
+    fn rewind_transactions_page(&mut self) -> bool {
+        let Some(previous_cursor) = self.fetch_context.transactions.previous_pages.pop() else {
+            return false;
+        };
+        self.fetch_context.transactions.page_after = previous_cursor;
+        self.set_selected_row(0);
+        self.request_refresh("transactions page changed");
+        true
     }
 
     fn next_route(&mut self) {
@@ -389,6 +460,22 @@ impl App {
     }
 
     fn handle_main_key(&mut self, key_event: KeyEvent) {
+        if self.route == Route::Transactions {
+            match key_event.code {
+                KeyCode::PageUp => {
+                    if self.rewind_transactions_page() {
+                        return;
+                    }
+                }
+                KeyCode::PageDown => {
+                    if self.advance_transactions_page() {
+                        return;
+                    }
+                }
+                _ => {}
+            }
+        }
+
         let len = self.current_row_count();
         if len == 0 {
             return;
@@ -579,6 +666,54 @@ impl App {
             }
         }
 
+        if self.route == Route::Transactions {
+            for sort_field in [
+                TransactionSortField::PostedAt,
+                TransactionSortField::AmountMinor,
+                TransactionSortField::Description,
+                TransactionSortField::Counterparty,
+                TransactionSortField::AccountId,
+            ] {
+                let selected = if self.fetch_context.transactions.sort_field == sort_field {
+                    " (selected)"
+                } else {
+                    ""
+                };
+                let label = transaction_sort_label(sort_field);
+                actions.push(PaletteAction {
+                    title: format!("Sort transactions by: {label}{selected}"),
+                    context: "transactions".to_owned(),
+                    section: PaletteSection::Context,
+                    kind: PaletteActionKind::SetTransactionsSortField(sort_field),
+                    keywords: vec![
+                        "transactions".to_owned(),
+                        "sort".to_owned(),
+                        label.to_owned(),
+                    ],
+                });
+            }
+
+            for direction in [SortDirection::Desc, SortDirection::Asc] {
+                let selected = if self.fetch_context.transactions.sort_direction == direction {
+                    " (selected)"
+                } else {
+                    ""
+                };
+                let label = sort_direction_label(direction);
+                actions.push(PaletteAction {
+                    title: format!("Set transaction order: {label}{selected}"),
+                    context: "transactions".to_owned(),
+                    section: PaletteSection::Context,
+                    kind: PaletteActionKind::SetTransactionsSortDirection(direction),
+                    keywords: vec![
+                        "transactions".to_owned(),
+                        "order".to_owned(),
+                        label.to_owned(),
+                    ],
+                });
+            }
+        }
+
         if self.route == Route::Overview {
             let all_selected = matches!(self.fetch_context.overview.scope, OverviewScope::All);
             let all_suffix = if all_selected { " (selected)" } else { "" };
@@ -724,6 +859,28 @@ impl App {
                     self.status = format!("Set group to {group}");
                 }
             }
+            PaletteActionKind::SetTransactionsSortField(sort_field) => {
+                self.close_palette();
+                if self.set_transactions_sort_field(sort_field) {
+                    self.request_refresh("transaction sort changed");
+                } else {
+                    self.status = format!(
+                        "Transaction sort already {}",
+                        transaction_sort_label(sort_field)
+                    );
+                }
+            }
+            PaletteActionKind::SetTransactionsSortDirection(direction) => {
+                self.close_palette();
+                if self.set_transactions_sort_direction(direction) {
+                    self.request_refresh("transaction order changed");
+                } else {
+                    self.status = format!(
+                        "Transaction order already {}",
+                        sort_direction_label(direction)
+                    );
+                }
+            }
             PaletteActionKind::SetOverviewScopeAll => {
                 self.close_palette();
                 self.fetch_context.overview.scope = OverviewScope::All;
@@ -763,6 +920,23 @@ fn reconcile_group_state(
     }
 }
 
+fn transaction_sort_label(sort_field: TransactionSortField) -> &'static str {
+    match sort_field {
+        TransactionSortField::PostedAt => "posted date",
+        TransactionSortField::AmountMinor => "amount",
+        TransactionSortField::Description => "description",
+        TransactionSortField::Counterparty => "counterparty",
+        TransactionSortField::AccountId => "account",
+    }
+}
+
+fn sort_direction_label(direction: SortDirection) -> &'static str {
+    match direction {
+        SortDirection::Asc => "ascending",
+        SortDirection::Desc => "descending",
+    }
+}
+
 fn is_palette_trigger(key_event: KeyEvent) -> bool {
     match key_event.code {
         KeyCode::Char(character) => {
@@ -776,13 +950,16 @@ fn is_palette_trigger(key_event: KeyEvent) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use fin_sdk::{SortDirection, TransactionCursor, TransactionCursorValue, TransactionSortField};
 
     use super::{App, FocusTarget};
     use crate::{
         fetch::{
-            AccountFreshnessRow, OverviewDashboardPayload, RoutePayload, TransactionTableRow,
-            TransactionsPayload,
+            AccountFreshnessRow, OverviewDashboardPayload, RoutePayload, TransactionDetailPanel,
+            TransactionDetailPostingRow, TransactionTableRow, TransactionsPayload,
         },
         routes::Route,
     };
@@ -790,20 +967,64 @@ mod tests {
     fn seed_transactions(app: &mut App, count: usize) {
         let rows = (0..count)
             .map(|index| TransactionTableRow {
+                posting_id: format!("posting-{index}"),
+                journal_entry_id: format!("journal-{index}"),
                 posted_at: format!("2026-03-{:02}T10:00:00", (index % 28) + 1),
                 from_account: "Assets:Personal:Monzo".to_owned(),
                 to_account: "Expenses:Food:Groceries".to_owned(),
                 amount_minor: index as i64,
                 description: format!("Test {index}"),
                 counterparty: "Demo".to_owned(),
+                pair_accounts: vec!["Expenses:Food:Groceries".to_owned()],
             })
             .collect::<Vec<_>>();
+        let detail_by_posting_id = rows
+            .iter()
+            .map(|row| {
+                (
+                    row.posting_id.clone(),
+                    TransactionDetailPanel {
+                        posting_id: row.posting_id.clone(),
+                        journal_entry_id: row.journal_entry_id.clone(),
+                        posted_at: row.posted_at.clone(),
+                        posted_date: row.posted_at[..10].to_owned(),
+                        amount_minor: row.amount_minor,
+                        currency: "GBP".to_owned(),
+                        description: row.description.clone(),
+                        raw_description: Some(row.description.clone()),
+                        clean_description: Some(row.description.clone()),
+                        counterparty: Some(row.counterparty.clone()),
+                        source_file: Some("fixtures/demo.csv".to_owned()),
+                        is_transfer: false,
+                        pair_postings: vec![TransactionDetailPostingRow {
+                            account_id: "Expenses:Food:Groceries".to_owned(),
+                            amount_minor: -row.amount_minor,
+                            memo: Some("memo".to_owned()),
+                        }],
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
         app.cache.store(
             app.fetch_context.route_cache_key(Route::Transactions),
             RoutePayload::Transactions(TransactionsPayload {
                 rows,
-                limit: 1000,
-                has_more: false,
+                detail_by_posting_id,
+                limit: 50,
+                total_count: count.max(1) * 3,
+                has_more: true,
+                page_index: 0,
+                next_cursor: Some(TransactionCursor {
+                    sort_field: TransactionSortField::PostedAt,
+                    sort_direction: SortDirection::Desc,
+                    sort_value: TransactionCursorValue::Text("2026-03-05T10:00:00".to_owned()),
+                    posted_at: "2026-03-05T10:00:00".to_owned(),
+                    journal_entry_id: "journal-5".to_owned(),
+                    posting_id: "posting-5".to_owned(),
+                }),
+                sort_field: TransactionSortField::PostedAt,
+                sort_direction: SortDirection::Desc,
+                group_id: None,
             }),
         );
     }
@@ -980,6 +1201,77 @@ mod tests {
 
         app.on_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
         assert_eq!(app.selected_row(), 2);
+    }
+
+    #[test]
+    fn page_down_advances_transactions_cursor_and_resets_selection() {
+        let mut app = App::new();
+        seed_transactions(&mut app, 20);
+        app.set_route(Route::Transactions);
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        assert_eq!(app.selected_row(), 19);
+
+        app.on_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+
+        assert_eq!(app.selected_row(), 0);
+        assert_eq!(app.fetch_context.transactions.previous_pages, vec![None]);
+        assert_eq!(
+            app.fetch_context
+                .transactions
+                .page_after
+                .as_ref()
+                .map(|cursor| cursor.posting_id.as_str()),
+            Some("posting-5")
+        );
+        assert!(app.is_pending_refresh());
+    }
+
+    #[test]
+    fn page_up_rewinds_transactions_cursor_and_resets_selection() {
+        let mut app = App::new();
+        seed_transactions(&mut app, 20);
+        app.set_route(Route::Transactions);
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+        assert_eq!(app.fetch_context.transactions.previous_pages, vec![None]);
+
+        app.on_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+
+        assert_eq!(app.selected_row(), 0);
+        assert!(app.fetch_context.transactions.previous_pages.is_empty());
+        assert!(app.fetch_context.transactions.page_after.is_none());
+        assert!(app.is_pending_refresh());
+    }
+
+    #[test]
+    fn palette_sort_change_resets_transactions_paging() {
+        let mut app = App::new();
+        seed_transactions(&mut app, 20);
+        app.set_route(Route::Transactions);
+        app.fetch_context.transactions.page_after = Some(TransactionCursor {
+            sort_field: TransactionSortField::PostedAt,
+            sort_direction: SortDirection::Desc,
+            sort_value: TransactionCursorValue::Text("2026-03-05T10:00:00".to_owned()),
+            posted_at: "2026-03-05T10:00:00".to_owned(),
+            journal_entry_id: "journal-5".to_owned(),
+            posting_id: "posting-5".to_owned(),
+        });
+        app.fetch_context.transactions.previous_pages = vec![None];
+
+        app.on_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+        for ch in "amount".chars() {
+            app.on_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+        }
+        app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert_eq!(
+            app.fetch_context.transactions.sort_field,
+            TransactionSortField::AmountMinor
+        );
+        assert!(app.fetch_context.transactions.page_after.is_none());
+        assert!(app.fetch_context.transactions.previous_pages.is_empty());
+        assert!(app.is_pending_refresh());
     }
 
     #[test]

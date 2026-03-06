@@ -7,8 +7,9 @@ pub use loaders::FetchClient;
 pub use models::{
     AccountFreshnessRow, CashflowDashboardPayload, CategoriesDashboardPayload,
     OverviewDashboardPayload, RoutePayload, SummaryAllocation, SummaryDashboardPayload,
-    SummaryGroupPanel, SummaryMonthSnapshot, TransactionsPayload, transaction_matches_query,
+    SummaryGroupPanel, SummaryMonthSnapshot, TransactionDetailPanel, TransactionTableRow,
+    TransactionsPayload, transaction_matches_query,
 };
 
 #[cfg(test)]
-pub use models::TransactionTableRow;
+pub use models::TransactionDetailPostingRow;

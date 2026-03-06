@@ -1,15 +1,45 @@
+use std::collections::BTreeMap;
+
 use fin_sdk::{
     AllocationBucket, ContributionPoint, DailyBalancePoint, RunwayProjectionReport, ShortTermTrend,
+    SortDirection, TransactionCursor, TransactionSortField,
 };
 
 #[derive(Debug, Clone)]
 pub struct TransactionTableRow {
+    pub posting_id: String,
+    pub journal_entry_id: String,
     pub posted_at: String,
     pub from_account: String,
     pub to_account: String,
     pub amount_minor: i64,
     pub description: String,
     pub counterparty: String,
+    pub pair_accounts: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionDetailPostingRow {
+    pub account_id: String,
+    pub amount_minor: i64,
+    pub memo: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionDetailPanel {
+    pub posting_id: String,
+    pub journal_entry_id: String,
+    pub posted_at: String,
+    pub posted_date: String,
+    pub amount_minor: i64,
+    pub currency: String,
+    pub description: String,
+    pub raw_description: Option<String>,
+    pub clean_description: Option<String>,
+    pub counterparty: Option<String>,
+    pub source_file: Option<String>,
+    pub is_transfer: bool,
+    pub pair_postings: Vec<TransactionDetailPostingRow>,
 }
 
 pub fn transaction_matches_query(row: &TransactionTableRow, query: &str) -> bool {
@@ -19,18 +49,31 @@ pub fn transaction_matches_query(row: &TransactionTableRow, query: &str) -> bool
     }
 
     row.posted_at.to_ascii_lowercase().contains(&needle)
+        || row.posting_id.to_ascii_lowercase().contains(&needle)
+        || row.journal_entry_id.to_ascii_lowercase().contains(&needle)
         || row.from_account.to_ascii_lowercase().contains(&needle)
         || row.to_account.to_ascii_lowercase().contains(&needle)
         || row.amount_minor.to_string().contains(&needle)
         || row.description.to_ascii_lowercase().contains(&needle)
         || row.counterparty.to_ascii_lowercase().contains(&needle)
+        || row
+            .pair_accounts
+            .iter()
+            .any(|account| account.to_ascii_lowercase().contains(&needle))
 }
 
 #[derive(Debug, Clone)]
 pub struct TransactionsPayload {
     pub rows: Vec<TransactionTableRow>,
+    pub detail_by_posting_id: BTreeMap<String, TransactionDetailPanel>,
     pub limit: usize,
+    pub total_count: usize,
     pub has_more: bool,
+    pub page_index: usize,
+    pub next_cursor: Option<TransactionCursor>,
+    pub sort_field: TransactionSortField,
+    pub sort_direction: SortDirection,
+    pub group_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]

@@ -1,11 +1,11 @@
-use fin_sdk::{SortDirection, TransactionSortField};
+use fin_sdk::{SortDirection, TransactionCursor, TransactionSortField};
 
 use crate::{
     cache::{RouteCacheKey, RouteViewKey},
     routes::Route,
 };
 
-pub const TUI_TRANSACTIONS_PREVIEW_LIMIT: usize = 1000;
+pub const TUI_TRANSACTIONS_PAGE_LIMIT: usize = 50;
 pub const CASHFLOW_LOOKBACK_MONTHS: usize = 120;
 pub const CASHFLOW_VIEW_MONTHS: usize = 12;
 pub const CATEGORY_MONTHS: usize = 6;
@@ -51,6 +51,8 @@ pub struct TransactionsRouteState {
     pub sort_direction: SortDirection,
     pub window_months: Option<usize>,
     pub page_limit: usize,
+    pub page_after: Option<TransactionCursor>,
+    pub previous_pages: Vec<Option<TransactionCursor>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,7 +103,9 @@ impl Default for FetchContext {
                 sort_field: TransactionSortField::PostedAt,
                 sort_direction: SortDirection::Desc,
                 window_months: None,
-                page_limit: TUI_TRANSACTIONS_PREVIEW_LIMIT,
+                page_limit: TUI_TRANSACTIONS_PAGE_LIMIT,
+                page_after: None,
+                previous_pages: Vec::new(),
             },
             cashflow: CashflowRouteState {
                 group_id: "business".to_owned(),
@@ -146,11 +150,11 @@ impl FetchContext {
                     .window_months
                     .map(|months| format!("{months}m"))
                     .unwrap_or_else(|| "all".to_owned());
+                let page = self.transactions.previous_pages.len() + 1;
                 format!(
-                    "finance/transactions/{group}/{}-{}/{}",
+                    "finance/transactions/{group}/{}-{}/{window}/page-{page}",
                     transaction_sort_id(self.transactions.sort_field),
                     sort_direction_id(self.transactions.sort_direction),
-                    window
                 )
             }
             Route::Cashflow => format!(
@@ -179,11 +183,12 @@ impl FetchContext {
                     .transactions
                     .window_months
                     .map_or_else(|| "all".to_owned(), |months| months.to_string());
+                let cursor = transaction_cursor_id(self.transactions.page_after.as_ref());
                 format!(
-                    "group={group}|sort={}-{}|window={window}|limit={}",
+                    "group={group}|sort={}-{}|window={window}|limit={}|cursor={cursor}",
                     transaction_sort_id(self.transactions.sort_field),
                     sort_direction_id(self.transactions.sort_direction),
-                    self.transactions.page_limit
+                    self.transactions.page_limit,
                 )
             }
             Route::Cashflow => format!(
@@ -240,8 +245,27 @@ fn sort_direction_id(direction: SortDirection) -> &'static str {
     }
 }
 
+fn transaction_cursor_id(cursor: Option<&TransactionCursor>) -> String {
+    let Some(cursor) = cursor else {
+        return "origin".to_owned();
+    };
+    let sort_value = match &cursor.sort_value {
+        fin_sdk::TransactionCursorValue::Text(value) => encode_context_fragment(value),
+        fin_sdk::TransactionCursorValue::Integer(value) => value.to_string(),
+    };
+    format!(
+        "{}:{}:{}:{}",
+        transaction_sort_id(cursor.sort_field),
+        sort_direction_id(cursor.sort_direction),
+        sort_value,
+        encode_context_fragment(&cursor.posting_id)
+    )
+}
+
 #[cfg(test)]
 mod tests {
+    use fin_sdk::{SortDirection, TransactionCursor, TransactionCursorValue, TransactionSortField};
+
     use super::FetchContext;
     use crate::routes::Route;
 
@@ -256,6 +280,16 @@ mod tests {
 
         assert_eq!(base_cache_key, context.route_cache_key(Route::Transactions));
         assert_ne!(base_view_key, context.route_view_key(Route::Transactions));
+
+        context.transactions.page_after = Some(TransactionCursor {
+            sort_field: TransactionSortField::PostedAt,
+            sort_direction: SortDirection::Desc,
+            sort_value: TransactionCursorValue::Text("2026-02-01T12:00:00".to_owned()),
+            posted_at: "2026-02-01T12:00:00".to_owned(),
+            journal_entry_id: "je-1".to_owned(),
+            posting_id: "p-1".to_owned(),
+        });
+        assert_ne!(base_cache_key, context.route_cache_key(Route::Transactions));
 
         context.cashflow.group_id = "joint".to_owned();
         assert_ne!(

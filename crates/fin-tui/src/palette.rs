@@ -1,3 +1,4 @@
+use fin_sdk::{SortDirection, TransactionSortField};
 use ratatui::style::Color;
 
 use crate::routes::Route;
@@ -31,6 +32,8 @@ pub enum PaletteActionKind {
     Navigate(Route),
     Refresh,
     SetRouteGroup(String),
+    SetTransactionsSortField(TransactionSortField),
+    SetTransactionsSortDirection(SortDirection),
     SetOverviewScopeAll,
     SetOverviewScopeGroup(String),
     Quit,

@@ -4,12 +4,12 @@ use fin_sdk::config::LoadedConfig;
 use fin_sdk::runtime::{RuntimeContext, RuntimeContextOptions};
 use fin_sdk::{
     BalanceSeriesQueryOptions, DashboardAllocationBasis, FlowQueryOptions, HierarchyQueryOptions,
-    MonthlyCashflowPoint, RollupMode, RunwayProjectionOptions, TransactionQueryOptions,
+    MonthlyCashflowPoint, RollupMode, RunwayProjectionOptions, TransactionPageQuery,
     all_accounts_daily_balance_series, cumulative_contribution_series, group_asset_account_ids,
-    group_category_breakdown, group_expense_hierarchy, group_flow_graph,
+    group_category_breakdown, group_expense_hierarchy, group_flow_graph, load_transaction_detail,
     merged_accounts_daily_balance_series, project_consolidated_runway, project_group_runway,
-    report_cashflow, report_cashflow_kpis, report_group_allocation, report_reserves, report_runway,
-    report_summary, view_accounts, view_transactions,
+    query_transactions_page, report_cashflow, report_cashflow_kpis, report_group_allocation,
+    report_reserves, report_runway, report_summary, view_accounts,
 };
 use rusqlite::{Connection, params_from_iter};
 
@@ -24,8 +24,8 @@ use super::models::{
     AccountFreshnessRow, CashflowDashboardPayload, CashflowPoint, CategoriesDashboardPayload,
     CategoryParetoPoint, CategoryStabilityRow, ExpenseTreeRow, FlowMatrixRow,
     OverviewDashboardPayload, RoutePayload, SummaryAllocation, SummaryAllocationSegment,
-    SummaryDashboardPayload, SummaryGroupPanel, SummaryMonthSnapshot, TransactionTableRow,
-    TransactionsPayload, UncategorizedLeakage,
+    SummaryDashboardPayload, SummaryGroupPanel, SummaryMonthSnapshot, TransactionDetailPanel,
+    TransactionDetailPostingRow, TransactionTableRow, TransactionsPayload, UncategorizedLeakage,
 };
 
 #[derive(Debug, Default)]
@@ -208,26 +208,30 @@ fn fetch_transactions(
     runtime: &RuntimeContext,
     context: &TransactionsRouteState,
 ) -> Result<RoutePayload, String> {
-    let chart_account_ids = context
-        .group_id
-        .as_deref()
-        .map(|group_id| group_asset_account_ids(runtime.config(), group_id));
-    let rows = view_transactions(
+    let page = query_transactions_page(
         runtime.connection(),
-        &TransactionQueryOptions {
-            chart_account_ids,
+        runtime.config(),
+        &TransactionPageQuery {
+            group_id: context.group_id.clone(),
+            chart_account_ids: context
+                .group_id
+                .as_deref()
+                .map(|group_id| group_asset_account_ids(runtime.config(), group_id)),
             limit: context.page_limit,
-            ..TransactionQueryOptions::default()
+            sort_field: context.sort_field,
+            sort_direction: context.sort_direction,
+            after: context.page_after.clone(),
+            ..TransactionPageQuery::default()
         },
     )
     .map_err(|error| error.to_string())?;
 
-    let has_more = rows.len() == context.page_limit;
-    let mapped = rows
-        .into_iter()
+    let mapped = page
+        .items
+        .iter()
         .map(|row| {
-            let primary = summarize_accounts(&row.chart_account_id);
-            let pair = summarize_accounts(&row.pair_account_id);
+            let primary = summarize_account_id(&row.chart_account_id);
+            let pair = summarize_account_ids(&row.pair_account_ids);
             let (from_account, to_account) = if row.amount_minor < 0 {
                 (primary, pair)
             } else {
@@ -235,24 +239,69 @@ fn fetch_transactions(
             };
 
             TransactionTableRow {
-                posted_at: row.posted_at,
+                posting_id: row.posting_id.clone(),
+                journal_entry_id: row.journal_entry_id.clone(),
+                posted_at: row.posted_at.clone(),
                 from_account,
                 to_account,
                 amount_minor: row.amount_minor,
                 description: if row.clean_description.trim().is_empty() {
-                    row.raw_description
+                    row.raw_description.clone()
                 } else {
-                    row.clean_description
+                    row.clean_description.clone()
                 },
-                counterparty: row.counterparty.unwrap_or_default(),
+                counterparty: row.counterparty.clone().unwrap_or_default(),
+                pair_accounts: row.pair_account_ids.clone(),
             }
         })
         .collect::<Vec<_>>();
 
+    let mut detail_by_posting_id = std::collections::BTreeMap::new();
+    for row in &page.items {
+        let Some(detail) = load_transaction_detail(runtime.connection(), &row.posting_id)
+            .map_err(|error| error.to_string())?
+        else {
+            continue;
+        };
+        detail_by_posting_id.insert(
+            row.posting_id.clone(),
+            TransactionDetailPanel {
+                posting_id: detail.posting_id,
+                journal_entry_id: detail.journal_entry_id,
+                posted_at: detail.posted_at,
+                posted_date: detail.posted_date,
+                amount_minor: detail.amount_minor,
+                currency: detail.currency,
+                description: detail.description,
+                raw_description: detail.raw_description,
+                clean_description: detail.clean_description,
+                counterparty: detail.counterparty,
+                source_file: detail.source_file,
+                is_transfer: detail.is_transfer,
+                pair_postings: detail
+                    .pair_postings
+                    .into_iter()
+                    .map(|posting| TransactionDetailPostingRow {
+                        account_id: posting.account_id,
+                        amount_minor: posting.amount_minor,
+                        memo: posting.memo,
+                    })
+                    .collect(),
+            },
+        );
+    }
+
     Ok(RoutePayload::Transactions(TransactionsPayload {
         rows: mapped,
+        detail_by_posting_id,
         limit: context.page_limit,
-        has_more,
+        total_count: page.total_count,
+        has_more: page.has_more,
+        page_index: context.previous_pages.len(),
+        next_cursor: page.next_cursor,
+        sort_field: context.sort_field,
+        sort_direction: context.sort_direction,
+        group_id: context.group_id.clone(),
     }))
 }
 
@@ -872,9 +921,18 @@ fn sql_placeholders(count: usize) -> String {
         .join(", ")
 }
 
-fn summarize_accounts(accounts: &str) -> String {
-    let parts = accounts
-        .split(',')
+fn summarize_account_id(account_id: &str) -> String {
+    account_id
+        .rsplit(':')
+        .next()
+        .filter(|value| !value.is_empty())
+        .unwrap_or("n/a")
+        .to_owned()
+}
+
+fn summarize_account_ids(account_ids: &[String]) -> String {
+    let parts = account_ids
+        .iter()
         .filter_map(|value| value.rsplit(':').next())
         .filter(|value| !value.is_empty())
         .collect::<Vec<_>>();
@@ -1062,6 +1120,25 @@ mod tests {
                 assert!(!payload.flow.is_empty());
             }
             other => panic!("unexpected categories payload: {other:?}"),
+        }
+
+        let transactions = client
+            .fetch_route(Route::Transactions, &FetchContext::default())
+            .expect("transactions payload");
+        match transactions {
+            RoutePayload::Transactions(payload) => {
+                assert!(!payload.rows.is_empty());
+                assert!(payload.total_count >= payload.rows.len());
+                assert_eq!(payload.sort_field, fin_sdk::TransactionSortField::PostedAt);
+                assert_eq!(payload.sort_direction, fin_sdk::SortDirection::Desc);
+                let first_row = payload.rows.first().expect("first transaction");
+                assert!(
+                    payload
+                        .detail_by_posting_id
+                        .contains_key(&first_row.posting_id)
+                );
+            }
+            other => panic!("unexpected transactions payload: {other:?}"),
         }
     }
 }
