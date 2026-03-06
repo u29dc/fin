@@ -1,0 +1,92 @@
+{
+  "seed": "qa-001-benchmark-fixture",
+  "startMonth": "2023-01",
+  "months": 48,
+  "groups": [
+    {
+      "id": "personal",
+      "monthlyIncomeMinor": 520000,
+      "monthlyExpenseTargetMinor": 276000,
+      "txPerMonth": 18,
+      "reserveTransfers": [
+        {
+          "targetAccountId": "Assets:Personal:Emergency",
+          "amountMinor": 65000
+        },
+        {
+          "targetAccountId": "Assets:Personal:Investments",
+          "amountMinor": 90000
+        }
+      ],
+      "anomalyMonths": [
+        {
+          "monthIndex": 14,
+          "amountMinor": 185000,
+          "expenseAccountId": "Expenses:Health:Medical",
+          "description": "Dental surgery",
+          "counterparty": "Private Clinic"
+        },
+        {
+          "monthIndex": 33,
+          "amountMinor": 145000,
+          "expenseAccountId": "Expenses:Transport:Travel",
+          "description": "Family travel",
+          "counterparty": "Eurostar"
+        }
+      ]
+    },
+    {
+      "id": "joint",
+      "monthlyIncomeMinor": 310000,
+      "monthlyExpenseTargetMinor": 238000,
+      "txPerMonth": 14,
+      "reserveTransfers": [
+        {
+          "targetAccountId": "Assets:Joint:HomeReserve",
+          "amountMinor": 45000
+        }
+      ],
+      "anomalyMonths": [
+        {
+          "monthIndex": 9,
+          "amountMinor": 210000,
+          "expenseAccountId": "Expenses:Housing:Utilities",
+          "description": "Boiler replacement",
+          "counterparty": "Home Services"
+        }
+      ]
+    },
+    {
+      "id": "business",
+      "monthlyIncomeMinor": 1280000,
+      "monthlyExpenseTargetMinor": 612000,
+      "txPerMonth": 26,
+      "reserveTransfers": [
+        {
+          "targetAccountId": "Assets:Business:TaxReserve",
+          "amountMinor": 135000
+        },
+        {
+          "targetAccountId": "Assets:Business:RainyDay",
+          "amountMinor": 55000
+        }
+      ],
+      "anomalyMonths": [
+        {
+          "monthIndex": 11,
+          "amountMinor": 420000,
+          "expenseAccountId": "Expenses:Business:Equipment",
+          "description": "Studio equipment refresh",
+          "counterparty": "Pro AV"
+        },
+        {
+          "monthIndex": 27,
+          "amountMinor": 360000,
+          "expenseAccountId": "Expenses:Business:Contractors",
+          "description": "Launch contractor sprint",
+          "counterparty": "Collective Studio"
+        }
+      ]
+    }
+  ]
+}

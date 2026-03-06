@@ -1,0 +1,56 @@
+{
+  "warn_on_unmapped": true,
+  "fallback_to_raw": true,
+  "rules": [
+    {
+      "patterns": ["PAYROLL", "SALARY"],
+      "target": "Salary",
+      "category": "Income:Salary"
+    },
+    {
+      "patterns": ["CLIENT INVOICE", "RETAINER"],
+      "target": "Client Revenue",
+      "category": "Income:Other"
+    },
+    {
+      "patterns": ["DIVIDEND", "INTEREST"],
+      "target": "Investment Return",
+      "category": "Income:Dividends"
+    },
+    {
+      "patterns": ["GROCERY", "SUPERMARKET"],
+      "target": "Groceries",
+      "category": "Expenses:Food:Groceries"
+    },
+    {
+      "patterns": ["DINING", "CAFE"],
+      "target": "Dining",
+      "category": "Expenses:Food:Restaurants"
+    },
+    {
+      "patterns": ["RENT", "LANDLORD"],
+      "target": "Rent",
+      "category": "Expenses:Housing:Rent"
+    },
+    {
+      "patterns": ["UTILITY", "ENERGY", "WATER"],
+      "target": "Utilities",
+      "category": "Expenses:Housing:Utilities"
+    },
+    {
+      "patterns": ["SAAS", "SOFTWARE", "HOSTING"],
+      "target": "Software",
+      "category": "Expenses:Business:Software"
+    },
+    {
+      "patterns": ["CONTRACTOR", "FREELANCER"],
+      "target": "Contractor",
+      "category": "Expenses:Business:Contractors"
+    },
+    {
+      "patterns": ["TRAIN", "TUBE", "AIRFARE"],
+      "target": "Travel",
+      "category": "Expenses:Transport:Travel"
+    }
+  ]
+}

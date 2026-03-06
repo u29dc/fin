@@ -1,0 +1,43 @@
+{
+  "paths": {
+    "home_dir": "/Users/han/Git/fin/target/bench-fixtures/benchmark-runtime",
+    "data_dir": "/Users/han/Git/fin/target/bench-fixtures/benchmark-runtime/data",
+    "imports_dir": "/Users/han/Git/fin/target/bench-fixtures/benchmark-runtime/imports",
+    "inbox_dir": "/Users/han/Git/fin/target/bench-fixtures/benchmark-runtime/imports/inbox",
+    "archive_dir": "/Users/han/Git/fin/target/bench-fixtures/benchmark-runtime/imports/archive",
+    "config_path": "/Users/han/Git/fin/target/bench-fixtures/benchmark-runtime/data/fin.config.toml",
+    "rules_path": "/Users/han/Git/fin/target/bench-fixtures/benchmark-runtime/data/fin.rules.json",
+    "spec_path": "/Users/han/Git/fin/target/bench-fixtures/benchmark-runtime/fixture-spec.json",
+    "db_path": "/Users/han/Git/fin/target/bench-fixtures/benchmark-runtime/data/fin.db"
+  },
+  "stats": {
+    "seed": "qa-001-benchmark-fixture",
+    "months": 48,
+    "account_count": 8,
+    "journal_entries": 3229,
+    "postings": 6458,
+    "transfer_entries": 240,
+    "first_posted_at": "2022-12-02T08:15:00",
+    "last_posted_at": "2026-12-28T15:20:00",
+    "groups": {
+      "business": {
+        "income_entries": 48,
+        "expense_entries": 1250,
+        "transfer_entries": 96,
+        "other_entries": 102
+      },
+      "joint": {
+        "income_entries": 48,
+        "expense_entries": 673,
+        "transfer_entries": 48,
+        "other_entries": 52
+      },
+      "personal": {
+        "income_entries": 96,
+        "expense_entries": 866,
+        "transfer_entries": 96,
+        "other_entries": 102
+      }
+    }
+  }
+}

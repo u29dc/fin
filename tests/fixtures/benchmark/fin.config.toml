@@ -1,0 +1,99 @@
+[financial]
+corp_tax_rate = 0.25
+personal_income_tax_rate = 0.2
+burn_rate_method = "median"
+
+[sanitization]
+rules = "data/fin.rules.json"
+
+[[groups]]
+id = "personal"
+label = "Personal"
+icon = "user"
+tax_type = "income"
+expense_reserve_months = 3
+
+[[groups]]
+id = "joint"
+label = "Joint"
+icon = "home"
+tax_type = "none"
+expense_reserve_months = 4
+
+[[groups]]
+id = "business"
+label = "Business"
+icon = "briefcase"
+tax_type = "corp"
+expense_reserve_months = 2
+
+[[accounts]]
+id = "Assets:Personal:Checking"
+group = "personal"
+type = "asset"
+provider = "synthetic"
+label = "Personal Checking"
+subtype = "checking"
+
+[[accounts]]
+id = "Assets:Personal:Emergency"
+group = "personal"
+type = "asset"
+provider = "synthetic"
+label = "Emergency Fund"
+subtype = "savings"
+
+[[accounts]]
+id = "Assets:Personal:Investments"
+group = "personal"
+type = "asset"
+provider = "synthetic"
+label = "Brokerage"
+subtype = "investment"
+
+[[accounts]]
+id = "Assets:Joint:Current"
+group = "joint"
+type = "asset"
+provider = "synthetic"
+label = "Joint Current"
+subtype = "checking"
+
+[[accounts]]
+id = "Assets:Joint:HomeReserve"
+group = "joint"
+type = "asset"
+provider = "synthetic"
+label = "Home Reserve"
+subtype = "savings"
+
+[[accounts]]
+id = "Assets:Business:Operating"
+group = "business"
+type = "asset"
+provider = "synthetic"
+label = "Operating"
+subtype = "checking"
+
+[[accounts]]
+id = "Assets:Business:TaxReserve"
+group = "business"
+type = "asset"
+provider = "synthetic"
+label = "Tax Reserve"
+subtype = "tax_reserve"
+
+[[accounts]]
+id = "Assets:Business:RainyDay"
+group = "business"
+type = "asset"
+provider = "synthetic"
+label = "Rainy Day"
+subtype = "savings"
+
+[[banks]]
+name = "synthetic"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"

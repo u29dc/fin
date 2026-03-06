@@ -13,6 +13,7 @@ pub mod queries;
 pub mod reports;
 pub mod rules;
 pub mod sanitize;
+pub mod testing;
 pub mod units;
 
 pub use compat::{
