@@ -10,6 +10,7 @@
 	},
 	"scripts": {
 		"prepare": "husky",
+		"dev": "bun run scripts/dev.ts",
 		"fin:dev": "cargo run -p fin-cli --",
 		"fin:tui": "cargo run -p fin-tui --",
 		"fin:api": "cargo run -p fin-api --",
