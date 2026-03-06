@@ -308,8 +308,10 @@ impl App {
                 .filter(|row| transaction_matches_query(row, &self.transactions_search_query))
                 .count(),
             Some(RoutePayload::Text(_))
-            | Some(RoutePayload::LineChart(_))
-            | Some(RoutePayload::CategoryBars(_))
+            | Some(RoutePayload::SummaryDashboard(_))
+            | Some(RoutePayload::CashflowDashboard(_))
+            | Some(RoutePayload::OverviewDashboard(_))
+            | Some(RoutePayload::CategoriesDashboard(_))
             | None => 0,
         }
     }

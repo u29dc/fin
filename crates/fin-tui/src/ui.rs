@@ -1,22 +1,21 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    symbols::Marker,
     text::{Line, Span},
     widgets::{
-        Axis, BarChart, Block, Borders, Cell, Chart, Clear, Dataset, GraphType, List, ListItem,
-        Paragraph, Row, Table, Tabs, Wrap,
+        BarChart, Block, Borders, Cell, Clear, LineGauge, List, ListItem, Paragraph, Row, Table,
+        Tabs, Wrap,
     },
 };
 
 use crate::{
     app::App,
     fetch::{
-        CategoryBarsPayload, ChartTone, LineChartPayload, RoutePayload, TransactionsPayload,
-        transaction_matches_query,
+        CashflowDashboardPayload, CategoriesDashboardPayload, OverviewDashboardPayload,
+        RoutePayload, SummaryDashboardPayload, TransactionsPayload, transaction_matches_query,
     },
     palette::PaletteRow,
-    palette::{ACCENT_1, ACCENT_2, ACCENT_3, ACCENT_4},
+    palette::{ACCENT_1, ACCENT_2, ACCENT_3},
     routes::Route,
 };
 
@@ -153,8 +152,18 @@ fn render_main(frame: &mut Frame<'_>, app: &App, area: Rect) {
         RoutePayload::Transactions(payload) => {
             render_transactions_table(frame, inner, app.selected_row(), payload, app);
         }
-        RoutePayload::LineChart(payload) => render_line_chart(frame, inner, payload, app),
-        RoutePayload::CategoryBars(payload) => render_category_bars(frame, inner, payload, app),
+        RoutePayload::SummaryDashboard(payload) => {
+            render_summary_dashboard(frame, inner, payload, app)
+        }
+        RoutePayload::CashflowDashboard(payload) => {
+            render_cashflow_dashboard(frame, inner, payload, app)
+        }
+        RoutePayload::OverviewDashboard(payload) => {
+            render_overview_dashboard(frame, inner, payload, app)
+        }
+        RoutePayload::CategoriesDashboard(payload) => {
+            render_categories_dashboard(frame, inner, payload, app)
+        }
     }
 }
 
@@ -296,173 +305,608 @@ fn render_transactions_table(
     frame.render_widget(table, table_area);
 }
 
-fn render_line_chart(frame: &mut Frame<'_>, area: Rect, payload: &LineChartPayload, app: &App) {
-    if payload.series.is_empty() {
-        frame.render_widget(
-            Paragraph::new("No chart series available.").style(app.theme.footer_meta),
-            area,
-        );
-        return;
-    }
-
+fn render_summary_dashboard(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    payload: &SummaryDashboardPayload,
+    app: &App,
+) {
     let sections = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Min(1),
-            Constraint::Length(1),
-        ])
+        .constraints([Constraint::Length(9), Constraint::Min(8)])
         .split(area);
+    let top = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .split(sections[0]);
 
+    let kpi_header = Row::new(vec![
+        Cell::from("group").style(app.theme.section_heading),
+        Cell::from("net worth").style(app.theme.section_heading),
+        Cell::from("last net").style(app.theme.section_heading),
+        Cell::from("avg6 net").style(app.theme.section_heading),
+        Cell::from("runway").style(app.theme.section_heading),
+        Cell::from("available").style(app.theme.section_heading),
+    ]);
+    let kpi_rows = payload.group_rows.iter().map(|row| {
+        Row::new(vec![
+            Cell::from(row.group_id.clone()),
+            Cell::from(format_minor_compact(row.net_worth_minor)),
+            Cell::from(
+                row.last_full_month_net_minor
+                    .map(format_minor_compact)
+                    .unwrap_or_else(|| "n/a".to_owned()),
+            ),
+            Cell::from(
+                row.avg_six_month_net_minor
+                    .map(format_minor_compact)
+                    .unwrap_or_else(|| "n/a".to_owned()),
+            ),
+            Cell::from(
+                row.runway_months
+                    .map(|value| format!("{value:.1}m"))
+                    .unwrap_or_else(|| "n/a".to_owned()),
+            ),
+            Cell::from(
+                row.available_minor
+                    .map(format_minor_compact)
+                    .unwrap_or_else(|| "n/a".to_owned()),
+            ),
+        ])
+    });
+    let kpi_table = Table::new(
+        kpi_rows,
+        [
+            Constraint::Length(10),
+            Constraint::Length(12),
+            Constraint::Length(11),
+            Constraint::Length(11),
+            Constraint::Length(9),
+            Constraint::Length(12),
+        ],
+    )
+    .header(kpi_header)
+    .column_spacing(1)
+    .block(Block::default().borders(Borders::ALL).title(Span::styled(
+        " Group Scoreboard ",
+        app.theme.section_heading,
+    )));
+    frame.render_widget(kpi_table, top[0]);
+
+    let summary_lines = vec![
+        Line::from(vec![
+            Span::styled("Consolidated ", app.theme.section_heading),
+            Span::styled(
+                format_minor_compact(payload.consolidated_net_worth_minor),
+                app.theme.body,
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Generated ", app.theme.section_heading),
+            Span::styled(payload.generated_at.clone(), app.theme.footer_meta),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("Coverage ", app.theme.section_heading),
+            Span::styled(
+                format!("{} groups", payload.group_rows.len()),
+                app.theme.footer_meta,
+            ),
+        ]),
+    ];
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(format!("{} ", payload.title), app.theme.section_heading),
-            Span::styled(payload.subtitle.clone(), app.theme.footer_meta),
-        ])),
-        sections[0],
+        Paragraph::new(summary_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(Span::styled(" Snapshot ", app.theme.section_heading)),
+            )
+            .wrap(Wrap { trim: false }),
+        top[1],
     );
 
-    let mut y_min = f64::INFINITY;
-    let mut y_max = f64::NEG_INFINITY;
-    let mut x_max = 0_f64;
-    for series in &payload.series {
-        if let Some(last) = series.points.last() {
-            x_max = x_max.max(last.0);
-        }
-        for (_, value) in &series.points {
-            y_min = y_min.min(*value);
-            y_max = y_max.max(*value);
-        }
-    }
-    if !y_min.is_finite() || !y_max.is_finite() {
+    if payload.reserve_rows.is_empty() {
         frame.render_widget(
-            Paragraph::new("Chart values are unavailable.").style(app.theme.footer_meta),
+            Paragraph::new("No reserve rows.")
+                .style(app.theme.footer_meta)
+                .block(Block::default().borders(Borders::ALL).title(Span::styled(
+                    " Runway + Reserves ",
+                    app.theme.section_heading,
+                ))),
             sections[1],
         );
         return;
     }
-    if (y_max - y_min).abs() < f64::EPSILON {
-        y_min -= 1.0;
-        y_max += 1.0;
-    } else {
-        let padding = (y_max - y_min) * 0.12;
-        y_min -= padding;
-        y_max += padding;
-    }
-    let mid_y = (y_min + y_max) / 2.0;
 
-    let datasets = payload
-        .series
-        .iter()
-        .map(|series| {
-            Dataset::default()
-                .name(series.label.clone())
-                .marker(Marker::Braille)
-                .graph_type(GraphType::Line)
-                .style(app.theme.body.fg(chart_tone_color(series.tone)))
-                .data(&series.points)
-        })
-        .collect::<Vec<_>>();
-
-    let x_labels = axis_labels(&payload.x_labels);
-    let y_labels = vec![
-        Span::raw(format_major_axis(y_min)),
-        Span::raw(format_major_axis(mid_y)),
-        Span::raw(format_major_axis(y_max)),
-    ];
-
-    let chart = Chart::new(datasets)
-        .x_axis(
-            Axis::default()
-                .style(app.theme.footer_meta)
-                .bounds([0.0, x_max.max(1.0)])
-                .labels(x_labels),
-        )
-        .y_axis(
-            Axis::default()
-                .style(app.theme.footer_meta)
-                .bounds([y_min, y_max])
-                .labels(y_labels),
-        );
-
-    frame.render_widget(chart, sections[1]);
-
-    let legend = payload
-        .series
-        .iter()
-        .map(|series| {
-            let latest = series.points.last().map(|(_, y)| *y).unwrap_or_default();
-            Span::styled(
-                format!("{} {}", series.label, format_major_axis(latest)),
-                app.theme.body.fg(chart_tone_color(series.tone)),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let mut legend_spans = Vec::new();
-    for (index, span) in legend.into_iter().enumerate() {
-        legend_spans.push(span);
-        if index + 1 < payload.series.len() {
-            legend_spans.push(Span::styled("  |  ", app.theme.footer_meta));
+    let reserve_sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(vec![Constraint::Length(3); payload.reserve_rows.len()].as_slice())
+        .split(sections[1]);
+    for (index, row) in payload.reserve_rows.iter().enumerate() {
+        if index >= reserve_sections.len() {
+            break;
         }
+        let inner = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
+            ])
+            .split(reserve_sections[index]);
+        let title = format!(
+            "{} | runway {} | available {} | reserve target {}",
+            row.group_id,
+            row.runway_months
+                .map(|value| format!("{value:.1}m"))
+                .unwrap_or_else(|| "n/a".to_owned()),
+            format_minor_compact(row.available_minor),
+            format_minor_compact(row.target_minor),
+        );
+        frame.render_widget(Paragraph::new(title).style(app.theme.footer_meta), inner[0]);
+
+        let ratio = if row.target_minor <= 0 {
+            if row.available_minor > 0 { 1.0 } else { 0.0 }
+        } else {
+            (row.available_minor as f64 / row.target_minor as f64).clamp(0.0, 1.0)
+        };
+        let gauge = LineGauge::default()
+            .ratio(ratio)
+            .filled_style(app.theme.body.fg(ACCENT_2))
+            .unfilled_style(app.theme.footer_meta)
+            .line_set(ratatui::symbols::line::THICK)
+            .label(Span::styled(
+                format!(
+                    "expense {} + tax {}",
+                    format_minor_compact(row.expense_reserve_minor),
+                    format_minor_compact(row.tax_reserve_minor)
+                ),
+                app.theme.footer_meta,
+            ));
+        frame.render_widget(gauge, inner[1]);
     }
-    frame.render_widget(Paragraph::new(Line::from(legend_spans)), sections[2]);
 }
 
-fn render_category_bars(
+fn render_cashflow_dashboard(
     frame: &mut Frame<'_>,
     area: Rect,
-    payload: &CategoryBarsPayload,
+    payload: &CashflowDashboardPayload,
     app: &App,
 ) {
-    if payload.points.is_empty() {
-        frame.render_widget(
-            Paragraph::new("No category bars to render.").style(app.theme.footer_meta),
-            area,
-        );
-        return;
-    }
-
     let sections = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(1)])
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(8),
+            Constraint::Length(3),
+        ])
         .split(area);
 
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(format!("{} ", payload.title), app.theme.section_heading),
-            Span::styled(payload.subtitle.clone(), app.theme.footer_meta),
-        ])),
-        sections[0],
-    );
+    let header = Line::from(vec![
+        Span::styled(format!("{} ", payload.group_id), app.theme.section_heading),
+        Span::styled(
+            format!(
+                "latest {} | 6m avg net {} | runway {}",
+                payload
+                    .latest_full_month
+                    .as_ref()
+                    .map(|point| format_minor_compact(point.net_minor))
+                    .unwrap_or_else(|| "n/a".to_owned()),
+                payload
+                    .avg_six_month_net_minor
+                    .map(format_minor_compact)
+                    .unwrap_or_else(|| "n/a".to_owned()),
+                payload
+                    .runway_months
+                    .map(|value| format!("{value:.1}m"))
+                    .unwrap_or_else(|| "n/a".to_owned())
+            ),
+            app.theme.footer_meta,
+        ),
+    ]);
+    let averages = Line::from(vec![
+        Span::styled("6m avg income ", app.theme.section_heading),
+        Span::styled(
+            payload
+                .avg_six_month_income_minor
+                .map(format_minor_compact)
+                .unwrap_or_else(|| "n/a".to_owned()),
+            app.theme.body,
+        ),
+        Span::styled(" | 6m avg expense ", app.theme.section_heading),
+        Span::styled(
+            payload
+                .avg_six_month_expense_minor
+                .map(format_minor_compact)
+                .unwrap_or_else(|| "n/a".to_owned()),
+            app.theme.body,
+        ),
+    ]);
+    frame.render_widget(Paragraph::new(vec![header, averages]), sections[0]);
 
-    let bars = payload
+    let body = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(sections[1]);
+
+    render_monthly_net_bars(frame, body[0], payload, app);
+    render_income_expense_bars(frame, body[1], payload, app);
+
+    let reserve_line = Line::from(vec![
+        Span::styled("available ", app.theme.section_heading),
+        Span::styled(
+            payload
+                .available_minor
+                .map(format_minor_compact)
+                .unwrap_or_else(|| "n/a".to_owned()),
+            app.theme.body,
+        ),
+        Span::styled(" | expense reserve ", app.theme.section_heading),
+        Span::styled(
+            payload
+                .expense_reserve_minor
+                .map(format_minor_compact)
+                .unwrap_or_else(|| "n/a".to_owned()),
+            app.theme.body,
+        ),
+        Span::styled(" | tax reserve ", app.theme.section_heading),
+        Span::styled(
+            payload
+                .tax_reserve_minor
+                .map(format_minor_compact)
+                .unwrap_or_else(|| "n/a".to_owned()),
+            app.theme.body,
+        ),
+    ]);
+    frame.render_widget(
+        Paragraph::new(reserve_line)
+            .block(Block::default().borders(Borders::ALL).title(Span::styled(
+                " Runway + Reserve ",
+                app.theme.section_heading,
+            )))
+            .wrap(Wrap { trim: false }),
+        sections[2],
+    );
+}
+
+fn render_monthly_net_bars(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    payload: &CashflowDashboardPayload,
+    app: &App,
+) {
+    let max_abs = payload
         .points
         .iter()
-        .map(|point| (truncate_text(&point.label, 18), point.total_major))
+        .map(|point| point.net_minor.abs())
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let bar_width = area.width.saturating_sub(22) as usize;
+    let header = Row::new(vec![
+        Cell::from("month").style(app.theme.section_heading),
+        Cell::from("net").style(app.theme.section_heading),
+        Cell::from("bar").style(app.theme.section_heading),
+    ]);
+    let rows = payload.points.iter().map(|point| {
+        let bar = scaled_bar(point.net_minor.abs(), max_abs, bar_width.max(2));
+        let sign = if point.net_minor >= 0 { "+" } else { "-" };
+        let mut row = Row::new(vec![
+            Cell::from(point.month.clone()),
+            Cell::from(format_minor_compact(point.net_minor)),
+            Cell::from(format!("{sign}{bar}")),
+        ]);
+        row = if point.net_minor >= 0 {
+            row.style(app.theme.body.fg(ACCENT_2))
+        } else {
+            row.style(app.theme.body.fg(ACCENT_3))
+        };
+        row
+    });
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(8),
+            Constraint::Length(12),
+            Constraint::Min(10),
+        ],
+    )
+    .header(header)
+    .column_spacing(1)
+    .block(Block::default().borders(Borders::ALL).title(Span::styled(
+        " Monthly Net (Diverging Bars) ",
+        app.theme.section_heading,
+    )));
+    frame.render_widget(table, area);
+}
+
+fn render_income_expense_bars(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    payload: &CashflowDashboardPayload,
+    app: &App,
+) {
+    let max_income = payload
+        .points
+        .iter()
+        .map(|point| point.income_minor)
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let max_expense = payload
+        .points
+        .iter()
+        .map(|point| point.expense_minor)
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let bar_width = area.width.saturating_sub(34) as usize;
+
+    let header = Row::new(vec![
+        Cell::from("month").style(app.theme.section_heading),
+        Cell::from("income").style(app.theme.section_heading),
+        Cell::from("expense").style(app.theme.section_heading),
+    ]);
+    let rows = payload.points.iter().map(|point| {
+        Row::new(vec![
+            Cell::from(point.month.clone()),
+            Cell::from(format!(
+                "{} {}",
+                scaled_bar(point.income_minor, max_income, bar_width.max(2)),
+                format_minor_compact(point.income_minor)
+            ))
+            .style(app.theme.body.fg(ACCENT_1)),
+            Cell::from(format!(
+                "{} {}",
+                scaled_bar(point.expense_minor, max_expense, bar_width.max(2)),
+                format_minor_compact(point.expense_minor)
+            ))
+            .style(app.theme.body.fg(ACCENT_3)),
+        ])
+    });
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(8),
+            Constraint::Percentage(50),
+            Constraint::Percentage(50),
+        ],
+    )
+    .header(header)
+    .column_spacing(1)
+    .block(Block::default().borders(Borders::ALL).title(Span::styled(
+        " Income vs Expense (12 Full Months) ",
+        app.theme.section_heading,
+    )));
+    frame.render_widget(table, area);
+}
+
+fn render_overview_dashboard(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    payload: &OverviewDashboardPayload,
+    app: &App,
+) {
+    let sections = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .split(area);
+
+    let bars = payload
+        .accounts
+        .iter()
+        .map(|row| {
+            (
+                truncate_text(&row.label, 18),
+                ((row.balance_minor.abs() / 100).max(0) as u64).max(1),
+            )
+        })
         .collect::<Vec<_>>();
     let bar_refs = bars
         .iter()
         .map(|(label, value)| (label.as_str(), *value))
         .collect::<Vec<_>>();
-
-    let bar_chart = BarChart::default()
-        .data(bar_refs.as_slice())
-        .bar_width(8)
+    let max_value = bars.iter().map(|(_, value)| *value).max().unwrap_or(1);
+    let account_chart = BarChart::default()
+        .data(&bar_refs)
+        .bar_width(7)
         .bar_gap(1)
         .bar_style(app.theme.body.fg(ACCENT_2))
         .value_style(app.theme.body.fg(ACCENT_1))
         .label_style(app.theme.footer_meta)
-        .max(
-            payload
-                .points
-                .iter()
-                .map(|point| point.total_major)
-                .max()
-                .unwrap_or(1),
-        );
+        .max(max_value)
+        .block(Block::default().borders(Borders::ALL).title(Span::styled(
+            format!(
+                " Account Balances ({}) total {} ",
+                payload.scope_label,
+                format_minor_compact(payload.total_balance_minor)
+            ),
+            app.theme.section_heading,
+        )));
+    frame.render_widget(account_chart, sections[0]);
 
-    frame.render_widget(bar_chart, sections[1]);
+    let right = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(4), Constraint::Min(5)])
+        .split(sections[1]);
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("scope ", app.theme.section_heading),
+                Span::styled(payload.scope_label.clone(), app.theme.body),
+            ]),
+            Line::from(vec![
+                Span::styled("accounts ", app.theme.section_heading),
+                Span::styled(payload.accounts.len().to_string(), app.theme.body),
+            ]),
+            Line::from(vec![
+                Span::styled("total ", app.theme.section_heading),
+                Span::styled(
+                    format_minor_compact(payload.total_balance_minor),
+                    app.theme.body,
+                ),
+            ]),
+        ])
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(Span::styled(" Scope Snapshot ", app.theme.section_heading)),
+        ),
+        right[0],
+    );
+
+    let freshness_header = Row::new(vec![
+        Cell::from("account").style(app.theme.section_heading),
+        Cell::from("days").style(app.theme.section_heading),
+        Cell::from("updated").style(app.theme.section_heading),
+    ]);
+    let freshness_rows = payload.accounts.iter().map(|row| {
+        let days = row
+            .stale_days
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "n/a".to_owned());
+        let updated = row
+            .updated_at
+            .as_deref()
+            .map(|value| truncate_text(value, 10))
+            .unwrap_or_else(|| "n/a".to_owned());
+        let mut rendered = Row::new(vec![
+            Cell::from(truncate_text(&row.label, 16)),
+            Cell::from(days.clone()),
+            Cell::from(updated),
+        ]);
+        if let Ok(parsed) = days.parse::<i64>()
+            && parsed > 90
+        {
+            rendered = rendered.style(app.theme.body.fg(ACCENT_3));
+        }
+        rendered
+    });
+    let freshness_table = Table::new(
+        freshness_rows,
+        [
+            Constraint::Length(17),
+            Constraint::Length(6),
+            Constraint::Length(11),
+        ],
+    )
+    .header(freshness_header)
+    .column_spacing(1)
+    .block(Block::default().borders(Borders::ALL).title(Span::styled(
+        " Data Freshness (Account Updates) ",
+        app.theme.section_heading,
+    )));
+    frame.render_widget(freshness_table, right[1]);
+}
+
+fn render_categories_dashboard(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    payload: &CategoriesDashboardPayload,
+    app: &App,
+) {
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(8), Constraint::Length(4)])
+        .split(area);
+    let top = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+        .split(sections[0]);
+
+    let bars = payload
+        .pareto
+        .iter()
+        .map(|point| {
+            (
+                truncate_text(&point.category, 18),
+                (point.total_minor.abs() / 100).max(0) as u64,
+            )
+        })
+        .collect::<Vec<_>>();
+    let bar_refs = bars
+        .iter()
+        .map(|(label, value)| (label.as_str(), *value))
+        .collect::<Vec<_>>();
+    let pareto_max = bars.iter().map(|(_, value)| *value).max().unwrap_or(1);
+    let pareto_chart = BarChart::default()
+        .data(&bar_refs)
+        .bar_width(7)
+        .bar_gap(1)
+        .bar_style(app.theme.body.fg(ACCENT_2))
+        .value_style(app.theme.body.fg(ACCENT_1))
+        .label_style(app.theme.footer_meta)
+        .max(pareto_max)
+        .block(Block::default().borders(Borders::ALL).title(Span::styled(
+            format!(" Pareto ({}, {}m) ", payload.group_id, payload.months.len()),
+            app.theme.section_heading,
+        )));
+    frame.render_widget(pareto_chart, top[0]);
+
+    let stability_header = Row::new(vec![
+        Cell::from("category").style(app.theme.section_heading),
+        Cell::from("trend").style(app.theme.section_heading),
+        Cell::from("total").style(app.theme.section_heading),
+    ]);
+    let stability_rows = payload.stability.iter().map(|row| {
+        Row::new(vec![
+            Cell::from(truncate_text(&row.category, 14)),
+            Cell::from(sparkline_text(&row.month_values_minor)),
+            Cell::from(format_minor_compact(row.total_minor)),
+        ])
+    });
+    let stability_table = Table::new(
+        stability_rows,
+        [
+            Constraint::Length(15),
+            Constraint::Length(8),
+            Constraint::Length(12),
+        ],
+    )
+    .header(stability_header)
+    .column_spacing(1)
+    .block(Block::default().borders(Borders::ALL).title(Span::styled(
+        " Category Stability (6 Full Months) ",
+        app.theme.section_heading,
+    )));
+    frame.render_widget(stability_table, top[1]);
+
+    let leakage_ratio = (payload.leakage.leakage_pct / 100.0).clamp(0.0, 1.0);
+    let top = payload.pareto.first();
+    let leakage = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(sections[1]);
+    frame.render_widget(
+        Paragraph::new(format!(
+            "Uncategorized leakage: {} ({:.2}%) count={} total_expense={} | top={} ({:.1}%, {} txns)",
+            format_minor_compact(payload.leakage.uncategorized_minor),
+            payload.leakage.leakage_pct,
+            payload.leakage.uncategorized_count,
+            format_minor_compact(payload.leakage.total_expense_minor),
+            top.map(|point| point.category.as_str()).unwrap_or("n/a"),
+            top.map(|point| point.share_pct).unwrap_or(0.0),
+            top.map(|point| point.transaction_count).unwrap_or(0),
+        ))
+        .style(app.theme.footer_meta),
+        leakage[0],
+    );
+    frame.render_widget(
+        LineGauge::default()
+            .ratio(leakage_ratio)
+            .filled_style(app.theme.body.fg(ACCENT_3))
+            .unfilled_style(app.theme.footer_meta)
+            .line_set(ratatui::symbols::line::THICK)
+            .label(Span::styled(
+                format!("{:.2}% uncategorized", payload.leakage.leakage_pct),
+                app.theme.footer_meta,
+            )),
+        leakage[1],
+    );
 }
 
 fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -657,36 +1101,51 @@ fn palette_two_column_line(
     ])
 }
 
-fn axis_labels(labels: &[String]) -> Vec<Span<'static>> {
-    if labels.is_empty() {
-        return vec![Span::raw(""), Span::raw(""), Span::raw("")];
+fn scaled_bar(value: i64, max: i64, width: usize) -> String {
+    if width == 0 {
+        return String::new();
     }
-    let first = labels.first().cloned().unwrap_or_default();
-    let mid = labels
-        .get(labels.len() / 2)
-        .cloned()
-        .unwrap_or_else(|| first.clone());
-    let last = labels.last().cloned().unwrap_or_else(|| first.clone());
-    vec![Span::raw(first), Span::raw(mid), Span::raw(last)]
+    if max <= 0 || value <= 0 {
+        return " ".repeat(width);
+    }
+    let filled = ((value as f64 / max as f64) * width as f64)
+        .round()
+        .clamp(1.0, width as f64) as usize;
+    let mut output = String::new();
+    output.push_str(&"█".repeat(filled));
+    output.push_str(&" ".repeat(width.saturating_sub(filled)));
+    output
 }
 
-fn chart_tone_color(tone: ChartTone) -> ratatui::style::Color {
-    match tone {
-        ChartTone::Accent1 => ACCENT_1,
-        ChartTone::Accent2 => ACCENT_2,
-        ChartTone::Accent3 => ACCENT_3,
-        ChartTone::Accent4 => ACCENT_4,
+fn sparkline_text(values: &[i64]) -> String {
+    if values.is_empty() {
+        return "-".to_owned();
     }
+    const LEVELS: &[char; 8] = &['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let min = values.iter().copied().min().unwrap_or(0);
+    let max = values.iter().copied().max().unwrap_or(0);
+    if min == max {
+        return "▅".repeat(values.len());
+    }
+    values
+        .iter()
+        .map(|value| {
+            let ratio = (*value - min) as f64 / (max - min) as f64;
+            let index = (ratio * (LEVELS.len() - 1) as f64).round() as usize;
+            LEVELS[index.min(LEVELS.len() - 1)]
+        })
+        .collect::<String>()
 }
 
-fn format_major_axis(value: f64) -> String {
-    let abs = value.abs();
+fn format_minor_compact(value: i64) -> String {
+    let sign = if value < 0 { "-" } else { "" };
+    let abs = value.abs() as f64 / 100.0;
     if abs >= 1_000_000.0 {
-        format!("{:.1}m", value / 1_000_000.0)
+        format!("{sign}{:.1}m", abs / 1_000_000.0)
     } else if abs >= 1_000.0 {
-        format!("{:.1}k", value / 1_000.0)
+        format!("{sign}{:.1}k", abs / 1_000.0)
     } else {
-        format!("{value:.0}")
+        format!("{sign}{abs:.0}")
     }
 }
 

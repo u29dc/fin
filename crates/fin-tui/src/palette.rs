@@ -5,7 +5,6 @@ use crate::routes::Route;
 pub const ACCENT_1: Color = Color::Cyan;
 pub const ACCENT_2: Color = Color::Rgb(140, 214, 232);
 pub const ACCENT_3: Color = Color::Rgb(92, 176, 214);
-pub const ACCENT_4: Color = Color::Rgb(68, 138, 190);
 pub const TEXT_PRIMARY: Color = Color::Gray;
 pub const TEXT_MUTED: Color = Color::DarkGray;
 pub const BORDER_SUBTLE: Color = Color::DarkGray;

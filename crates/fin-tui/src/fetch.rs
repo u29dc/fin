@@ -1,21 +1,22 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeSet, HashMap};
 
 use fin_sdk::config::{LoadedConfig, load_config};
 use fin_sdk::db::{OpenDatabaseOptions, open_database, resolve_db_path};
 use fin_sdk::{
-    TransactionQueryOptions, group_category_breakdown, report_cashflow, report_summary,
-    view_transactions,
+    MonthlyCashflowPoint, TransactionQueryOptions, group_category_breakdown, report_cashflow,
+    report_reserves, report_runway, report_summary, view_accounts, view_transactions,
 };
 use rusqlite::{Connection, params_from_iter};
 
 use crate::routes::Route;
 
 pub const TUI_TRANSACTIONS_PREVIEW_LIMIT: usize = 1000;
-const CASHFLOW_MONTHS: usize = 48;
+const CASHFLOW_LOOKBACK_MONTHS: usize = 120;
+const CASHFLOW_VIEW_MONTHS: usize = 12;
 const CATEGORY_MONTHS: usize = 6;
 const CATEGORY_LIMIT: usize = 12;
-const CHART_MAX_POINTS: usize = 160;
-const OVERVIEW_MAX_SERIES: usize = 8;
+const CATEGORY_STABILITY_LIMIT: usize = 6;
+const OVERVIEW_MAX_ACCOUNTS: usize = 12;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverviewScope {
@@ -39,14 +40,6 @@ impl OverviewScope {
             Self::Group(group) => format!("{group} accounts"),
         }
     }
-
-    #[must_use]
-    fn allows_group(&self, group: &str) -> bool {
-        match self {
-            Self::All => true,
-            Self::Group(selected) => selected == group,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -62,42 +55,6 @@ impl Default for FetchContext {
             overview_scope: OverviewScope::All,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChartTone {
-    Accent1,
-    Accent2,
-    Accent3,
-    Accent4,
-}
-
-#[derive(Debug, Clone)]
-pub struct LineChartSeries {
-    pub label: String,
-    pub tone: ChartTone,
-    pub points: Vec<(f64, f64)>,
-}
-
-#[derive(Debug, Clone)]
-pub struct LineChartPayload {
-    pub title: String,
-    pub subtitle: String,
-    pub x_labels: Vec<String>,
-    pub series: Vec<LineChartSeries>,
-}
-
-#[derive(Debug, Clone)]
-pub struct CategoryBarPoint {
-    pub label: String,
-    pub total_major: u64,
-}
-
-#[derive(Debug, Clone)]
-pub struct CategoryBarsPayload {
-    pub title: String,
-    pub subtitle: String,
-    pub points: Vec<CategoryBarPoint>,
 }
 
 #[derive(Debug, Clone)]
@@ -132,11 +89,110 @@ pub struct TransactionsPayload {
 }
 
 #[derive(Debug, Clone)]
+pub struct GroupKpiRow {
+    pub group_id: String,
+    pub net_worth_minor: i64,
+    pub runway_months: Option<f64>,
+    pub available_minor: Option<i64>,
+    pub last_full_month_net_minor: Option<i64>,
+    pub avg_six_month_net_minor: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReserveGaugeRow {
+    pub group_id: String,
+    pub runway_months: Option<f64>,
+    pub available_minor: i64,
+    pub target_minor: i64,
+    pub expense_reserve_minor: i64,
+    pub tax_reserve_minor: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct SummaryDashboardPayload {
+    pub generated_at: String,
+    pub consolidated_net_worth_minor: i64,
+    pub group_rows: Vec<GroupKpiRow>,
+    pub reserve_rows: Vec<ReserveGaugeRow>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CashflowPoint {
+    pub month: String,
+    pub income_minor: i64,
+    pub expense_minor: i64,
+    pub net_minor: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct CashflowDashboardPayload {
+    pub group_id: String,
+    pub points: Vec<CashflowPoint>,
+    pub latest_full_month: Option<CashflowPoint>,
+    pub avg_six_month_income_minor: Option<i64>,
+    pub avg_six_month_expense_minor: Option<i64>,
+    pub avg_six_month_net_minor: Option<i64>,
+    pub runway_months: Option<f64>,
+    pub available_minor: Option<i64>,
+    pub expense_reserve_minor: Option<i64>,
+    pub tax_reserve_minor: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CategoryParetoPoint {
+    pub category: String,
+    pub total_minor: i64,
+    pub transaction_count: i64,
+    pub share_pct: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct CategoryStabilityRow {
+    pub category: String,
+    pub month_values_minor: Vec<i64>,
+    pub total_minor: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct UncategorizedLeakage {
+    pub total_expense_minor: i64,
+    pub uncategorized_minor: i64,
+    pub uncategorized_count: i64,
+    pub leakage_pct: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct CategoriesDashboardPayload {
+    pub group_id: String,
+    pub pareto: Vec<CategoryParetoPoint>,
+    pub months: Vec<String>,
+    pub stability: Vec<CategoryStabilityRow>,
+    pub leakage: UncategorizedLeakage,
+}
+
+#[derive(Debug, Clone)]
+pub struct AccountFreshnessRow {
+    pub label: String,
+    pub balance_minor: i64,
+    pub updated_at: Option<String>,
+    pub stale_days: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OverviewDashboardPayload {
+    pub scope_label: String,
+    pub total_balance_minor: i64,
+    pub accounts: Vec<AccountFreshnessRow>,
+}
+
+#[derive(Debug, Clone)]
 pub enum RoutePayload {
     Text(String),
     Transactions(TransactionsPayload),
-    LineChart(LineChartPayload),
-    CategoryBars(CategoryBarsPayload),
+    SummaryDashboard(SummaryDashboardPayload),
+    CashflowDashboard(CashflowDashboardPayload),
+    OverviewDashboard(OverviewDashboardPayload),
+    CategoriesDashboard(CategoriesDashboardPayload),
 }
 
 #[derive(Debug)]
@@ -190,11 +246,11 @@ impl FetchClient {
         };
 
         match route {
-            Route::Summary => fetch_summary(runtime),
+            Route::Summary => fetch_summary_dashboard(runtime),
             Route::Transactions => fetch_transactions(runtime),
-            Route::Cashflow => fetch_cashflow_chart(runtime, &context.cashflow_group),
-            Route::Overview => fetch_overview_chart(runtime, &context.overview_scope),
-            Route::Categories => fetch_category_bars(runtime, &context.cashflow_group),
+            Route::Cashflow => fetch_cashflow_dashboard(runtime, &context.cashflow_group),
+            Route::Overview => fetch_overview_dashboard(runtime, &context.overview_scope),
+            Route::Categories => fetch_categories_dashboard(runtime, &context.cashflow_group),
             Route::Reports => fetch_reports(runtime, &context.cashflow_group),
         }
     }
@@ -207,40 +263,67 @@ impl FetchClient {
     }
 }
 
-fn fetch_summary(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
+fn fetch_summary_dashboard(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
     let summary = report_summary(&runtime.connection, &runtime.loaded.config, 12)
         .map_err(|error| error.to_string())?;
+    let current_month = current_month(&runtime.connection)?;
 
-    let mut lines = vec![
-        "Summary".to_owned(),
-        format!("Generated: {}", summary.generated_at),
-        format!("Period (months): {}", summary.period_months),
-        format!(
-            "Consolidated net worth (minor): {}",
-            summary.consolidated.net_worth_minor
-        ),
-        String::new(),
-        "Group snapshots".to_owned(),
-    ];
+    let mut group_rows = Vec::new();
+    let mut reserve_rows = Vec::new();
 
-    for (group_id, group) in &summary.groups {
-        let runway = group
-            .latest_runway_months
-            .map(|value| format!("{value:.2}"))
-            .unwrap_or_else(|| "n/a".to_owned());
-        let health = group
-            .latest_health_minor
-            .map_or_else(|| "n/a".to_owned(), |value| value.to_string());
-        let available = group
-            .latest_available_minor
-            .map_or_else(|| "n/a".to_owned(), |value| value.to_string());
-        lines.push(format!(
-            "{group_id:>9} | nw {net:>12} | runway {runway:>7} | health {health:>12} | available {available:>12}",
-            net = group.net_worth_minor,
-        ));
+    for group_id in runtime.loaded.config.group_ids() {
+        let group = summary.groups.get(&group_id);
+        let (series, _) = report_cashflow(
+            &runtime.connection,
+            &runtime.loaded.config,
+            &group_id,
+            CASHFLOW_LOOKBACK_MONTHS,
+            None,
+            None,
+        )
+        .map_err(|error| error.to_string())?;
+        let full_months = full_month_series(&series, &current_month);
+        let last_full_month_net_minor = full_months.last().map(|point| point.net_minor);
+        let avg_six_month_net_minor = average_last_n(full_months, 6, |point| point.net_minor);
+
+        group_rows.push(GroupKpiRow {
+            group_id: group_id.clone(),
+            net_worth_minor: group.map_or(0, |value| value.net_worth_minor),
+            runway_months: group.and_then(|value| value.latest_runway_months),
+            available_minor: group.and_then(|value| value.latest_available_minor),
+            last_full_month_net_minor,
+            avg_six_month_net_minor,
+        });
+
+        let reserves = report_reserves(
+            &runtime.connection,
+            &runtime.loaded.config,
+            &group_id,
+            None,
+            None,
+        )
+        .map_err(|error| error.to_string())?;
+        let latest_reserve = reserves.last();
+        let expense_reserve_minor = latest_reserve.map_or(0, |value| value.expense_reserve_minor);
+        let tax_reserve_minor = latest_reserve.map_or(0, |value| value.tax_reserve_minor);
+        let available_minor = latest_reserve.map_or(0, |value| value.available_minor);
+
+        reserve_rows.push(ReserveGaugeRow {
+            group_id: group_id.clone(),
+            runway_months: group.and_then(|value| value.latest_runway_months),
+            available_minor,
+            target_minor: expense_reserve_minor + tax_reserve_minor,
+            expense_reserve_minor,
+            tax_reserve_minor,
+        });
     }
 
-    Ok(RoutePayload::Text(lines.join("\n")))
+    Ok(RoutePayload::SummaryDashboard(SummaryDashboardPayload {
+        generated_at: summary.generated_at,
+        consolidated_net_worth_minor: summary.consolidated.net_worth_minor,
+        group_rows,
+        reserve_rows,
+    }))
 }
 
 fn fetch_transactions(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
@@ -287,186 +370,149 @@ fn fetch_transactions(runtime: &RuntimeContext) -> Result<RoutePayload, String> 
     }))
 }
 
-fn fetch_cashflow_chart(
+fn fetch_cashflow_dashboard(
     runtime: &RuntimeContext,
     requested_group: &str,
 ) -> Result<RoutePayload, String> {
     let group_id = resolve_group(runtime, requested_group);
-    let (points, _totals) = report_cashflow(
+    let current = current_month(&runtime.connection)?;
+
+    let (series, _) = report_cashflow(
         &runtime.connection,
         &runtime.loaded.config,
         &group_id,
-        CASHFLOW_MONTHS,
+        CASHFLOW_LOOKBACK_MONTHS,
         None,
         None,
     )
     .map_err(|error| error.to_string())?;
-    if points.is_empty() {
+
+    let full_months = full_month_series(&series, &current);
+    if full_months.is_empty() {
         return Ok(RoutePayload::Text(format!(
-            "Cashflow ({group_id})\nNo series points."
+            "Cashflow ({group_id})\nNo full-month points yet."
         )));
     }
 
-    let indices = downsample_indices(points.len(), CHART_MAX_POINTS);
-    let x_labels = indices
+    let points = full_months
         .iter()
-        .filter_map(|index| points.get(*index).map(|point| point.month.clone()))
-        .collect::<Vec<_>>();
-
-    let mut income = Vec::with_capacity(indices.len());
-    let mut expense = Vec::with_capacity(indices.len());
-    let mut net = Vec::with_capacity(indices.len());
-
-    for (x, source_index) in indices.iter().enumerate() {
-        let Some(point) = points.get(*source_index) else {
-            continue;
-        };
-        let x_value = x as f64;
-        income.push((x_value, point.income_minor as f64 / 100.0));
-        expense.push((x_value, point.expense_minor as f64 / 100.0));
-        net.push((x_value, point.net_minor as f64 / 100.0));
-    }
-
-    Ok(RoutePayload::LineChart(LineChartPayload {
-        title: "Cashflow".to_owned(),
-        subtitle: format!("{group_id} | monthly income, expense, net"),
-        x_labels,
-        series: vec![
-            LineChartSeries {
-                label: "income".to_owned(),
-                tone: ChartTone::Accent1,
-                points: income,
-            },
-            LineChartSeries {
-                label: "expense".to_owned(),
-                tone: ChartTone::Accent3,
-                points: expense,
-            },
-            LineChartSeries {
-                label: "net".to_owned(),
-                tone: ChartTone::Accent2,
-                points: net,
-            },
-        ],
-    }))
-}
-
-fn fetch_overview_chart(
-    runtime: &RuntimeContext,
-    scope: &OverviewScope,
-) -> Result<RoutePayload, String> {
-    let assets = runtime
-        .loaded
-        .config
-        .accounts
-        .iter()
-        .filter(|account| account.account_type == "asset" && scope.allows_group(&account.group))
-        .map(|account| {
-            (
-                account.id.clone(),
-                account.label.clone().unwrap_or_else(|| {
-                    account
-                        .id
-                        .rsplit(':')
-                        .next()
-                        .unwrap_or(&account.id)
-                        .to_owned()
-                }),
-            )
+        .rev()
+        .take(CASHFLOW_VIEW_MONTHS)
+        .cloned()
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .map(|point| CashflowPoint {
+            month: point.month,
+            income_minor: point.income_minor,
+            expense_minor: point.expense_minor,
+            net_minor: point.net_minor,
         })
         .collect::<Vec<_>>();
 
-    if assets.is_empty() {
+    let latest_full_month = points.last().cloned();
+    let avg_six_month_income_minor = average_last_n(full_months, 6, |point| point.income_minor);
+    let avg_six_month_expense_minor = average_last_n(full_months, 6, |point| point.expense_minor);
+    let avg_six_month_net_minor = average_last_n(full_months, 6, |point| point.net_minor);
+
+    let runway = report_runway(
+        &runtime.connection,
+        &runtime.loaded.config,
+        &group_id,
+        None,
+        None,
+    )
+    .map_err(|error| error.to_string())?;
+    let runway_months = runway.last().map(|point| point.runway_months);
+
+    let reserves = report_reserves(
+        &runtime.connection,
+        &runtime.loaded.config,
+        &group_id,
+        None,
+        None,
+    )
+    .map_err(|error| error.to_string())?;
+    let latest_reserve = reserves.last();
+
+    Ok(RoutePayload::CashflowDashboard(CashflowDashboardPayload {
+        group_id,
+        points,
+        latest_full_month,
+        avg_six_month_income_minor,
+        avg_six_month_expense_minor,
+        avg_six_month_net_minor,
+        runway_months,
+        available_minor: latest_reserve.map(|point| point.available_minor),
+        expense_reserve_minor: latest_reserve.map(|point| point.expense_reserve_minor),
+        tax_reserve_minor: latest_reserve.map(|point| point.tax_reserve_minor),
+    }))
+}
+
+fn fetch_overview_dashboard(
+    runtime: &RuntimeContext,
+    scope: &OverviewScope,
+) -> Result<RoutePayload, String> {
+    let group_filter = match scope {
+        OverviewScope::All => None,
+        OverviewScope::Group(group) => Some(group.as_str()),
+    };
+
+    let mut accounts = view_accounts(&runtime.connection, &runtime.loaded.config, group_filter)
+        .map_err(|error| error.to_string())?;
+    if accounts.is_empty() {
         return Ok(RoutePayload::Text(format!(
             "Overview ({})\nNo asset accounts match current scope.",
             scope.label()
         )));
     }
 
-    let account_ids = assets.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>();
-    let labels_by_id = assets.into_iter().collect::<BTreeMap<_, _>>();
+    accounts.sort_by(|left, right| {
+        right
+            .balance_minor
+            .unwrap_or_default()
+            .abs()
+            .cmp(&left.balance_minor.unwrap_or_default().abs())
+            .then(left.id.cmp(&right.id))
+    });
 
-    let timeline = load_account_balance_timeline(&runtime.connection, &account_ids)?;
-    if timeline.dates.is_empty() {
-        return Ok(RoutePayload::Text(format!(
-            "Overview ({})\nNo balance history yet.",
-            scope.label()
-        )));
+    if accounts.len() > OVERVIEW_MAX_ACCOUNTS {
+        accounts.truncate(OVERVIEW_MAX_ACCOUNTS);
     }
 
-    let selected_series = select_top_account_series(
-        &timeline.series_by_account,
-        OVERVIEW_MAX_SERIES,
-        "Other accounts",
-    );
-    if selected_series.is_empty() {
-        return Ok(RoutePayload::Text(format!(
-            "Overview ({})\nNo balance data found.",
-            scope.label()
-        )));
-    }
-
-    let indices = downsample_indices(timeline.dates.len(), CHART_MAX_POINTS);
-    let x_labels = indices
-        .iter()
-        .filter_map(|index| timeline.dates.get(*index).cloned())
-        .collect::<Vec<_>>();
-
-    let tones = [
-        ChartTone::Accent1,
-        ChartTone::Accent2,
-        ChartTone::Accent3,
-        ChartTone::Accent4,
-    ];
-
-    let series = selected_series
-        .iter()
-        .enumerate()
-        .map(|(series_index, (account_id, balances))| {
-            let points = indices
-                .iter()
-                .enumerate()
-                .filter_map(|(x, source_index)| {
-                    balances
-                        .get(*source_index)
-                        .map(|balance_minor| (x as f64, *balance_minor as f64 / 100.0))
-                })
-                .collect::<Vec<_>>();
-
-            let label = if account_id == "__other__" {
-                "Other accounts".to_owned()
-            } else {
-                labels_by_id.get(account_id).cloned().unwrap_or_else(|| {
-                    account_id
-                        .rsplit(':')
-                        .next()
-                        .unwrap_or(account_id)
-                        .to_owned()
-                })
-            };
-
-            LineChartSeries {
-                label,
-                tone: tones[series_index % tones.len()],
-                points,
+    let rows = accounts
+        .into_iter()
+        .map(|account| {
+            let stale_days = account
+                .updated_at
+                .as_deref()
+                .and_then(|value| days_since(&runtime.connection, value).ok());
+            AccountFreshnessRow {
+                label: account.name,
+                balance_minor: account.balance_minor.unwrap_or(0),
+                updated_at: account.updated_at,
+                stale_days,
             }
         })
         .collect::<Vec<_>>();
 
-    Ok(RoutePayload::LineChart(LineChartPayload {
-        title: "Overview".to_owned(),
-        subtitle: format!("{} | account balances over time", scope.label()),
-        x_labels,
-        series,
+    let total_balance_minor = rows.iter().map(|row| row.balance_minor).sum::<i64>();
+
+    Ok(RoutePayload::OverviewDashboard(OverviewDashboardPayload {
+        scope_label: scope.label(),
+        total_balance_minor,
+        accounts: rows,
     }))
 }
 
-fn fetch_category_bars(
+fn fetch_categories_dashboard(
     runtime: &RuntimeContext,
     requested_group: &str,
 ) -> Result<RoutePayload, String> {
     let group_id = resolve_group(runtime, requested_group);
-    let points = group_category_breakdown(
+    let current = current_month(&runtime.connection)?;
+
+    let breakdown = group_category_breakdown(
         &runtime.connection,
         &runtime.loaded.config,
         &group_id,
@@ -474,62 +520,139 @@ fn fetch_category_bars(
         CATEGORY_LIMIT,
     )
     .map_err(|error| error.to_string())?;
-
-    if points.is_empty() {
+    if breakdown.is_empty() {
         return Ok(RoutePayload::Text(format!(
             "Categories ({group_id})\nNo category data."
         )));
     }
 
-    let bars = points
+    let leakage = load_uncategorized_leakage(
+        &runtime.connection,
+        &runtime.loaded,
+        &group_id,
+        CATEGORY_MONTHS,
+        &current,
+    )?;
+
+    let total_expense_minor = if leakage.total_expense_minor > 0 {
+        leakage.total_expense_minor
+    } else {
+        breakdown.iter().map(|point| point.total_minor).sum::<i64>()
+    };
+
+    let pareto = breakdown
         .into_iter()
-        .map(|point| CategoryBarPoint {
-            label: point.category,
-            total_major: (point.total_minor.abs() / 100).max(0) as u64,
+        .map(|point| {
+            let share_pct = if total_expense_minor <= 0 {
+                0.0
+            } else {
+                (point.total_minor as f64 / total_expense_minor as f64) * 100.0
+            };
+            CategoryParetoPoint {
+                category: point.category,
+                total_minor: point.total_minor,
+                transaction_count: point.transaction_count,
+                share_pct,
+            }
         })
         .collect::<Vec<_>>();
 
-    Ok(RoutePayload::CategoryBars(CategoryBarsPayload {
-        title: "Categories".to_owned(),
-        subtitle: format!("{group_id} | median spend distribution ({CATEGORY_MONTHS}mo)"),
-        points: bars,
-    }))
+    let (months, stability) = load_category_stability(
+        &runtime.connection,
+        &runtime.loaded,
+        &group_id,
+        CATEGORY_MONTHS,
+        CATEGORY_STABILITY_LIMIT,
+        &current,
+    )?;
+
+    Ok(RoutePayload::CategoriesDashboard(
+        CategoriesDashboardPayload {
+            group_id,
+            pareto,
+            months,
+            stability,
+            leakage,
+        },
+    ))
 }
 
 fn fetch_reports(runtime: &RuntimeContext, requested_group: &str) -> Result<RoutePayload, String> {
     let group_id = resolve_group(runtime, requested_group);
+    let current = current_month(&runtime.connection)?;
+
     let (series, totals) = report_cashflow(
         &runtime.connection,
         &runtime.loaded.config,
         &group_id,
-        6,
+        CASHFLOW_LOOKBACK_MONTHS,
+        None,
+        None,
+    )
+    .map_err(|error| error.to_string())?;
+    let full_months = full_month_series(&series, &current);
+
+    let runway = report_runway(
+        &runtime.connection,
+        &runtime.loaded.config,
+        &group_id,
+        None,
+        None,
+    )
+    .map_err(|error| error.to_string())?;
+    let reserves = report_reserves(
+        &runtime.connection,
+        &runtime.loaded.config,
+        &group_id,
         None,
         None,
     )
     .map_err(|error| error.to_string())?;
 
-    if series.is_empty() {
-        return Ok(RoutePayload::Text(format!(
-            "Reports ({group_id})\nNo series points."
-        )));
-    }
+    let latest_net = full_months.last().map_or(0, |point| point.net_minor);
+    let avg_six_net = average_last_n(full_months, 6, |point| point.net_minor).unwrap_or(0);
+    let latest_runway = runway
+        .last()
+        .map(|point| point.runway_months)
+        .unwrap_or(0.0);
+    let latest_reserve = reserves.last();
+    let available = latest_reserve.map_or(0, |point| point.available_minor);
 
     let mut lines = vec![
-        format!("Reports ({group_id}, {} points)", series.len()),
+        format!("Reports ({group_id})"),
         format!(
-            "Totals | income {:>10} | expenses {:>10} | net {:>10}",
+            "Totals (all months) | income {:>12} | expenses {:>12} | net {:>12}",
             totals.income_minor, totals.expense_minor, totals.net_minor
         ),
+        format!(
+            "Latest full month net {:>12} | 6m avg net {:>12}",
+            latest_net, avg_six_net
+        ),
+        format!(
+            "Runway {:>8.2} months | Available {:>12}",
+            latest_runway, available
+        ),
+        String::new(),
+        "Recent full months".to_owned(),
     ];
-    for point in series.iter().take(12) {
+
+    for point in full_months
+        .iter()
+        .rev()
+        .take(12)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+    {
         let savings = point
             .savings_rate_pct
-            .map_or_else(|| "n/a".to_owned(), |value| format!("{value:.2}%"));
+            .map_or_else(|| "n/a".to_owned(), |value| format!("{value:.1}%"));
         lines.push(format!(
-            "{} | income {:>10} | expenses {:>10} | net {:>10} | savings {:>8}",
+            "{} | income {:>10} | expenses {:>10} | net {:>10} | savings {:>7}",
             point.month, point.income_minor, point.expense_minor, point.net_minor, savings
         ));
     }
+
     Ok(RoutePayload::Text(lines.join("\n")))
 }
 
@@ -544,153 +667,198 @@ fn resolve_group(runtime: &RuntimeContext, requested_group: &str) -> String {
         .unwrap_or_else(|| requested_group.to_owned())
 }
 
-#[derive(Debug, Clone)]
-struct BalanceTimeline {
-    dates: Vec<String>,
-    series_by_account: BTreeMap<String, Vec<i64>>,
+fn full_month_series<'a>(
+    points: &'a [MonthlyCashflowPoint],
+    current_month: &str,
+) -> &'a [MonthlyCashflowPoint] {
+    if points.is_empty() {
+        return points;
+    }
+    let split = points
+        .iter()
+        .position(|point| point.month == current_month)
+        .unwrap_or(points.len());
+    &points[..split]
 }
 
-fn load_account_balance_timeline(
+fn average_last_n(
+    points: &[MonthlyCashflowPoint],
+    n: usize,
+    selector: impl Fn(&MonthlyCashflowPoint) -> i64,
+) -> Option<i64> {
+    if points.is_empty() || n == 0 {
+        return None;
+    }
+    let sample = points.iter().rev().take(n).collect::<Vec<_>>();
+    if sample.is_empty() {
+        return None;
+    }
+    let total = sample.iter().map(|point| selector(point)).sum::<i64>();
+    Some(total / i64::try_from(sample.len()).unwrap_or(1))
+}
+
+fn current_month(connection: &Connection) -> Result<String, String> {
+    connection
+        .query_row("SELECT strftime('%Y-%m', 'now', 'localtime')", [], |row| {
+            row.get::<usize, String>(0)
+        })
+        .map_err(|error| error.to_string())
+}
+
+fn days_since(connection: &Connection, timestamp: &str) -> Result<i64, String> {
+    connection
+        .query_row(
+            "SELECT CAST(julianday('now', 'localtime') - julianday(?1) AS INTEGER)",
+            [timestamp],
+            |row| row.get::<usize, i64>(0),
+        )
+        .map_err(|error| error.to_string())
+}
+
+fn load_category_stability(
     connection: &Connection,
-    account_ids: &[String],
-) -> Result<BalanceTimeline, String> {
+    loaded: &LoadedConfig,
+    group_id: &str,
+    months: usize,
+    limit: usize,
+    current_month: &str,
+) -> Result<(Vec<String>, Vec<CategoryStabilityRow>), String> {
+    let account_ids = loaded
+        .config
+        .accounts
+        .iter()
+        .filter(|account| account.group == group_id && account.account_type == "asset")
+        .map(|account| account.id.clone())
+        .collect::<Vec<_>>();
     if account_ids.is_empty() {
-        return Ok(BalanceTimeline {
-            dates: Vec::new(),
-            series_by_account: BTreeMap::new(),
-        });
+        return Ok((Vec::new(), Vec::new()));
     }
 
-    let placeholders = sql_placeholders(account_ids.len());
+    let placeholders_sql = sql_placeholders(account_ids.len());
     let sql = format!(
-        "SELECT je.posted_date,\n                p.account_id,\n                SUM(p.amount_minor) AS delta_minor\n         FROM postings p\n         JOIN journal_entries je ON je.id = p.journal_entry_id\n         WHERE p.account_id IN ({placeholders})\n         GROUP BY je.posted_date, p.account_id\n         ORDER BY je.posted_date ASC"
+        "SELECT strftime('%Y-%m', je.posted_at) AS month,\n                coa.name AS category,\n                COALESCE(SUM(p.amount_minor), 0) AS month_total\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         WHERE coa.account_type = 'expense'\n           AND je.posted_at >= date('now', 'start of month', '-' || ? || ' months')\n           AND strftime('%Y-%m', je.posted_at) < ?\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND asset.account_id IN ({placeholders_sql})\n           )\n         GROUP BY month, coa.name\n         ORDER BY month ASC, month_total DESC"
     );
+
+    let mut params = vec![months.to_string(), current_month.to_owned()];
+    params.extend(account_ids);
 
     let mut statement = connection
         .prepare(&sql)
         .map_err(|error| error.to_string())?;
     let mut rows = statement
-        .query(params_from_iter(account_ids.iter()))
+        .query(params_from_iter(params.iter()))
         .map_err(|error| error.to_string())?;
 
-    let mut dates = BTreeSet::new();
-    let mut deltas = BTreeMap::<String, BTreeMap<String, i64>>::new();
+    let mut month_set = BTreeSet::new();
+    let mut month_totals = HashMap::<String, HashMap<String, i64>>::new();
+    let mut category_totals = HashMap::<String, i64>::new();
 
     while let Some(row) = rows.next().map_err(|error| error.to_string())? {
-        let date: String = row.get(0).map_err(|error| error.to_string())?;
-        let account_id: String = row.get(1).map_err(|error| error.to_string())?;
-        let delta_minor: i64 = row.get(2).map_err(|error| error.to_string())?;
-        dates.insert(date.clone());
-        deltas
-            .entry(date)
+        let month: String = row.get(0).map_err(|error| error.to_string())?;
+        let category: String = row.get(1).map_err(|error| error.to_string())?;
+        let total_minor: i64 = row.get(2).map_err(|error| error.to_string())?;
+
+        month_set.insert(month.clone());
+        month_totals
+            .entry(category.clone())
             .or_default()
-            .entry(account_id)
-            .and_modify(|current| *current += delta_minor)
-            .or_insert(delta_minor);
+            .insert(month, total_minor);
+        category_totals
+            .entry(category)
+            .and_modify(|current| *current += total_minor)
+            .or_insert(total_minor);
     }
 
-    let ordered_dates = dates.into_iter().collect::<Vec<_>>();
-    let mut running = account_ids
-        .iter()
-        .map(|id| (id.clone(), 0_i64))
-        .collect::<BTreeMap<_, _>>();
-    let mut series_by_account = account_ids
-        .iter()
-        .map(|id| (id.clone(), Vec::<i64>::with_capacity(ordered_dates.len())))
-        .collect::<BTreeMap<_, _>>();
-
-    for date in &ordered_dates {
-        if let Some(date_deltas) = deltas.get(date) {
-            for (account_id, delta_minor) in date_deltas {
-                if let Some(current) = running.get_mut(account_id) {
-                    *current += *delta_minor;
-                }
-            }
-        }
-
-        for account_id in account_ids {
-            let value = *running.get(account_id).unwrap_or(&0_i64);
-            if let Some(series) = series_by_account.get_mut(account_id) {
-                series.push(value);
-            }
-        }
+    let months = month_set.into_iter().collect::<Vec<_>>();
+    if months.is_empty() {
+        return Ok((months, Vec::new()));
     }
 
-    Ok(BalanceTimeline {
-        dates: ordered_dates,
-        series_by_account,
-    })
-}
-
-fn select_top_account_series(
-    input: &BTreeMap<String, Vec<i64>>,
-    max_series: usize,
-    other_id: &str,
-) -> BTreeMap<String, Vec<i64>> {
-    if input.is_empty() || max_series == 0 {
-        return BTreeMap::new();
-    }
-
-    let mut ranked = input
-        .iter()
-        .map(|(account_id, balances)| {
-            let latest = balances.last().copied().unwrap_or(0_i64).abs();
-            (account_id.clone(), latest)
-        })
-        .collect::<Vec<_>>();
+    let mut ranked = category_totals.into_iter().collect::<Vec<_>>();
     ranked.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
 
-    let mut selected_ids = ranked
-        .iter()
-        .take(max_series)
-        .map(|(account_id, _)| account_id.clone())
-        .collect::<Vec<_>>();
-    selected_ids.sort();
-
-    let mut output = BTreeMap::new();
-    for account_id in &selected_ids {
-        if let Some(series) = input.get(account_id) {
-            output.insert(account_id.clone(), series.clone());
-        }
-    }
-
-    if ranked.len() > max_series {
-        let remainder = ranked
-            .iter()
-            .skip(max_series)
-            .map(|(account_id, _)| account_id.clone())
-            .collect::<Vec<_>>();
-        let Some(len) = input.values().next().map(Vec::len) else {
-            return output;
-        };
-        let mut merged = vec![0_i64; len];
-        for account_id in remainder {
-            if let Some(series) = input.get(&account_id) {
-                for (index, value) in series.iter().enumerate() {
-                    merged[index] += value;
-                }
+    let selected = ranked
+        .into_iter()
+        .take(limit)
+        .map(|(category, _)| {
+            let values = months
+                .iter()
+                .map(|month| {
+                    month_totals
+                        .get(&category)
+                        .and_then(|by_month| by_month.get(month))
+                        .copied()
+                        .unwrap_or(0)
+                })
+                .collect::<Vec<_>>();
+            let total_minor = values.iter().sum::<i64>();
+            CategoryStabilityRow {
+                category,
+                month_values_minor: values,
+                total_minor,
             }
-        }
-        output.insert(other_id.to_owned(), merged);
-    }
+        })
+        .collect::<Vec<_>>();
 
-    output
+    Ok((months, selected))
 }
 
-fn downsample_indices(total: usize, max_points: usize) -> Vec<usize> {
-    if total == 0 || max_points == 0 {
-        return Vec::new();
-    }
-    if total <= max_points {
-        return (0..total).collect();
+fn load_uncategorized_leakage(
+    connection: &Connection,
+    loaded: &LoadedConfig,
+    group_id: &str,
+    months: usize,
+    current_month: &str,
+) -> Result<UncategorizedLeakage, String> {
+    let account_ids = loaded
+        .config
+        .accounts
+        .iter()
+        .filter(|account| account.group == group_id && account.account_type == "asset")
+        .map(|account| account.id.clone())
+        .collect::<Vec<_>>();
+    if account_ids.is_empty() {
+        return Ok(UncategorizedLeakage {
+            total_expense_minor: 0,
+            uncategorized_minor: 0,
+            uncategorized_count: 0,
+            leakage_pct: 0.0,
+        });
     }
 
-    let step = total.div_ceil(max_points);
-    let mut indices = (0..total).step_by(step).collect::<Vec<_>>();
-    if indices.last().copied() != Some(total - 1) {
-        indices.push(total - 1);
-    }
-    indices
+    let placeholders_sql = sql_placeholders(account_ids.len());
+    let sql = format!(
+        "SELECT COALESCE(SUM(CASE WHEN p.account_id = 'Expenses:Uncategorized' THEN p.amount_minor ELSE 0 END), 0) AS uncategorized_minor,\n                COALESCE(SUM(CASE WHEN p.account_id = 'Expenses:Uncategorized' THEN 1 ELSE 0 END), 0) AS uncategorized_count,\n                COALESCE(SUM(p.amount_minor), 0) AS total_expense_minor\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON coa.id = p.account_id\n         WHERE coa.account_type = 'expense'\n           AND je.posted_at >= date('now', 'start of month', '-' || ? || ' months')\n           AND strftime('%Y-%m', je.posted_at) < ?\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND asset.account_id IN ({placeholders_sql})\n           )"
+    );
+
+    let mut params = vec![months.to_string(), current_month.to_owned()];
+    params.extend(account_ids);
+
+    let values = connection
+        .query_row(&sql, params_from_iter(params.iter()), |row| {
+            let uncategorized_minor = row.get::<usize, i64>(0)?;
+            let uncategorized_count = row.get::<usize, i64>(1)?;
+            let total_expense_minor = row.get::<usize, i64>(2)?;
+            Ok((
+                uncategorized_minor,
+                uncategorized_count,
+                total_expense_minor,
+            ))
+        })
+        .map_err(|error| error.to_string())?;
+
+    let leakage_pct = if values.2 <= 0 {
+        0.0
+    } else {
+        (values.0 as f64 / values.2 as f64) * 100.0
+    };
+
+    Ok(UncategorizedLeakage {
+        total_expense_minor: values.2,
+        uncategorized_minor: values.0,
+        uncategorized_count: values.1,
+        leakage_pct,
+    })
 }
 
 fn sql_placeholders(count: usize) -> String {
