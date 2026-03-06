@@ -515,7 +515,7 @@ describe("loadDashboardPageData", () => {
 			},
 		};
 
-		const data = await loadDashboardPageData({
+        const data = await loadDashboardPageData({
 			url: new URL("https://fin.test/?group=business"),
 			client: createMockClient({
 				configShow: async () => configShow,
@@ -531,12 +531,12 @@ describe("loadDashboardPageData", () => {
 				dashboardBalances: async ({ account }) => balanceSeriesByAccount[account ?? ""] ?? balanceSeriesByAccount["Assets:Business:Monzo"],
 				dashboardContributions: async (account) => contributionSeriesByAccount[account],
 			}),
-		});
+        });
 
-		expect(data.initialGroup).toBe("business");
-		expect(data.config.ui.groupColumnOrder).toEqual(["personal", "business"]);
-		expect(data.config.finance.investmentProjectionAnnualReturns).toEqual({ low: 0.04, mid: 0.06, high: 0.08 });
-		expect(data.accounts).toHaveLength(3);
+        expect(data.initialGroup).toBe("business");
+        expect(data.config.ui.groupColumnOrder).toEqual(["business", "personal"]);
+        expect(data.config.finance.investmentProjectionAnnualReturns).toEqual({ low: 0.04, mid: 0.06, high: 0.08 });
+        expect(data.accounts).toHaveLength(3);
 		expect(data.groupSummary.personal?.recentAnomalyMonths).toEqual(["2025-12", "2026-02"]);
 		expect(data.groupCashflowSeries.personal?.[1]).toEqual({
 			month: "2026-02",

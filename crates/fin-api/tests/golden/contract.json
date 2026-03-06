@@ -10,16 +10,16 @@
             "subtype": "checking"
           },
           {
-            "id": "Assets:Business:RainyDay",
-            "label": "Rainy Day",
-            "provider": "synthetic",
-            "subtype": "savings"
-          },
-          {
             "id": "Assets:Business:TaxReserve",
             "label": "Tax Reserve",
             "provider": "synthetic",
             "subtype": "tax_reserve"
+          },
+          {
+            "id": "Assets:Business:RainyDay",
+            "label": "Rainy Day",
+            "provider": "synthetic",
+            "subtype": "savings"
           }
         ],
         "joint": [
@@ -65,11 +65,11 @@
       },
       "groups": [
         {
-          "expenseReserveMonths": 2,
-          "icon": "briefcase",
-          "id": "business",
-          "label": "Business",
-          "taxType": "corp"
+          "expenseReserveMonths": 3,
+          "icon": "user",
+          "id": "personal",
+          "label": "Personal",
+          "taxType": "income"
         },
         {
           "expenseReserveMonths": 4,
@@ -79,11 +79,11 @@
           "taxType": "none"
         },
         {
-          "expenseReserveMonths": 3,
-          "icon": "user",
-          "id": "personal",
-          "label": "Personal",
-          "taxType": "income"
+          "expenseReserveMonths": 2,
+          "icon": "briefcase",
+          "id": "business",
+          "label": "Business",
+          "taxType": "corp"
         }
       ]
     },
@@ -631,13 +631,6 @@
             "target_id": "Assets:Business:Operating"
           },
           {
-            "amount_minor": 360000,
-            "share_of_source_pct": 16.84,
-            "share_of_total_pct": 6.72,
-            "source_id": "Assets:Business:Operating",
-            "target_id": "Assets:Business:TaxReserve"
-          },
-          {
             "amount_minor": 278605,
             "share_of_source_pct": 13.03,
             "share_of_total_pct": 5.2,
@@ -678,13 +671,6 @@
             "share_of_total_pct": 4.91,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Services"
-          },
-          {
-            "amount_minor": 146666,
-            "share_of_source_pct": 6.86,
-            "share_of_total_pct": 2.74,
-            "source_id": "Assets:Business:Operating",
-            "target_id": "Assets:Business:RainyDay"
           }
         ],
         "nodes": [
@@ -692,16 +678,6 @@
             "id": "Assets:Business:Operating",
             "kind": "asset",
             "label": "Operating"
-          },
-          {
-            "id": "Assets:Business:RainyDay",
-            "kind": "asset",
-            "label": "Rainy Day"
-          },
-          {
-            "id": "Assets:Business:TaxReserve",
-            "kind": "asset",
-            "label": "Tax Reserve"
           },
           {
             "id": "Expenses:Business:Contractors",
@@ -739,14 +715,14 @@
             "label": "Other"
           }
         ],
-        "total_minor": 5356172
+        "total_minor": 4849506
       },
       "groupId": "business",
       "mode": "monthly_average",
       "months": 6
     },
     "meta": {
-      "count": 9,
+      "count": 7,
       "elapsed": 0,
       "tool": "dashboard.flow"
     },
@@ -758,31 +734,11 @@
       "groupId": "business",
       "mode": "monthly_average",
       "months": 6,
-      "nodes": [
-        {
-          "account_id": "Outflows:Transfers",
-          "children": [
-            {
-              "account_id": "Outflows:Transfers:business-account",
-              "children": [],
-              "kind": "transfer",
-              "name": "Business Account",
-              "share_of_parent_pct": 100.0,
-              "share_of_root_pct": 100.0,
-              "total_minor": 506666
-            }
-          ],
-          "kind": "transfer",
-          "name": "Transfers",
-          "share_of_parent_pct": 100.0,
-          "share_of_root_pct": 100.0,
-          "total_minor": 506666
-        }
-      ],
-      "totalMinor": 506666
+      "nodes": [],
+      "totalMinor": 0
     },
     "meta": {
-      "count": 2,
+      "count": 0,
       "elapsed": 0,
       "tool": "dashboard.hierarchy"
     },

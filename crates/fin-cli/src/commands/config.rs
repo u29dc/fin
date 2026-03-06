@@ -60,28 +60,37 @@ fn build_account_map(config: &fin_sdk::config::FinConfig) -> BTreeMap<String, Ve
                 subtype: account.subtype.clone(),
             });
     }
-
-    for accounts in grouped.values_mut() {
-        accounts.sort_by(|left, right| left.id.cmp(&right.id));
-    }
     grouped
 }
 
 fn derive_groups(
+    config: &fin_sdk::config::FinConfig,
     configured_groups: Option<Vec<GroupMetadata>>,
-    account_map: &BTreeMap<String, Vec<AccountSummary>>,
+    _account_map: &BTreeMap<String, Vec<AccountSummary>>,
 ) -> Vec<GroupMetadata> {
-    if let Some(mut groups) = configured_groups {
-        groups.sort_by(|left, right| left.id.cmp(&right.id));
-        return groups;
+    if let Some(groups) = configured_groups {
+        let existing = groups
+            .iter()
+            .map(|group| group.id.clone())
+            .collect::<BTreeSet<_>>();
+        let mut ordered = groups;
+        for group_id in config.group_ids() {
+            if existing.contains(&group_id) {
+                continue;
+            }
+            ordered.push(GroupMetadata {
+                label: group_id.clone(),
+                id: group_id,
+                icon: None,
+                tax_type: None,
+                expense_reserve_months: None,
+            });
+        }
+        return ordered;
     }
 
-    let mut group_ids = BTreeSet::new();
-    for group_id in account_map.keys() {
-        group_ids.insert(group_id.clone());
-    }
-
-    group_ids
+    config
+        .group_ids()
         .into_iter()
         .map(|id| GroupMetadata {
             label: id.clone(),
@@ -147,7 +156,7 @@ pub fn run_show() -> Result<CommandResult, CommandFailure> {
     })?;
 
     let account_map = build_account_map(&loaded.config);
-    let groups = derive_groups(loaded.config.groups.clone(), &account_map);
+    let groups = derive_groups(&loaded.config, loaded.config.groups.clone(), &account_map);
     let financial =
         serde_json::to_value(&loaded.config.financial).unwrap_or(serde_json::Value::Null);
     let config_path = loaded.path.display().to_string();

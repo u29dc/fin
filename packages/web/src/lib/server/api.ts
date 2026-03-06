@@ -522,8 +522,6 @@ export type FinApiClient = {
 
 const DEFAULT_UNIX_ORIGIN = "http://localhost";
 const DEFAULT_TCP_ORIGIN = "http://127.0.0.1:7414";
-const PREFERRED_GROUP_ORDER = ["personal", "joint", "business"];
-
 export class FinApiError extends Error {
 	readonly code: string;
 	readonly status: number;
@@ -699,36 +697,25 @@ function toApiError(status: number, envelope: ApiEnvelope<unknown>): FinApiError
 }
 
 function deriveGroups(config: ConfigShowData | null): Pick<ShellState, "availableGroups" | "groupMetadata"> {
-	if (!config) {
-		return {
-			availableGroups: fallbackGroups,
-			groupMetadata: fallbackGroupMetadata,
-		};
-	}
+    if (!config) {
+        return {
+            availableGroups: fallbackGroups,
+            groupMetadata: fallbackGroupMetadata,
+        };
+    }
 
-	const orderedGroups = [...config.groups].sort((left, right) => {
-		const leftIndex = preferredGroupIndex(left.id);
-		const rightIndex = preferredGroupIndex(right.id);
-		return leftIndex - rightIndex || left.label.localeCompare(right.label);
-	});
-
-	return {
-		availableGroups: orderedGroups.map((group) => group.id),
-		groupMetadata: Object.fromEntries(
-			orderedGroups.map((group) => [
-				group.id,
-				{
-					label: group.label,
-					icon: group.icon ?? "wallet",
-				},
-			]),
-		) as Record<GroupId, GroupMeta>,
-	};
-}
-
-function preferredGroupIndex(groupId: string): number {
-	const index = PREFERRED_GROUP_ORDER.indexOf(groupId);
-	return index === -1 ? PREFERRED_GROUP_ORDER.length : index;
+    return {
+        availableGroups: config.groups.map((group) => group.id),
+        groupMetadata: Object.fromEntries(
+            config.groups.map((group) => [
+                group.id,
+                {
+                    label: group.label,
+                    icon: group.icon ?? "wallet",
+                },
+            ]),
+        ) as Record<GroupId, GroupMeta>,
+    };
 }
 
 function deriveConnectionState(

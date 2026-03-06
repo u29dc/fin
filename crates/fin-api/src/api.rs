@@ -13,17 +13,17 @@ use fin_sdk::{
     AccountBalanceRow, AuditPayeePoint, BalanceSeriesQueryOptions, BalanceSheet, CashflowKpis,
     CashflowTotals, CategoryBreakdownPoint, CategoryMedianPoint, ConfigShowData,
     ConfigValidationResult, ContributionPoint, DailyBalancePoint, DescriptionSummary, EnvelopeMeta,
-    ErrorEnvelope, ErrorPayload, ExpenseHierarchyNode, FinError, FinSdkError, FlowGraph,
-    FlowQueryOptions, GlobalFlag, GroupAllocationSnapshot, HealthCheckOptions, HealthPoint,
-    HealthReport, HierarchyQueryOptions, JournalEntryRow, LedgerQueryOptions,
-    ReserveBreakdownPoint, RollupMode, RuntimeContext, RuntimeContextOptions, RunwayPoint,
-    RunwayProjectionOptions, RunwayProjectionReport, SDK_VERSION, SortDirection, SuccessEnvelope,
-    SummaryReport, ToolMeta, TransactionCursor, TransactionDetail, TransactionListRow,
-    TransactionPageQuery, TransactionSortField, ValidationError, account_daily_balance_series,
-    audit_payees, build_config_show, cumulative_contribution_series, discover_descriptions,
-    discover_unmapped_descriptions, get_balance_sheet, global_flags, group_category_breakdown,
-    group_category_monthly_median, group_daily_balance_series, group_expense_hierarchy,
-    group_flow_graph, ledger_entry_count, load_transaction_detail,
+    ErrorEnvelope, ErrorPayload, ExpenseHierarchyNode, ExpenseHierarchyNodeKind, FinError,
+    FinSdkError, FlowGraph, FlowNodeKind, FlowQueryOptions, GlobalFlag, GroupAllocationSnapshot,
+    HealthCheckOptions, HealthPoint, HealthReport, HierarchyQueryOptions, JournalEntryRow,
+    LedgerQueryOptions, ReserveBreakdownPoint, RollupMode, RuntimeContext, RuntimeContextOptions,
+    RunwayPoint, RunwayProjectionOptions, RunwayProjectionReport, SDK_VERSION, SortDirection,
+    SuccessEnvelope, SummaryReport, ToolMeta, TransactionCursor, TransactionDetail,
+    TransactionListRow, TransactionPageQuery, TransactionSortField, ValidationError,
+    account_daily_balance_series, audit_payees, build_config_show, cumulative_contribution_series,
+    discover_descriptions, discover_unmapped_descriptions, get_balance_sheet, global_flags,
+    group_category_breakdown, group_category_monthly_median, group_daily_balance_series,
+    group_expense_hierarchy, group_flow_graph, ledger_entry_count, load_transaction_detail,
     merged_accounts_daily_balance_series, project_consolidated_runway, project_group_runway,
     query_transactions_page, report_cashflow, report_cashflow_kpis,
     report_group_allocation_for_month, report_health, report_reserves, report_runway,
@@ -1588,7 +1588,7 @@ async fn dashboard_hierarchy_handler(
         started,
     )?;
 
-    let nodes = group_expense_hierarchy(
+    let raw_nodes = group_expense_hierarchy(
         runtime.connection(),
         runtime.config(),
         &query.group,
@@ -1599,6 +1599,7 @@ async fn dashboard_hierarchy_handler(
         },
     )
     .map_err(|error| ApiError::from_fin_error("dashboard.hierarchy", error, started))?;
+    let nodes = filter_expense_hierarchy_nodes(&raw_nodes);
     let count = hierarchy_node_count(&nodes);
     let total_minor = nodes.iter().map(|node| node.total_minor).sum::<i64>();
 
@@ -1628,7 +1629,7 @@ async fn dashboard_flow_handler(
     let runtime = open_read_runtime(&state, "dashboard.flow", started)?;
     ensure_group_exists(runtime.config(), &query.group, "dashboard.flow", started)?;
 
-    let graph = group_flow_graph(
+    let raw_graph = group_flow_graph(
         runtime.connection(),
         runtime.config(),
         &query.group,
@@ -1639,6 +1640,7 @@ async fn dashboard_flow_handler(
         },
     )
     .map_err(|error| ApiError::from_fin_error("dashboard.flow", error, started))?;
+    let graph = filter_dashboard_flow_graph(raw_graph);
     let count = graph.edges.len();
 
     Ok(success(
@@ -2001,6 +2003,66 @@ fn hierarchy_node_count(nodes: &[ExpenseHierarchyNode]) -> usize {
         .iter()
         .map(|node| 1 + hierarchy_node_count(&node.children))
         .sum()
+}
+
+fn filter_expense_hierarchy_nodes(nodes: &[ExpenseHierarchyNode]) -> Vec<ExpenseHierarchyNode> {
+    nodes
+        .iter()
+        .filter(|node| node.kind == ExpenseHierarchyNodeKind::Expense)
+        .map(filter_expense_hierarchy_node)
+        .collect()
+}
+
+fn filter_expense_hierarchy_node(node: &ExpenseHierarchyNode) -> ExpenseHierarchyNode {
+    ExpenseHierarchyNode {
+        account_id: node.account_id.clone(),
+        name: node.name.clone(),
+        kind: node.kind,
+        total_minor: node.total_minor,
+        share_of_parent_pct: node.share_of_parent_pct,
+        share_of_root_pct: node.share_of_root_pct,
+        children: node
+            .children
+            .iter()
+            .filter(|child| child.kind == ExpenseHierarchyNodeKind::Expense)
+            .map(filter_expense_hierarchy_node)
+            .collect(),
+    }
+}
+
+fn filter_dashboard_flow_graph(graph: FlowGraph) -> FlowGraph {
+    let node_kind_by_id = graph
+        .nodes
+        .iter()
+        .map(|node| (node.id.clone(), node.kind))
+        .collect::<BTreeMap<_, _>>();
+    let edges = graph
+        .edges
+        .into_iter()
+        .filter(|edge| {
+            let source_kind = node_kind_by_id.get(&edge.source_id).copied();
+            let target_kind = node_kind_by_id.get(&edge.target_id).copied();
+            !matches!(
+                (source_kind, target_kind),
+                (Some(FlowNodeKind::Asset), Some(FlowNodeKind::Asset))
+            )
+        })
+        .collect::<Vec<_>>();
+    let used_node_ids = edges
+        .iter()
+        .flat_map(|edge| [edge.source_id.clone(), edge.target_id.clone()])
+        .collect::<std::collections::BTreeSet<_>>();
+    let nodes = graph
+        .nodes
+        .into_iter()
+        .filter(|node| used_node_ids.contains(&node.id))
+        .collect::<Vec<_>>();
+
+    FlowGraph {
+        total_minor: edges.iter().map(|edge| edge.amount_minor).sum(),
+        nodes,
+        edges,
+    }
 }
 
 fn selected_runway_groups(

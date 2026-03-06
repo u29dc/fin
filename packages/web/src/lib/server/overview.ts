@@ -15,7 +15,6 @@ import { type ConnectionState, type GroupId, type GroupMeta } from "$lib/server/
 const DAY_MS = 86_400_000;
 const SERIES_LIMIT = 10_000;
 const PROJECTION_MONTHS = 24;
-const PREFERRED_GROUP_ORDER = ["personal", "joint", "business"];
 const TOTAL_SERIES_ID = "__all_assets__";
 
 export type OverviewChartAccount = {
@@ -189,7 +188,8 @@ function selectChartAccounts(shell: ShellState, accountsResult: ViewAccountsData
 	const assetRowIds = new Set(assetRows.map((account) => account.id));
 	const rowById = new Map(assetRows.map((account) => [account.id, account] as const));
 	const orderedConfigured = flattenConfiguredAccounts(shell.config, shell.availableGroups);
-	const selected = new Map<string, OverviewChartAccount>();
+    const selected = new Map<string, OverviewChartAccount>();
+    const groupOrder = new Map(shell.availableGroups.map((groupId, index) => [groupId, index]));
 
 	for (const account of orderedConfigured) {
 		if (assetRowIds.size > 0 && !assetRowIds.has(account.id) && !account.id.startsWith("Assets:")) {
@@ -215,13 +215,15 @@ function selectChartAccounts(shell: ShellState, accountsResult: ViewAccountsData
 		});
 	}
 
-	return [...selected.values()].sort((left, right) => {
-		const groupDelta = preferredGroupIndex(left.groupId) - preferredGroupIndex(right.groupId);
-		if (groupDelta !== 0) {
-			return groupDelta;
-		}
-		return left.label.localeCompare(right.label) || left.id.localeCompare(right.id);
-	});
+    return [...selected.values()].sort((left, right) => {
+        const groupDelta =
+            (groupOrder.get(left.groupId) ?? Number.MAX_SAFE_INTEGER) -
+            (groupOrder.get(right.groupId) ?? Number.MAX_SAFE_INTEGER);
+        if (groupDelta !== 0) {
+            return groupDelta;
+        }
+        return left.label.localeCompare(right.label) || left.id.localeCompare(right.id);
+    });
 }
 
 function buildOverviewChartAccount(account: ConfiguredChartAccount, row: AccountBalanceRow | undefined): OverviewChartAccount {
@@ -258,11 +260,6 @@ function inferGroupId(accountId: string, availableGroups: readonly string[]): st
 	return availableGroups[0] ?? "personal";
 }
 
-function preferredGroupIndex(groupId: string): number {
-	const preferredIndex = PREFERRED_GROUP_ORDER.indexOf(groupId);
-	return preferredIndex === -1 ? PREFERRED_GROUP_ORDER.length : preferredIndex;
-}
-
 type ConfiguredChartAccount = {
 	id: string;
 	label: string | null;
@@ -279,31 +276,31 @@ function flattenConfiguredAccounts(
 		return [];
 	}
 
-	const orderedGroups = [...availableGroups].sort((left, right) => {
-		return preferredGroupIndex(left) - preferredGroupIndex(right) || left.localeCompare(right);
-	});
-	const entries: ConfiguredChartAccount[] = [];
+    const entries: ConfiguredChartAccount[] = [];
 
-	for (const groupId of orderedGroups) {
-		const accounts = config.accounts[groupId] ?? [];
-		for (const account of accounts) {
-			entries.push({
-				id: account.id,
+    for (const groupId of availableGroups) {
+        const accounts = config.accounts[groupId] ?? [];
+        for (const account of accounts) {
+            entries.push({
+                id: account.id,
 				label: account.label ?? null,
 				groupId,
 				provider: account.provider,
 				subtype: account.subtype ?? null,
 			});
-		}
-	}
+        }
+    }
 
-	return entries.sort((left, right) => {
-		const groupDelta = preferredGroupIndex(left.groupId) - preferredGroupIndex(right.groupId);
-		if (groupDelta !== 0) {
-			return groupDelta;
-		}
-		return deriveAccountLabel(left.id, left.label).localeCompare(deriveAccountLabel(right.id, right.label));
-	});
+    const groupOrder = new Map(availableGroups.map((groupId, index) => [groupId, index]));
+    return entries.sort((left, right) => {
+        const groupDelta =
+            (groupOrder.get(left.groupId) ?? Number.MAX_SAFE_INTEGER) -
+            (groupOrder.get(right.groupId) ?? Number.MAX_SAFE_INTEGER);
+        if (groupDelta !== 0) {
+            return groupDelta;
+        }
+        return deriveAccountLabel(left.id, left.label).localeCompare(deriveAccountLabel(right.id, right.label));
+    });
 }
 
 function deriveDownsampleStepDays(payload: DashboardBalanceData | null): number | undefined {

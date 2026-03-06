@@ -932,7 +932,7 @@ mod tests {
 
         let (hierarchy_status, hierarchy_body) = request_json(
             address,
-            "/v1/dashboard/hierarchy?group=business&months=6&mode=monthly_average",
+            "/v1/dashboard/hierarchy?group=personal&months=6&mode=monthly_average",
         )
         .await?;
         assert_eq!(hierarchy_status, 200);
@@ -942,13 +942,13 @@ mod tests {
         assert!(
             hierarchy_body["data"]["nodes"]
                 .as_array()
-                .is_some_and(|nodes| !nodes.is_empty())
+                .is_some_and(|nodes| nodes.iter().all(|node| node["kind"] == "expense"))
         );
         assert!(hierarchy_body["data"]["totalMinor"].as_i64().is_some());
 
         let (flow_status, flow_body) = request_json(
             address,
-            "/v1/dashboard/flow?group=business&months=6&mode=monthly_average",
+            "/v1/dashboard/flow?group=personal&months=6&mode=monthly_average",
         )
         .await?;
         assert_eq!(flow_status, 200);
@@ -959,6 +959,36 @@ mod tests {
             flow_body["data"]["graph"]["edges"]
                 .as_array()
                 .is_some_and(|edges| !edges.is_empty())
+        );
+        let node_kind_by_id = flow_body["data"]["graph"]["nodes"]
+            .as_array()
+            .expect("flow nodes")
+            .iter()
+            .filter_map(|node| {
+                Some((
+                    node["id"].as_str()?.to_owned(),
+                    node["kind"].as_str()?.to_owned(),
+                ))
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        assert!(
+            flow_body["data"]["graph"]["edges"]
+                .as_array()
+                .is_some_and(|edges| edges.iter().all(|edge| {
+                    let Some(source_id) = edge["source_id"].as_str() else {
+                        return false;
+                    };
+                    let Some(target_id) = edge["target_id"].as_str() else {
+                        return false;
+                    };
+                    !matches!(
+                        (
+                            node_kind_by_id.get(source_id).map(String::as_str),
+                            node_kind_by_id.get(target_id).map(String::as_str),
+                        ),
+                        (Some("asset"), Some("asset"))
+                    )
+                }))
         );
         assert!(flow_body["data"]["graph"]["total_minor"].as_i64().is_some());
 

@@ -156,9 +156,6 @@ pub fn build_config_show(explicit_path: Option<&Path>) -> Result<ConfigShowData,
                 subtype: account.subtype.clone(),
             });
     }
-    for values in accounts.values_mut() {
-        values.sort_by(|left, right| left.id.cmp(&right.id));
-    }
 
     let mut groups = loaded
         .config
@@ -175,34 +172,22 @@ pub fn build_config_show(explicit_path: Option<&Path>) -> Result<ConfigShowData,
         })
         .collect::<Vec<_>>();
 
-    if groups.is_empty() {
-        for group_id in accounts.keys() {
-            groups.push(GroupMetadata {
-                id: group_id.clone(),
-                label: title_case(group_id),
-                icon: None,
-                tax_type: "none".to_owned(),
-                expense_reserve_months: 3,
-            });
+    let existing = groups
+        .iter()
+        .map(|group| group.id.clone())
+        .collect::<BTreeSet<_>>();
+    for group_id in loaded.config.group_ids() {
+        if existing.contains(&group_id) {
+            continue;
         }
-    } else {
-        let existing = groups
-            .iter()
-            .map(|group| group.id.clone())
-            .collect::<BTreeSet<_>>();
-        for group_id in accounts.keys() {
-            if !existing.contains(group_id) {
-                groups.push(GroupMetadata {
-                    id: group_id.clone(),
-                    label: title_case(group_id),
-                    icon: None,
-                    tax_type: "none".to_owned(),
-                    expense_reserve_months: 3,
-                });
-            }
-        }
+        groups.push(GroupMetadata {
+            id: group_id.clone(),
+            label: title_case(&group_id),
+            icon: None,
+            tax_type: "none".to_owned(),
+            expense_reserve_months: 3,
+        });
     }
-    groups.sort_by(|left, right| left.id.cmp(&right.id));
 
     let financial = serde_json::to_value(&loaded.config.financial).unwrap_or(JsonValue::Null);
     Ok(ConfigShowData {

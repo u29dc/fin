@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use rusqlite::{Connection, params_from_iter};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{AccountConfig, FinConfig};
+use crate::config::FinConfig;
 use crate::error::Result;
 use crate::stats::{mean_i64, median_i64};
 
@@ -125,12 +125,12 @@ pub fn project_group_runway(
 ) -> Result<RunwayProjectionReport> {
     let scope_group_ids = [group_id.to_owned()];
     let asset_account_ids = scoped_asset_account_ids(config, &scope_group_ids);
-    let liquid_account_ids = scoped_liquid_asset_account_ids(config, &scope_group_ids);
+    let runway_balance_account_ids = scoped_runway_balance_account_ids(config, &scope_group_ids);
     let inputs = projection_inputs(
         connection,
         config,
         &asset_account_ids,
-        &liquid_account_ids,
+        &runway_balance_account_ids,
         options,
     )?;
     Ok(build_projection_report(
@@ -148,12 +148,12 @@ pub fn project_consolidated_runway(
     options: &RunwayProjectionOptions,
 ) -> Result<RunwayProjectionReport> {
     let asset_account_ids = scoped_asset_account_ids(config, group_ids);
-    let liquid_account_ids = scoped_liquid_asset_account_ids(config, group_ids);
+    let runway_balance_account_ids = scoped_runway_balance_account_ids(config, group_ids);
     let inputs = projection_inputs(
         connection,
         config,
         &asset_account_ids,
-        &liquid_account_ids,
+        &runway_balance_account_ids,
         options,
     )?;
     Ok(build_projection_report(
@@ -347,24 +347,18 @@ fn scoped_asset_account_ids(config: &FinConfig, group_ids: &[String]) -> Vec<Str
         .collect()
 }
 
-fn scoped_liquid_asset_account_ids(config: &FinConfig, group_ids: &[String]) -> Vec<String> {
+fn scoped_runway_balance_account_ids(config: &FinConfig, group_ids: &[String]) -> Vec<String> {
     let scope = group_ids.iter().collect::<BTreeSet<_>>();
+    let excluded_prefixes = runway_balance_exclude_prefixes(config);
     config
         .accounts
         .iter()
         .filter(|account| account.account_type == "asset" && scope.contains(&account.group))
-        .filter(|account| is_liquid_account(account))
+        .filter(|account| !matches_any_account_prefix(&account.id, &excluded_prefixes))
         .map(|account| account.id.clone())
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()
-}
-
-fn is_liquid_account(account: &AccountConfig) -> bool {
-    if account.subtype.as_deref() == Some("investment") {
-        return false;
-    }
-    !account.provider.eq_ignore_ascii_case("vanguard")
 }
 
 fn scoped_balance_as_of(
@@ -399,7 +393,9 @@ fn scoped_monthly_outflow(
         return Ok(Vec::new());
     }
 
-    let (asset_clause, mut params) = account_match_clause("asset", account_ids);
+    let (asset_outflow_clause, mut params) = account_match_clause("asset_out", account_ids);
+    let (asset_inflow_clause, inflow_params) = account_match_clause("asset_in", account_ids);
+    params.extend(inflow_params);
     let excluded_prefixes = burn_rate_exclude_prefixes(config);
     let exclude_sql = if excluded_prefixes.is_empty() {
         String::new()
@@ -412,8 +408,8 @@ fn scoped_monthly_outflow(
     params.push(format!("{as_of_date}T23:59:59.999"));
     params.push(month_limit.max(1).to_string());
     let sql = format!(
-        "SELECT month, expense_minor\n         FROM (\n             SELECT strftime('%Y-%m', je.posted_at) AS month,\n                    COALESCE(SUM(p.amount_minor), 0) AS expense_minor\n             FROM journal_entries je\n             JOIN postings p ON p.journal_entry_id = je.id\n             JOIN chart_of_accounts coa ON p.account_id = coa.id\n             WHERE coa.account_type = 'expense'\n               AND EXISTS (\n                 SELECT 1\n                 FROM postings asset\n                 WHERE asset.journal_entry_id = je.id\n                   AND {}\n               ){}\n               AND je.posted_at <= ?\n             GROUP BY month\n             ORDER BY month DESC\n             LIMIT ?\n         ) recent\n         ORDER BY month ASC",
-        asset_clause, exclude_sql
+        "SELECT month, expense_minor\n         FROM (\n             SELECT strftime('%Y-%m', je.posted_at) AS month,\n                    COALESCE(SUM(p.amount_minor), 0) AS expense_minor\n             FROM journal_entries je\n             JOIN postings p ON p.journal_entry_id = je.id\n             JOIN chart_of_accounts coa ON p.account_id = coa.id\n             WHERE coa.account_type = 'expense'\n               AND EXISTS (\n                 SELECT 1\n                 FROM postings asset_out\n                 WHERE asset_out.journal_entry_id = je.id\n                   AND asset_out.amount_minor < 0\n                   AND {}\n               )\n               AND NOT EXISTS (\n                 SELECT 1\n                 FROM postings asset_in\n                 WHERE asset_in.journal_entry_id = je.id\n                   AND asset_in.amount_minor > 0\n                   AND {}\n               ){}\n               AND je.posted_at <= ?\n             GROUP BY month\n             ORDER BY month DESC\n             LIMIT ?\n         ) recent\n         ORDER BY month ASC",
+        asset_outflow_clause, asset_inflow_clause, exclude_sql
     );
 
     let mut statement = connection.prepare(&sql)?;
@@ -475,6 +471,27 @@ fn burn_rate_exclude_prefixes(config: &FinConfig) -> Vec<String> {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default()
+}
+
+fn runway_balance_exclude_prefixes(config: &FinConfig) -> Vec<String> {
+    config
+        .financial
+        .get("runway_balance_exclude_accounts")
+        .and_then(toml::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(toml::Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn matches_any_account_prefix(account_id: &str, prefixes: &[String]) -> bool {
+    prefixes
+        .iter()
+        .any(|prefix| account_id == prefix || account_id.starts_with(&format!("{prefix}:")))
 }
 
 fn burn_rate_method(config: &FinConfig) -> String {
@@ -566,13 +583,17 @@ fn is_leap_year(year: i32) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use rusqlite::Connection;
     use tempfile::tempdir;
 
     use super::{
         ProjectionScenarioKind, ProjectionScopeKind, RunwayProjectionOptions, RunwayThresholds,
         add_months, build_projection_scenario, clamp_minimum_burn_ratio,
-        project_consolidated_runway, project_group_runway,
+        matches_any_account_prefix, project_consolidated_runway, project_group_runway,
+        runway_balance_exclude_prefixes, scoped_monthly_outflow, scoped_runway_balance_account_ids,
     };
+    use crate::config::parse_fin_config;
+    use crate::db::migrate::migrate_to_latest;
     use crate::runtime::{RuntimeContext, RuntimeContextOptions};
     use crate::testing::fixture::{FixtureBuildOptions, materialize_fixture_home};
 
@@ -658,7 +679,7 @@ mod tests {
     }
 
     #[test]
-    fn fixture_group_projection_returns_two_scenarios_and_excludes_investments() {
+    fn fixture_group_projection_returns_two_scenarios_with_positive_runway_balance() {
         let temp = tempdir().expect("tempdir");
         let fixture = materialize_fixture_home(temp.path(), &FixtureBuildOptions::default())
             .expect("materialize fixture");
@@ -721,6 +742,163 @@ mod tests {
             scenario.kind == ProjectionScenarioKind::MinimumBurn
                 && scenario.burn_rate_minor == report.minimum_burn_minor
         }));
+    }
+
+    #[test]
+    fn scoped_runway_balance_includes_investments_by_default_and_honors_excludes() {
+        let config = parse_fin_config(
+            r#"
+[financial]
+runway_balance_exclude_accounts = ["Assets:Personal:Savings"]
+
+[[groups]]
+id = "personal"
+label = "Personal"
+
+[[accounts]]
+id = "Assets:Personal:Monzo"
+group = "personal"
+type = "asset"
+provider = "monzo"
+
+[[accounts]]
+id = "Assets:Personal:Vanguard"
+group = "personal"
+type = "asset"
+provider = "vanguard"
+subtype = "investment"
+
+[[accounts]]
+id = "Assets:Personal:Savings"
+group = "personal"
+type = "asset"
+provider = "monzo"
+
+[[banks]]
+name = "monzo"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"
+
+[[banks]]
+name = "vanguard"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"
+"#,
+        )
+        .expect("config parses");
+
+        assert_eq!(
+            runway_balance_exclude_prefixes(&config),
+            vec!["Assets:Personal:Savings".to_owned()]
+        );
+        assert!(matches_any_account_prefix(
+            "Assets:Personal:Savings:Pot",
+            &runway_balance_exclude_prefixes(&config)
+        ));
+
+        let ids = scoped_runway_balance_account_ids(&config, &["personal".to_owned()]);
+        assert_eq!(
+            ids,
+            vec![
+                "Assets:Personal:Monzo".to_owned(),
+                "Assets:Personal:Vanguard".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn scoped_monthly_outflow_ignores_internal_selected_scope_transfers() {
+        let mut connection = Connection::open_in_memory().expect("open sqlite");
+        migrate_to_latest(&mut connection).expect("migrate schema");
+        let config = parse_fin_config(
+            r#"
+[financial]
+
+[[groups]]
+id = "business"
+label = "Business"
+
+[[groups]]
+id = "personal"
+label = "Personal"
+
+[[accounts]]
+id = "Assets:Business:Monzo"
+group = "business"
+type = "asset"
+provider = "monzo"
+
+[[accounts]]
+id = "Assets:Personal:Monzo"
+group = "personal"
+type = "asset"
+provider = "monzo"
+
+[[banks]]
+name = "monzo"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"
+"#,
+        )
+        .expect("config parses");
+
+        connection
+            .execute_batch(
+                r#"
+INSERT INTO chart_of_accounts (id, name, account_type, parent_id) VALUES
+    ('Assets', 'Assets', 'asset', NULL),
+    ('Assets:Business:Monzo', 'Business Monzo', 'asset', 'Assets'),
+    ('Assets:Personal:Monzo', 'Personal Monzo', 'asset', 'Assets'),
+    ('Expenses', 'Expenses', 'expense', NULL),
+    ('Expenses:Business:Operations', 'Operations', 'expense', 'Expenses'),
+    ('Expenses:Business:Salary', 'Salary', 'expense', 'Expenses'),
+    ('Income', 'Income', 'income', NULL),
+    ('Income:Personal:Salary', 'Salary', 'income', 'Income'),
+    ('Equity', 'Equity', 'equity', NULL),
+    ('Equity:OpeningBalances', 'Opening Balances', 'equity', 'Equity');
+
+INSERT INTO journal_entries (id, posted_at, posted_date, description, counterparty, source_file) VALUES
+    ('je-opening-business', '2026-02-01T08:00:00Z', '2026-02-01', 'Opening business', 'Fixture', 'fixture.csv'),
+    ('je-opening-personal', '2026-02-01T08:05:00Z', '2026-02-01', 'Opening personal', 'Fixture', 'fixture.csv'),
+    ('je-rent', '2026-02-10T09:00:00Z', '2026-02-10', 'Office rent', 'Landlord', 'fixture.csv'),
+    ('je-draw', '2026-02-12T09:00:00Z', '2026-02-12', 'Owner draw', 'Owner', 'fixture.csv');
+
+INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency, memo) VALUES
+    ('po-open-business-asset', 'je-opening-business', 'Assets:Business:Monzo', 500000, 'GBP', NULL),
+    ('po-open-business-equity', 'je-opening-business', 'Equity:OpeningBalances', -500000, 'GBP', NULL),
+    ('po-open-personal-asset', 'je-opening-personal', 'Assets:Personal:Monzo', 250000, 'GBP', NULL),
+    ('po-open-personal-equity', 'je-opening-personal', 'Equity:OpeningBalances', -250000, 'GBP', NULL),
+    ('po-rent-expense', 'je-rent', 'Expenses:Business:Operations', 100000, 'GBP', NULL),
+    ('po-rent-asset', 'je-rent', 'Assets:Business:Monzo', -100000, 'GBP', NULL),
+    ('po-draw-expense', 'je-draw', 'Expenses:Business:Salary', 200000, 'GBP', NULL),
+    ('po-draw-business', 'je-draw', 'Assets:Business:Monzo', -200000, 'GBP', NULL),
+    ('po-draw-personal', 'je-draw', 'Assets:Personal:Monzo', 200000, 'GBP', NULL),
+    ('po-draw-income', 'je-draw', 'Income:Personal:Salary', -200000, 'GBP', NULL);
+"#,
+            )
+            .expect("seed ledger");
+
+        let outflow = scoped_monthly_outflow(
+            &connection,
+            &config,
+            &[
+                "Assets:Business:Monzo".to_owned(),
+                "Assets:Personal:Monzo".to_owned(),
+            ],
+            "2026-02-28",
+            2,
+        )
+        .expect("outflow series");
+
+        assert_eq!(outflow.len(), 1);
+        assert_eq!(outflow[0].month, "2026-02");
+        assert_eq!(outflow[0].expense_minor, 100_000);
     }
 
     #[test]

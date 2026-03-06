@@ -165,12 +165,19 @@ pub fn view_accounts(
         .iter()
         .map(|account| account.id.clone())
         .collect::<Vec<_>>();
+    let mut account_match_clauses = Vec::new();
+    let mut params = Vec::new();
+    for account_id in &account_ids {
+        account_match_clauses.push("(p.account_id = ? OR p.account_id LIKE ?)".to_owned());
+        params.push(account_id.clone());
+        params.push(format!("{account_id}:%"));
+    }
     let sql = format!(
-        "SELECT p.account_id,\n                COALESCE(SUM(p.amount_minor), 0) AS balance_minor,\n                MAX(je.posted_at) AS updated_at\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         WHERE p.account_id IN ({})\n         GROUP BY p.account_id",
-        placeholders(account_ids.len())
+        "SELECT p.account_id,\n                COALESCE(SUM(p.amount_minor), 0) AS balance_minor,\n                MAX(je.posted_at) AS updated_at\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         WHERE coa.account_type = 'asset'\n           AND ({})\n         GROUP BY p.account_id",
+        account_match_clauses.join(" OR ")
     );
     let mut statement = connection.prepare(&sql)?;
-    let mut rows = statement.query(rusqlite::params_from_iter(account_ids.iter()))?;
+    let mut rows = statement.query(rusqlite::params_from_iter(params.iter()))?;
     let mut aggregates = BTreeMap::<String, (i64, Option<String>)>::new();
     while let Some(row) = rows.next()? {
         let account_id: String = row.get(0)?;
@@ -181,17 +188,27 @@ pub fn view_accounts(
 
     let mut rows = Vec::new();
     for account in asset_accounts {
-        let (balance_minor, updated_at) = aggregates
-            .get(&account.id)
-            .map(|(balance_minor, updated_at)| (Some(*balance_minor), updated_at.clone()))
-            .unwrap_or((None, None));
+        let mut scoped_balance_minor = 0_i64;
+        let mut scoped_updated_at = None::<String>;
+        let mut found = false;
+        let descendant_prefix = format!("{}:", account.id);
+        for (account_id, (balance_minor, updated_at)) in &aggregates {
+            if account_id != &account.id && !account_id.starts_with(&descendant_prefix) {
+                continue;
+            }
+            scoped_balance_minor += balance_minor;
+            if updated_at.as_deref() > scoped_updated_at.as_deref() {
+                scoped_updated_at = updated_at.clone();
+            }
+            found = true;
+        }
 
         rows.push(AccountBalanceRow {
             id: account.id,
             name: account.label.unwrap_or_else(|| "Account".to_owned()),
             account_type: account.account_type,
-            balance_minor,
-            updated_at,
+            balance_minor: found.then_some(scoped_balance_minor),
+            updated_at: if found { scoped_updated_at } else { None },
         });
     }
     Ok(rows)
@@ -655,9 +672,12 @@ pub fn unique_months_from_cashflow(points: &[MonthlyCashflowPoint]) -> Vec<Strin
 
 #[cfg(test)]
 mod tests {
+    use rusqlite::Connection;
     use tempfile::tempdir;
 
     use super::{LedgerQueryOptions, view_accounts, view_ledger};
+    use crate::config::parse_fin_config;
+    use crate::db::migrate::migrate_to_latest;
     use crate::runtime::{RuntimeContext, RuntimeContextOptions};
     use crate::testing::fixture::{FixtureBuildOptions, materialize_fixture_home};
 
@@ -694,6 +714,62 @@ mod tests {
         );
         assert!(rows.iter().all(|row| row.balance_minor.is_some()));
         assert!(rows.iter().all(|row| row.updated_at.is_some()));
+    }
+
+    #[test]
+    fn view_accounts_aggregates_descendant_balances_for_configured_parent_accounts() {
+        let mut connection = Connection::open_in_memory().expect("open sqlite");
+        migrate_to_latest(&mut connection).expect("migrate schema");
+        let config = parse_fin_config(
+            r#"
+[financial]
+
+[[accounts]]
+id = "Assets:Personal:Investments"
+group = "personal"
+type = "asset"
+provider = "vanguard"
+label = "Investments"
+
+[[banks]]
+name = "vanguard"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"
+"#,
+        )
+        .expect("config parses");
+
+        connection
+            .execute_batch(
+                r#"
+INSERT INTO chart_of_accounts (id, name, account_type, parent_id) VALUES
+    ('Assets', 'Assets', 'asset', NULL),
+    ('Assets:Personal:Investments', 'Investments', 'asset', 'Assets'),
+    ('Assets:Personal:Investments:Vanguard', 'Vanguard', 'asset', 'Assets:Personal:Investments'),
+    ('Equity', 'Equity', 'equity', NULL),
+    ('Equity:OpeningBalances', 'Opening Balances', 'equity', 'Equity');
+
+INSERT INTO journal_entries (id, posted_at, posted_date, description, counterparty, source_file) VALUES
+    ('je-1', '2026-03-01T09:00:00Z', '2026-03-01', 'Investment top-up', 'Vanguard', 'fixture.csv'),
+    ('je-2', '2026-03-02T09:00:00Z', '2026-03-02', 'Investment growth', 'Vanguard', 'fixture.csv');
+
+INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency, memo) VALUES
+    ('po-1', 'je-1', 'Assets:Personal:Investments:Vanguard', 125000, 'GBP', NULL),
+    ('po-2', 'je-1', 'Equity:OpeningBalances', -125000, 'GBP', NULL),
+    ('po-3', 'je-2', 'Assets:Personal:Investments:Vanguard', 25000, 'GBP', NULL),
+    ('po-4', 'je-2', 'Equity:OpeningBalances', -25000, 'GBP', NULL);
+"#,
+            )
+            .expect("seed account hierarchy");
+
+        let rows = view_accounts(&connection, &config, Some("personal")).expect("view accounts");
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "Assets:Personal:Investments");
+        assert_eq!(rows[0].balance_minor, Some(150_000));
+        assert_eq!(rows[0].updated_at.as_deref(), Some("2026-03-02T09:00:00Z"));
     }
 
     #[test]

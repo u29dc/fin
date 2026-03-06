@@ -1055,9 +1055,9 @@ mod tests {
         assert_eq!(
             client.available_groups().expect("available groups"),
             vec![
-                "business".to_owned(),
+                "personal".to_owned(),
                 "joint".to_owned(),
-                "personal".to_owned()
+                "business".to_owned()
             ]
         );
 

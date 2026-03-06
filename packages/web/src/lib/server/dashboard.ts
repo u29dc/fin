@@ -34,7 +34,6 @@ const SUMMARY_MONTHS = 12;
 const FLOW_MONTHS = 6;
 const HIERARCHY_MONTHS = 6;
 const SERIES_LIMIT = 10_000;
-const PREFERRED_GROUP_ORDER = ["personal", "joint", "business"];
 
 export type DashboardAccount = {
 	id: string;
@@ -395,17 +394,18 @@ type ConfiguredAccount = {
 };
 
 function flattenConfiguredAccounts(config: ConfigShowData, orderedGroups: readonly string[]): ConfiguredAccount[] {
-	const entries = orderedGroups.flatMap((groupId) =>
-		(config.accounts[groupId] ?? []).map((account) => ({ groupId, config: account, id: account.id })),
-	);
-	return entries.sort((left, right) => {
-		const leftGroupIndex = preferredGroupIndex(left.groupId);
-		const rightGroupIndex = preferredGroupIndex(right.groupId);
-		if (leftGroupIndex !== rightGroupIndex) {
-			return leftGroupIndex - rightGroupIndex;
-		}
-		return left.id.localeCompare(right.id);
-	});
+    const entries = orderedGroups.flatMap((groupId) =>
+        (config.accounts[groupId] ?? []).map((account) => ({ groupId, config: account, id: account.id })),
+    );
+    const groupOrder = new Map(orderedGroups.map((groupId, index) => [groupId, index]));
+    return entries.sort((left, right) => {
+        const leftGroupIndex = groupOrder.get(left.groupId) ?? Number.MAX_SAFE_INTEGER;
+        const rightGroupIndex = groupOrder.get(right.groupId) ?? Number.MAX_SAFE_INTEGER;
+        if (leftGroupIndex !== rightGroupIndex) {
+            return leftGroupIndex - rightGroupIndex;
+        }
+        return left.id.localeCompare(right.id);
+    });
 }
 
 function mergeAccounts(accountConfigs: ConfiguredAccount[], accountsData: ViewAccountsData | null): DashboardAccount[] {
@@ -647,11 +647,6 @@ function mapExpenseNode(node: DashboardHierarchyData["nodes"][number]): ExpenseN
 
 function isInvestmentAccount(account: ConfigAccount): boolean {
 	return account.subtype === "investment" || account.provider === "vanguard";
-}
-
-function preferredGroupIndex(groupId: string): number {
-	const preferredIndex = PREFERRED_GROUP_ORDER.indexOf(groupId);
-	return preferredIndex === -1 ? PREFERRED_GROUP_ORDER.length : preferredIndex;
 }
 
 function fallbackLabel(groupId: string): string {

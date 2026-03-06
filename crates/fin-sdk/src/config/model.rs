@@ -40,11 +40,21 @@ impl FinConfig {
 
     #[must_use]
     pub fn group_ids(&self) -> Vec<String> {
-        let mut groups = BTreeSet::new();
-        for account in &self.accounts {
-            groups.insert(account.group.clone());
+        let mut groups = Vec::new();
+        let mut seen = BTreeSet::new();
+        if let Some(configured_groups) = &self.groups {
+            for group in configured_groups {
+                if seen.insert(group.id.clone()) {
+                    groups.push(group.id.clone());
+                }
+            }
         }
-        groups.into_iter().collect()
+        for account in &self.accounts {
+            if seen.insert(account.group.clone()) {
+                groups.push(account.group.clone());
+            }
+        }
+        groups
     }
 
     #[must_use]
@@ -202,5 +212,50 @@ amount = "Amount"
         let parsed = parse_fin_config(config).expect("template config parses");
         assert_eq!(parsed.accounts.len(), 1);
         assert_eq!(parsed.banks.len(), 1);
+    }
+
+    #[test]
+    fn group_ids_preserve_configured_group_order_and_append_missing_account_groups() {
+        let config = r#"
+[financial]
+corp_tax_rate = 0.25
+
+[[groups]]
+id = "business"
+label = "Business"
+
+[[groups]]
+id = "personal"
+label = "Personal"
+
+[[accounts]]
+id = "Assets:Joint:Monzo"
+group = "joint"
+type = "asset"
+provider = "monzo"
+
+[[accounts]]
+id = "Assets:Business:Monzo"
+group = "business"
+type = "asset"
+provider = "monzo"
+
+[[accounts]]
+id = "Assets:Personal:Monzo"
+group = "personal"
+type = "asset"
+provider = "monzo"
+
+[[banks]]
+name = "monzo"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"
+"#;
+
+        let parsed = parse_fin_config(config).expect("config parses");
+
+        assert_eq!(parsed.group_ids(), vec!["business", "personal", "joint"]);
     }
 }

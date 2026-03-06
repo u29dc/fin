@@ -250,7 +250,7 @@ describe("loadShellState", () => {
 		summary: { ok: 0, blocking: 1, degraded: 0 },
 	};
 
-	test("uses config groups while surfacing non-ready health", async () => {
+    test("uses config groups while surfacing non-ready health", async () => {
 		let callIndex = 0;
 		const client = createFinApiClient({
 			env: { FIN_API_BASE_URL: "http://127.0.0.1:7414" },
@@ -263,12 +263,12 @@ describe("loadShellState", () => {
 			},
 		});
 
-		const shell = await loadShellState(client);
-		expect(shell.availableGroups).toEqual(["personal", "business"]);
-		expect(shell.groupMetadata.personal?.icon).toBe("user");
-		expect(shell.connection.error).toBe("api blocked");
-		expect(shell.connection.detail).toContain("Database schema");
-	});
+        const shell = await loadShellState(client);
+        expect(shell.availableGroups).toEqual(["business", "personal"]);
+        expect(shell.groupMetadata.personal?.icon).toBe("user");
+        expect(shell.connection.error).toBe("api blocked");
+        expect(shell.connection.detail).toContain("Database schema");
+    });
 
 	test("falls back to placeholder groups when the API is unavailable", async () => {
 		const client = createFinApiClient({

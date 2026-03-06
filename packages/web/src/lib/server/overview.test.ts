@@ -330,15 +330,15 @@ describe("loadOverviewPageData", () => {
 			dashboardProjection: async () => projection,
 		});
 
-		const page = await loadOverviewPageData({ client });
+        const page = await loadOverviewPageData({ client });
 
-		expect(page.availableGroups).toEqual(["personal", "joint", "business"]);
-		expect(page.chartAccounts.map((account) => account.id)).toEqual([
-			"Assets:Personal:Monzo",
-			"Assets:Personal:Vanguard",
-			"Assets:Joint:Monzo",
-			"Assets:Business:Monzo",
-		]);
+        expect(page.availableGroups).toEqual(["joint", "business", "personal"]);
+        expect(page.chartAccounts.map((account) => account.id)).toEqual([
+            "Assets:Joint:Monzo",
+            "Assets:Business:Monzo",
+            "Assets:Personal:Monzo",
+            "Assets:Personal:Vanguard",
+        ]);
 		expect(page.totalBalanceSeries).toEqual([
 			{ date: "2024-01-01", balanceMinor: 1_100_000 },
 			{ date: "2025-01-01", balanceMinor: 2_400_000 },
@@ -356,13 +356,13 @@ describe("loadOverviewPageData", () => {
 			balanceMinor: 2_760_000,
 		});
 		expect(page.projection?.currentBurn?.zeroBalanceCrossing?.monthIndex).toBe(13);
-		expect(balanceQueries[0]).toEqual({ account: undefined, downsampleMinStepDays: undefined });
-		expect(balanceQueries.slice(1)).toEqual([
-			{ account: "Assets:Personal:Monzo", downsampleMinStepDays: 7 },
-			{ account: "Assets:Personal:Vanguard", downsampleMinStepDays: 7 },
-			{ account: "Assets:Joint:Monzo", downsampleMinStepDays: 7 },
-			{ account: "Assets:Business:Monzo", downsampleMinStepDays: 7 },
-		]);
+        expect(balanceQueries[0]).toEqual({ account: undefined, downsampleMinStepDays: undefined });
+        expect(balanceQueries.slice(1)).toEqual([
+            { account: "Assets:Joint:Monzo", downsampleMinStepDays: 7 },
+            { account: "Assets:Business:Monzo", downsampleMinStepDays: 7 },
+            { account: "Assets:Personal:Monzo", downsampleMinStepDays: 7 },
+            { account: "Assets:Personal:Vanguard", downsampleMinStepDays: 7 },
+        ]);
 	});
 
 	test("falls back to an empty overview surface when fin-api is unavailable", async () => {
