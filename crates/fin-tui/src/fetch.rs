@@ -3,11 +3,13 @@ use std::collections::{BTreeSet, HashMap};
 use fin_sdk::config::LoadedConfig;
 use fin_sdk::runtime::{RuntimeContext, RuntimeContextOptions};
 use fin_sdk::{
-    MonthlyCashflowPoint, TransactionQueryOptions, group_category_breakdown, report_cashflow,
-    report_reserves, report_runway, report_summary, view_accounts, view_transactions,
+    MonthlyCashflowPoint, SortDirection, TransactionQueryOptions, TransactionSortField,
+    group_asset_account_ids, group_category_breakdown, report_cashflow, report_reserves,
+    report_runway, report_summary, view_accounts, view_transactions,
 };
 use rusqlite::{Connection, params_from_iter};
 
+use crate::cache::{RouteCacheKey, RouteViewKey};
 use crate::routes::Route;
 
 pub const TUI_TRANSACTIONS_PREVIEW_LIMIT: usize = 1000;
@@ -42,18 +44,206 @@ impl OverviewScope {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SummaryRouteState {
+    pub trailing_months: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransactionsRouteState {
+    pub group_id: Option<String>,
+    pub search_query: String,
+    pub search_active: bool,
+    pub sort_field: TransactionSortField,
+    pub sort_direction: SortDirection,
+    pub window_months: Option<usize>,
+    pub page_limit: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CashflowRouteState {
+    pub group_id: String,
+    pub view_months: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OverviewRouteState {
+    pub scope: OverviewScope,
+    pub max_accounts: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CategoriesRouteState {
+    pub group_id: String,
+    pub months: usize,
+    pub pareto_limit: usize,
+    pub stability_limit: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportsRouteState {
+    pub group_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FetchContext {
-    pub cashflow_group: String,
-    pub overview_scope: OverviewScope,
+    pub summary: SummaryRouteState,
+    pub transactions: TransactionsRouteState,
+    pub cashflow: CashflowRouteState,
+    pub overview: OverviewRouteState,
+    pub categories: CategoriesRouteState,
+    pub reports: ReportsRouteState,
 }
 
 impl Default for FetchContext {
     fn default() -> Self {
         Self {
-            cashflow_group: "business".to_owned(),
-            overview_scope: OverviewScope::All,
+            summary: SummaryRouteState {
+                trailing_months: CASHFLOW_VIEW_MONTHS,
+            },
+            transactions: TransactionsRouteState {
+                group_id: None,
+                search_query: String::new(),
+                search_active: false,
+                sort_field: TransactionSortField::PostedAt,
+                sort_direction: SortDirection::Desc,
+                window_months: None,
+                page_limit: TUI_TRANSACTIONS_PREVIEW_LIMIT,
+            },
+            cashflow: CashflowRouteState {
+                group_id: "business".to_owned(),
+                view_months: CASHFLOW_VIEW_MONTHS,
+            },
+            overview: OverviewRouteState {
+                scope: OverviewScope::All,
+                max_accounts: OVERVIEW_MAX_ACCOUNTS,
+            },
+            categories: CategoriesRouteState {
+                group_id: "business".to_owned(),
+                months: CATEGORY_MONTHS,
+                pareto_limit: CATEGORY_LIMIT,
+                stability_limit: CATEGORY_STABILITY_LIMIT,
+            },
+            reports: ReportsRouteState {
+                group_id: "business".to_owned(),
+            },
         }
+    }
+}
+
+impl FetchContext {
+    #[must_use]
+    pub fn route_cache_key(&self, route: Route) -> RouteCacheKey {
+        RouteCacheKey::new(route, self.route_cache_fingerprint(route))
+    }
+
+    #[must_use]
+    pub fn route_view_key(&self, route: Route) -> RouteViewKey {
+        RouteViewKey::new(route, self.route_view_fingerprint(route))
+    }
+
+    #[must_use]
+    pub fn route_context(&self, route: Route) -> String {
+        match route {
+            Route::Summary => format!("finance/summary/{}m", self.summary.trailing_months),
+            Route::Transactions => {
+                let group = self.transactions.group_id.as_deref().unwrap_or("all");
+                let window = self
+                    .transactions
+                    .window_months
+                    .map(|months| format!("{months}m"))
+                    .unwrap_or_else(|| "all".to_owned());
+                format!(
+                    "finance/transactions/{group}/{}-{}/{}",
+                    transaction_sort_id(self.transactions.sort_field),
+                    sort_direction_id(self.transactions.sort_direction),
+                    window
+                )
+            }
+            Route::Cashflow => format!(
+                "finance/cashflow/{}/{}m",
+                self.cashflow.group_id, self.cashflow.view_months
+            ),
+            Route::Overview => format!(
+                "finance/overview/{}/max-{}",
+                self.overview.scope.id(),
+                self.overview.max_accounts
+            ),
+            Route::Categories => format!(
+                "finance/categories/{}/{}m",
+                self.categories.group_id, self.categories.months
+            ),
+            Route::Reports => format!("finance/reports/{}", self.reports.group_id),
+        }
+    }
+
+    fn route_cache_fingerprint(&self, route: Route) -> String {
+        match route {
+            Route::Summary => format!("trailing-months={}", self.summary.trailing_months),
+            Route::Transactions => {
+                let group = self.transactions.group_id.as_deref().unwrap_or("all");
+                let window = self
+                    .transactions
+                    .window_months
+                    .map_or_else(|| "all".to_owned(), |months| months.to_string());
+                format!(
+                    "group={group}|sort={}-{}|window={window}|limit={}",
+                    transaction_sort_id(self.transactions.sort_field),
+                    sort_direction_id(self.transactions.sort_direction),
+                    self.transactions.page_limit
+                )
+            }
+            Route::Cashflow => format!(
+                "group={}|months={}",
+                self.cashflow.group_id, self.cashflow.view_months
+            ),
+            Route::Overview => format!(
+                "scope={}|max-accounts={}",
+                self.overview.scope.id(),
+                self.overview.max_accounts
+            ),
+            Route::Categories => format!(
+                "group={}|months={}|pareto={}|stability={}",
+                self.categories.group_id,
+                self.categories.months,
+                self.categories.pareto_limit,
+                self.categories.stability_limit
+            ),
+            Route::Reports => format!("group={}", self.reports.group_id),
+        }
+    }
+
+    fn route_view_fingerprint(&self, route: Route) -> String {
+        match route {
+            Route::Transactions => format!(
+                "{}|search={}|active={}",
+                self.route_cache_fingerprint(route),
+                encode_context_fragment(&self.transactions.search_query),
+                self.transactions.search_active
+            ),
+            _ => self.route_cache_fingerprint(route),
+        }
+    }
+}
+
+fn encode_context_fragment(value: &str) -> String {
+    value.replace('|', "%7C")
+}
+
+fn transaction_sort_id(sort_field: TransactionSortField) -> &'static str {
+    match sort_field {
+        TransactionSortField::PostedAt => "posted_at",
+        TransactionSortField::AmountMinor => "amount_minor",
+        TransactionSortField::Description => "description",
+        TransactionSortField::Counterparty => "counterparty",
+        TransactionSortField::AccountId => "account_id",
+    }
+}
+
+fn sort_direction_id(direction: SortDirection) -> &'static str {
+    match direction {
+        SortDirection::Asc => "asc",
+        SortDirection::Desc => "desc",
     }
 }
 
@@ -224,12 +414,12 @@ impl FetchClient {
         };
 
         match route {
-            Route::Summary => fetch_summary_dashboard(runtime),
-            Route::Transactions => fetch_transactions(runtime),
-            Route::Cashflow => fetch_cashflow_dashboard(runtime, &context.cashflow_group),
-            Route::Overview => fetch_overview_dashboard(runtime, &context.overview_scope),
-            Route::Categories => fetch_categories_dashboard(runtime, &context.cashflow_group),
-            Route::Reports => fetch_reports(runtime, &context.cashflow_group),
+            Route::Summary => fetch_summary_dashboard(runtime, &context.summary),
+            Route::Transactions => fetch_transactions(runtime, &context.transactions),
+            Route::Cashflow => fetch_cashflow_dashboard(runtime, &context.cashflow),
+            Route::Overview => fetch_overview_dashboard(runtime, &context.overview),
+            Route::Categories => fetch_categories_dashboard(runtime, &context.categories),
+            Route::Reports => fetch_reports(runtime, &context.reports),
         }
     }
 
@@ -247,9 +437,16 @@ impl FetchClient {
     }
 }
 
-fn fetch_summary_dashboard(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
-    let summary = report_summary(runtime.connection(), runtime.config(), 12)
-        .map_err(|error| error.to_string())?;
+fn fetch_summary_dashboard(
+    runtime: &RuntimeContext,
+    context: &SummaryRouteState,
+) -> Result<RoutePayload, String> {
+    let summary = report_summary(
+        runtime.connection(),
+        runtime.config(),
+        context.trailing_months,
+    )
+    .map_err(|error| error.to_string())?;
     let current_month = current_month(runtime.connection())?;
 
     let mut group_rows = Vec::new();
@@ -310,17 +507,25 @@ fn fetch_summary_dashboard(runtime: &RuntimeContext) -> Result<RoutePayload, Str
     }))
 }
 
-fn fetch_transactions(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
+fn fetch_transactions(
+    runtime: &RuntimeContext,
+    context: &TransactionsRouteState,
+) -> Result<RoutePayload, String> {
+    let chart_account_ids = context
+        .group_id
+        .as_deref()
+        .map(|group_id| group_asset_account_ids(runtime.config(), group_id));
     let rows = view_transactions(
         runtime.connection(),
         &TransactionQueryOptions {
-            limit: TUI_TRANSACTIONS_PREVIEW_LIMIT,
+            chart_account_ids,
+            limit: context.page_limit,
             ..TransactionQueryOptions::default()
         },
     )
     .map_err(|error| error.to_string())?;
 
-    let has_more = rows.len() == TUI_TRANSACTIONS_PREVIEW_LIMIT;
+    let has_more = rows.len() == context.page_limit;
     let mapped = rows
         .into_iter()
         .map(|row| {
@@ -349,16 +554,16 @@ fn fetch_transactions(runtime: &RuntimeContext) -> Result<RoutePayload, String> 
 
     Ok(RoutePayload::Transactions(TransactionsPayload {
         rows: mapped,
-        limit: TUI_TRANSACTIONS_PREVIEW_LIMIT,
+        limit: context.page_limit,
         has_more,
     }))
 }
 
 fn fetch_cashflow_dashboard(
     runtime: &RuntimeContext,
-    requested_group: &str,
+    context: &CashflowRouteState,
 ) -> Result<RoutePayload, String> {
-    let group_id = resolve_group(runtime, requested_group);
+    let group_id = resolve_group(runtime, &context.group_id);
     let current = current_month(runtime.connection())?;
 
     let (series, _) = report_cashflow(
@@ -381,7 +586,7 @@ fn fetch_cashflow_dashboard(
     let points = full_months
         .iter()
         .rev()
-        .take(CASHFLOW_VIEW_MONTHS)
+        .take(context.view_months)
         .cloned()
         .collect::<Vec<_>>()
         .into_iter()
@@ -435,8 +640,9 @@ fn fetch_cashflow_dashboard(
 
 fn fetch_overview_dashboard(
     runtime: &RuntimeContext,
-    scope: &OverviewScope,
+    context: &OverviewRouteState,
 ) -> Result<RoutePayload, String> {
+    let scope = &context.scope;
     let group_filter = match scope {
         OverviewScope::All => None,
         OverviewScope::Group(group) => Some(group.as_str()),
@@ -460,8 +666,8 @@ fn fetch_overview_dashboard(
             .then(left.id.cmp(&right.id))
     });
 
-    if accounts.len() > OVERVIEW_MAX_ACCOUNTS {
-        accounts.truncate(OVERVIEW_MAX_ACCOUNTS);
+    if accounts.len() > context.max_accounts {
+        accounts.truncate(context.max_accounts);
     }
 
     let rows = accounts
@@ -491,17 +697,17 @@ fn fetch_overview_dashboard(
 
 fn fetch_categories_dashboard(
     runtime: &RuntimeContext,
-    requested_group: &str,
+    context: &CategoriesRouteState,
 ) -> Result<RoutePayload, String> {
-    let group_id = resolve_group(runtime, requested_group);
+    let group_id = resolve_group(runtime, &context.group_id);
     let current = current_month(runtime.connection())?;
 
     let breakdown = group_category_breakdown(
         runtime.connection(),
         runtime.config(),
         &group_id,
-        CATEGORY_MONTHS,
-        CATEGORY_LIMIT,
+        context.months,
+        context.pareto_limit,
     )
     .map_err(|error| error.to_string())?;
     if breakdown.is_empty() {
@@ -514,7 +720,7 @@ fn fetch_categories_dashboard(
         runtime.connection(),
         runtime.loaded_config(),
         &group_id,
-        CATEGORY_MONTHS,
+        context.months,
         &current,
     )?;
 
@@ -545,8 +751,8 @@ fn fetch_categories_dashboard(
         runtime.connection(),
         runtime.loaded_config(),
         &group_id,
-        CATEGORY_MONTHS,
-        CATEGORY_STABILITY_LIMIT,
+        context.months,
+        context.stability_limit,
         &current,
     )?;
 
@@ -561,8 +767,11 @@ fn fetch_categories_dashboard(
     ))
 }
 
-fn fetch_reports(runtime: &RuntimeContext, requested_group: &str) -> Result<RoutePayload, String> {
-    let group_id = resolve_group(runtime, requested_group);
+fn fetch_reports(
+    runtime: &RuntimeContext,
+    context: &ReportsRouteState,
+) -> Result<RoutePayload, String> {
+    let group_id = resolve_group(runtime, &context.group_id);
     let current = current_month(runtime.connection())?;
 
     let (series, totals) = report_cashflow(
@@ -912,5 +1121,24 @@ mod tests {
             }
             other => panic!("unexpected payload: {other:?}"),
         }
+    }
+
+    #[test]
+    fn fetch_context_uses_distinct_cache_and_view_keys() {
+        let mut context = FetchContext::default();
+        let base_cache_key = context.route_cache_key(Route::Transactions);
+        let base_view_key = context.route_view_key(Route::Transactions);
+
+        context.transactions.search_query = "rent".to_owned();
+        context.transactions.search_active = true;
+
+        assert_eq!(base_cache_key, context.route_cache_key(Route::Transactions));
+        assert_ne!(base_view_key, context.route_view_key(Route::Transactions));
+
+        context.cashflow.group_id = "joint".to_owned();
+        assert_ne!(
+            context.route_cache_key(Route::Cashflow),
+            FetchContext::default().route_cache_key(Route::Cashflow)
+        );
     }
 }

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
-    cache::RouteCache,
+    cache::{RouteCache, RouteViewKey},
     fetch::{FetchClient, FetchContext, OverviewScope, RoutePayload, transaction_matches_query},
     palette::{
         PaletteAction, PaletteActionKind, PaletteRow, PaletteSection, PaletteState, build_rows,
@@ -34,11 +34,9 @@ pub struct App {
     pending_refresh: bool,
     fetch_client: FetchClient,
     cache: RouteCache,
-    selected_rows: BTreeMap<Route, usize>,
+    selected_rows: BTreeMap<RouteViewKey, usize>,
     available_groups: Vec<String>,
     fetch_context: FetchContext,
-    transactions_search_query: String,
-    transactions_search_active: bool,
 }
 
 impl App {
@@ -64,8 +62,6 @@ impl App {
                 "personal".to_owned(),
             ],
             fetch_context: FetchContext::default(),
-            transactions_search_query: String::new(),
-            transactions_search_active: false,
         };
         app.request_refresh("startup");
         app
@@ -153,17 +149,7 @@ impl App {
     }
 
     pub fn route_context(&self) -> String {
-        match self.route {
-            Route::Cashflow => format!("finance/cashflow/{}", self.fetch_context.cashflow_group),
-            Route::Overview => format!(
-                "finance/overview/{}",
-                self.fetch_context.overview_scope.id()
-            ),
-            Route::Categories => {
-                format!("finance/categories/{}", self.fetch_context.cashflow_group)
-            }
-            _ => format!("finance/{}", self.route.id()),
-        }
+        self.fetch_context.route_context(self.route)
     }
 
     pub fn route_position(&self) -> (usize, usize) {
@@ -179,11 +165,14 @@ impl App {
     }
 
     pub fn route_payload(&self) -> Option<&RoutePayload> {
-        self.cache.get(self.route)
+        self.cache.get(&self.current_cache_key())
     }
 
     pub fn selected_row(&self) -> usize {
-        self.selected_rows.get(&self.route).copied().unwrap_or(0)
+        self.selected_rows
+            .get(&self.current_view_key())
+            .copied()
+            .unwrap_or(0)
     }
 
     pub fn is_navigation_focused(&self) -> bool {
@@ -191,15 +180,25 @@ impl App {
     }
 
     pub fn transactions_search_query(&self) -> &str {
-        &self.transactions_search_query
+        &self.fetch_context.transactions.search_query
     }
 
     pub fn transactions_search_visible(&self) -> bool {
-        self.transactions_search_active || !self.transactions_search_query.is_empty()
+        self.fetch_context.transactions.search_active
+            || !self.fetch_context.transactions.search_query.is_empty()
     }
 
     pub fn set_selected_row(&mut self, row: usize) {
-        self.selected_rows.insert(self.route, row);
+        let key = self.current_view_key();
+        self.selected_rows.insert(key, row);
+    }
+
+    fn current_cache_key(&self) -> crate::cache::RouteCacheKey {
+        self.fetch_context.route_cache_key(self.route)
+    }
+
+    fn current_view_key(&self) -> RouteViewKey {
+        self.fetch_context.route_view_key(self.route)
     }
 
     fn set_route(&mut self, route: Route) {
@@ -210,40 +209,40 @@ impl App {
         self.nav_cursor = self.current_route_index();
         self.clamp_selected_row();
 
-        if self.cache.get(route).is_some() {
+        if self.cache.get(&self.current_cache_key()).is_some() {
             self.status = format!("Loaded {}", route.label().to_ascii_lowercase());
         } else {
             self.request_refresh("route changed");
         }
 
         if route != Route::Transactions {
-            self.transactions_search_query.clear();
-            self.transactions_search_active = false;
+            self.fetch_context.transactions.search_query.clear();
+            self.fetch_context.transactions.search_active = false;
         }
     }
 
     fn refresh(&mut self) {
+        if let Ok(groups) = self.fetch_client.available_groups()
+            && !groups.is_empty()
+        {
+            self.available_groups = groups;
+        }
         self.reconcile_fetch_context();
+        let cache_key = self.current_cache_key();
         self.status = format!("Loading {}...", self.route.label().to_ascii_lowercase());
         match self
             .fetch_client
             .fetch_route(self.route, &self.fetch_context)
         {
             Ok(payload) => {
-                if let Ok(groups) = self.fetch_client.available_groups()
-                    && !groups.is_empty()
-                {
-                    self.available_groups = groups;
-                    self.reconcile_fetch_context();
-                }
-                self.cache.store(self.route, payload);
+                self.cache.store(cache_key, payload);
                 self.clamp_selected_row();
                 self.status = format!("Loaded {}", self.route.label().to_ascii_lowercase());
             }
             Err(error) => {
                 let message = format!("Route unavailable: {error}");
                 self.cache
-                    .store(self.route, RoutePayload::Text(message.clone()));
+                    .store(cache_key, RoutePayload::Text(message.clone()));
                 self.status = message;
             }
         }
@@ -253,28 +252,79 @@ impl App {
         if self.available_groups.is_empty() {
             return;
         }
-        if !self
-            .available_groups
-            .iter()
-            .any(|group| group == &self.fetch_context.cashflow_group)
-            && let Some(first) = self.available_groups.first()
+        let first_group = self.available_groups.first().cloned();
+        reconcile_group_state(
+            &self.available_groups,
+            &mut self.fetch_context.cashflow.group_id,
+            first_group.as_deref(),
+        );
+        reconcile_group_state(
+            &self.available_groups,
+            &mut self.fetch_context.categories.group_id,
+            first_group.as_deref(),
+        );
+        reconcile_group_state(
+            &self.available_groups,
+            &mut self.fetch_context.reports.group_id,
+            first_group.as_deref(),
+        );
+        if let Some(group_id) = &mut self.fetch_context.transactions.group_id
+            && !self
+                .available_groups
+                .iter()
+                .any(|candidate| candidate == group_id)
         {
-            self.fetch_context.cashflow_group = first.clone();
+            *group_id = first_group.clone().unwrap_or_default();
+        }
+        if self.fetch_context.transactions.group_id.as_deref() == Some("") {
+            self.fetch_context.transactions.group_id = None;
         }
 
-        if let OverviewScope::Group(group) = &self.fetch_context.overview_scope
+        if let OverviewScope::Group(group) = &self.fetch_context.overview.scope
             && !self
                 .available_groups
                 .iter()
                 .any(|candidate| candidate == group)
         {
-            self.fetch_context.overview_scope = OverviewScope::All;
+            self.fetch_context.overview.scope = OverviewScope::All;
         }
     }
 
     fn request_refresh(&mut self, reason: &str) {
         self.pending_refresh = true;
         self.status = format!("{reason}: {}", self.route.label().to_ascii_lowercase());
+    }
+
+    fn current_route_group(&self) -> Option<&str> {
+        match self.route {
+            Route::Cashflow => Some(self.fetch_context.cashflow.group_id.as_str()),
+            Route::Categories => Some(self.fetch_context.categories.group_id.as_str()),
+            Route::Reports => Some(self.fetch_context.reports.group_id.as_str()),
+            Route::Transactions => self.fetch_context.transactions.group_id.as_deref(),
+            Route::Summary | Route::Overview => None,
+        }
+    }
+
+    fn set_current_route_group(&mut self, group: String) -> bool {
+        match self.route {
+            Route::Cashflow => {
+                self.fetch_context.cashflow.group_id = group;
+                true
+            }
+            Route::Categories => {
+                self.fetch_context.categories.group_id = group;
+                true
+            }
+            Route::Reports => {
+                self.fetch_context.reports.group_id = group;
+                true
+            }
+            Route::Transactions => {
+                self.fetch_context.transactions.group_id = Some(group);
+                true
+            }
+            Route::Summary | Route::Overview => false,
+        }
     }
 
     fn next_route(&mut self) {
@@ -301,11 +351,13 @@ impl App {
     }
 
     fn current_row_count(&self) -> usize {
-        match self.cache.get(self.route) {
+        match self.route_payload() {
             Some(RoutePayload::Transactions(payload)) => payload
                 .rows
                 .iter()
-                .filter(|row| transaction_matches_query(row, &self.transactions_search_query))
+                .filter(|row| {
+                    transaction_matches_query(row, &self.fetch_context.transactions.search_query)
+                })
                 .count(),
             Some(RoutePayload::Text(_))
             | Some(RoutePayload::SummaryDashboard(_))
@@ -319,10 +371,11 @@ impl App {
     fn clamp_selected_row(&mut self) {
         let len = self.current_row_count();
         let selected = self.selected_row();
+        let key = self.current_view_key();
         if len == 0 {
-            self.selected_rows.insert(self.route, 0);
+            self.selected_rows.insert(key, 0);
         } else if selected >= len {
-            self.selected_rows.insert(self.route, len - 1);
+            self.selected_rows.insert(key, len - 1);
         }
     }
 
@@ -373,36 +426,41 @@ impl App {
             && (key_event.modifiers.contains(KeyModifiers::CONTROL)
                 || key_event.modifiers.contains(KeyModifiers::SUPER))
         {
-            self.transactions_search_active = true;
-            if self.transactions_search_query.is_empty() {
+            self.fetch_context.transactions.search_active = true;
+            if self.fetch_context.transactions.search_query.is_empty() {
                 self.status = "Search transactions".to_owned();
             } else {
-                self.status = format!("Filtered transactions: {}", self.transactions_search_query);
+                self.status = format!(
+                    "Filtered transactions: {}",
+                    self.fetch_context.transactions.search_query
+                );
             }
             return true;
         }
 
-        if self.transactions_search_active {
+        if self.fetch_context.transactions.search_active {
             match key_event.code {
                 KeyCode::Esc => {
-                    self.transactions_search_query.clear();
-                    self.transactions_search_active = false;
+                    self.fetch_context.transactions.search_query.clear();
+                    self.fetch_context.transactions.search_active = false;
                     self.clamp_selected_row();
                     self.status = "Cleared transaction search".to_owned();
                     return true;
                 }
                 KeyCode::Enter => {
-                    self.transactions_search_active = false;
+                    self.fetch_context.transactions.search_active = false;
                     return true;
                 }
                 KeyCode::Backspace => {
-                    self.transactions_search_query.pop();
-                    if self.transactions_search_query.is_empty() {
-                        self.transactions_search_active = false;
+                    self.fetch_context.transactions.search_query.pop();
+                    if self.fetch_context.transactions.search_query.is_empty() {
+                        self.fetch_context.transactions.search_active = false;
                         self.status = "Cleared transaction search".to_owned();
                     } else {
-                        self.status =
-                            format!("Filtered transactions: {}", self.transactions_search_query);
+                        self.status = format!(
+                            "Filtered transactions: {}",
+                            self.fetch_context.transactions.search_query
+                        );
                     }
                     self.clamp_selected_row();
                     return true;
@@ -413,9 +471,11 @@ impl App {
                         && !key_event.modifiers.contains(KeyModifiers::ALT)
                         && !character.is_control() =>
                 {
-                    self.transactions_search_query.push(character);
-                    self.status =
-                        format!("Filtered transactions: {}", self.transactions_search_query);
+                    self.fetch_context.transactions.search_query.push(character);
+                    self.status = format!(
+                        "Filtered transactions: {}",
+                        self.fetch_context.transactions.search_query
+                    );
                     self.clamp_selected_row();
                     return true;
                 }
@@ -424,14 +484,16 @@ impl App {
         }
 
         match key_event.code {
-            KeyCode::Backspace if !self.transactions_search_query.is_empty() => {
-                self.transactions_search_query.pop();
-                if self.transactions_search_query.is_empty() {
-                    self.transactions_search_active = false;
+            KeyCode::Backspace if !self.fetch_context.transactions.search_query.is_empty() => {
+                self.fetch_context.transactions.search_query.pop();
+                if self.fetch_context.transactions.search_query.is_empty() {
+                    self.fetch_context.transactions.search_active = false;
                     self.status = "Cleared transaction search".to_owned();
                 } else {
-                    self.status =
-                        format!("Filtered transactions: {}", self.transactions_search_query);
+                    self.status = format!(
+                        "Filtered transactions: {}",
+                        self.fetch_context.transactions.search_query
+                    );
                 }
                 self.clamp_selected_row();
                 true
@@ -443,9 +505,12 @@ impl App {
                     && !character.is_control()
                     && character != 'q' =>
             {
-                self.transactions_search_active = true;
-                self.transactions_search_query.push(character);
-                self.status = format!("Filtered transactions: {}", self.transactions_search_query);
+                self.fetch_context.transactions.search_active = true;
+                self.fetch_context.transactions.search_query.push(character);
+                self.status = format!(
+                    "Filtered transactions: {}",
+                    self.fetch_context.transactions.search_query
+                );
                 self.clamp_selected_row();
                 true
             }
@@ -493,9 +558,9 @@ impl App {
             keywords: vec!["refresh".to_owned(), "reload".to_owned()],
         }];
 
-        if matches!(self.route, Route::Cashflow | Route::Categories) {
+        if let Some(selected_group) = self.current_route_group() {
             for group in &self.available_groups {
-                let selected = if group == &self.fetch_context.cashflow_group {
+                let selected = if group == selected_group {
                     " (selected)"
                 } else {
                     ""
@@ -504,11 +569,10 @@ impl App {
                     title: format!("Set group: {group}{selected}"),
                     context: self.route.label().to_ascii_lowercase(),
                     section: PaletteSection::Context,
-                    kind: PaletteActionKind::SetCashflowGroup(group.clone()),
+                    kind: PaletteActionKind::SetRouteGroup(group.clone()),
                     keywords: vec![
                         "group".to_owned(),
-                        "cashflow".to_owned(),
-                        "categories".to_owned(),
+                        self.route.id().to_owned(),
                         group.clone(),
                     ],
                 });
@@ -516,7 +580,7 @@ impl App {
         }
 
         if self.route == Route::Overview {
-            let all_selected = matches!(self.fetch_context.overview_scope, OverviewScope::All);
+            let all_selected = matches!(self.fetch_context.overview.scope, OverviewScope::All);
             let all_suffix = if all_selected { " (selected)" } else { "" };
             actions.push(PaletteAction {
                 title: format!("Set overview scope: all{all_suffix}"),
@@ -528,7 +592,7 @@ impl App {
 
             for group in &self.available_groups {
                 let selected = matches!(
-                    &self.fetch_context.overview_scope,
+                    &self.fetch_context.overview.scope,
                     OverviewScope::Group(current) if current == group
                 );
                 let suffix = if selected { " (selected)" } else { "" };
@@ -652,19 +716,17 @@ impl App {
                 self.close_palette();
                 self.request_refresh("palette refresh");
             }
-            PaletteActionKind::SetCashflowGroup(group) => {
+            PaletteActionKind::SetRouteGroup(group) => {
                 self.close_palette();
-                self.fetch_context.cashflow_group = group;
-                if matches!(self.route, Route::Cashflow | Route::Categories) {
+                if self.set_current_route_group(group.clone()) {
                     self.request_refresh("group changed");
                 } else {
-                    self.status =
-                        format!("Set chart group to {}", self.fetch_context.cashflow_group);
+                    self.status = format!("Set group to {group}");
                 }
             }
             PaletteActionKind::SetOverviewScopeAll => {
                 self.close_palette();
-                self.fetch_context.overview_scope = OverviewScope::All;
+                self.fetch_context.overview.scope = OverviewScope::All;
                 if self.route == Route::Overview {
                     self.request_refresh("overview scope changed");
                 } else {
@@ -673,7 +735,7 @@ impl App {
             }
             PaletteActionKind::SetOverviewScopeGroup(group) => {
                 self.close_palette();
-                self.fetch_context.overview_scope = OverviewScope::Group(group.clone());
+                self.fetch_context.overview.scope = OverviewScope::Group(group.clone());
                 if self.route == Route::Overview {
                     self.request_refresh("overview scope changed");
                 } else {
@@ -682,6 +744,22 @@ impl App {
             }
             PaletteActionKind::Quit => self.should_quit = true,
         }
+    }
+}
+
+fn reconcile_group_state(
+    available_groups: &[String],
+    group_id: &mut String,
+    fallback: Option<&str>,
+) {
+    if available_groups
+        .iter()
+        .any(|candidate| candidate == group_id)
+    {
+        return;
+    }
+    if let Some(fallback) = fallback {
+        *group_id = fallback.to_owned();
     }
 }
 
@@ -718,7 +796,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         app.cache.store(
-            Route::Transactions,
+            app.fetch_context.route_cache_key(Route::Transactions),
             RoutePayload::Transactions(TransactionsPayload {
                 rows,
                 limit: 1000,
@@ -831,7 +909,7 @@ mod tests {
     fn palette_updates_cashflow_group_context() {
         let mut app = App::new();
         app.set_route(Route::Cashflow);
-        assert_eq!(app.fetch_context.cashflow_group, "business");
+        assert_eq!(app.fetch_context.cashflow.group_id, "business");
 
         app.on_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
         for ch in "joint".chars() {
@@ -839,6 +917,40 @@ mod tests {
         }
         app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-        assert_eq!(app.fetch_context.cashflow_group, "joint");
+        assert_eq!(app.fetch_context.cashflow.group_id, "joint");
+    }
+
+    #[test]
+    fn selection_is_scoped_to_transaction_search_context() {
+        let mut app = App::new();
+        seed_transactions(&mut app, 20);
+        app.set_route(Route::Transactions);
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+        app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.selected_row(), 2);
+
+        app.on_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert_eq!(app.selected_row(), 0);
+
+        app.on_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.selected_row(), 2);
+    }
+
+    #[test]
+    fn route_context_reflects_route_specific_state() {
+        let mut app = App::new();
+        app.set_route(Route::Categories);
+        assert_eq!(app.route_context(), "finance/categories/business/6m");
+
+        app.on_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+        for ch in "joint".chars() {
+            app.on_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+        }
+        app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert_eq!(app.route_context(), "finance/categories/joint/6m");
+        assert_eq!(app.fetch_context.cashflow.group_id, "business");
     }
 }

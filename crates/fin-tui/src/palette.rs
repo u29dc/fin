@@ -30,7 +30,7 @@ impl PaletteSection {
 pub enum PaletteActionKind {
     Navigate(Route),
     Refresh,
-    SetCashflowGroup(String),
+    SetRouteGroup(String),
     SetOverviewScopeAll,
     SetOverviewScopeGroup(String),
     Quit,
