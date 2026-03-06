@@ -1,6 +1,7 @@
 mod cashflow;
 mod categories;
 mod overview;
+mod reports;
 mod summary;
 mod transactions;
 
@@ -31,5 +32,6 @@ pub fn render_payload(frame: &mut Frame<'_>, area: Rect, app: &App, payload: &Ro
             overview::render(frame, area, app.selected_row(), payload, app)
         }
         RoutePayload::CategoriesDashboard(payload) => categories::render(frame, area, payload, app),
+        RoutePayload::ReportsDashboard(payload) => reports::render(frame, area, payload, app),
     }
 }

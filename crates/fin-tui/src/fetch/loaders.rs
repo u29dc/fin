@@ -23,9 +23,10 @@ use super::context::{
 use super::models::{
     AccountFreshnessRow, CashflowDashboardPayload, CashflowPoint, CategoriesDashboardPayload,
     CategoryParetoPoint, CategoryStabilityRow, ExpenseTreeRow, FlowMatrixRow,
-    OverviewDashboardPayload, RoutePayload, SummaryAllocation, SummaryAllocationSegment,
-    SummaryDashboardPayload, SummaryGroupPanel, SummaryMonthSnapshot, TransactionDetailPanel,
-    TransactionDetailPostingRow, TransactionTableRow, TransactionsPayload, UncategorizedLeakage,
+    OverviewDashboardPayload, ReportsDashboardPayload, ReserveSnapshotRow, RoutePayload,
+    RunwaySnapshotRow, SummaryAllocation, SummaryAllocationSegment, SummaryDashboardPayload,
+    SummaryGroupPanel, SummaryMonthSnapshot, TransactionDetailPanel, TransactionDetailPostingRow,
+    TransactionTableRow, TransactionsPayload, UncategorizedLeakage,
 };
 
 #[derive(Debug, Default)]
@@ -337,16 +338,7 @@ fn fetch_cashflow_dashboard(
         .collect::<Vec<_>>()
         .into_iter()
         .rev()
-        .map(|point| CashflowPoint {
-            month: point.month,
-            income_minor: point.income_minor,
-            expense_minor: point.expense_minor,
-            net_minor: point.net_minor,
-            savings_rate_pct: point.savings_rate_pct,
-            rolling_median_expense_minor: point.rolling_median_expense_minor,
-            expense_deviation_ratio: point.expense_deviation_ratio,
-            is_anomaly: point.is_anomaly,
-        })
+        .map(map_cashflow_point)
         .collect::<Vec<_>>();
 
     let latest_full_month = points.last().cloned();
@@ -670,51 +662,61 @@ fn fetch_reports(
     )
     .map_err(|error| error.to_string())?;
 
-    let latest_net = full_months.last().map_or(0, |point| point.net_minor);
-    let avg_six_net = average_last_n(full_months, 6, |point| point.net_minor).unwrap_or(0);
-    let latest_runway = runway
-        .last()
-        .map(|point| point.runway_months)
-        .unwrap_or(0.0);
-    let latest_reserve = reserves.last();
-    let available = latest_reserve.map_or(0, |point| point.available_minor);
-
-    let mut lines = vec![
-        format!("Reports ({group_id})"),
-        format!(
-            "Totals (all months) | income {:>12} | expenses {:>12} | net {:>12}",
-            totals.income_minor, totals.expense_minor, totals.net_minor
-        ),
-        format!(
-            "Latest full month net {:>12} | 6m avg net {:>12}",
-            latest_net, avg_six_net
-        ),
-        format!(
-            "Runway {:>8.2} months | Available {:>12}",
-            latest_runway, available
-        ),
-        String::new(),
-        "Recent full months".to_owned(),
-    ];
-
-    for point in full_months
+    let recent_months = full_months
         .iter()
         .rev()
         .take(12)
+        .cloned()
         .collect::<Vec<_>>()
         .into_iter()
         .rev()
-    {
-        let savings = point
-            .savings_rate_pct
-            .map_or_else(|| "n/a".to_owned(), |value| format!("{value:.1}%"));
-        lines.push(format!(
-            "{} | income {:>10} | expenses {:>10} | net {:>10} | savings {:>7}",
-            point.month, point.income_minor, point.expense_minor, point.net_minor, savings
-        ));
-    }
+        .map(map_cashflow_point)
+        .collect::<Vec<_>>();
+    let latest_reserve = reserves.last();
 
-    Ok(RoutePayload::Text(lines.join("\n")))
+    Ok(RoutePayload::ReportsDashboard(ReportsDashboardPayload {
+        group_id,
+        totals_income_minor: totals.income_minor,
+        totals_expense_minor: totals.expense_minor,
+        totals_net_minor: totals.net_minor,
+        latest_full_month_net_minor: full_months.last().map(|point| point.net_minor),
+        avg_six_month_net_minor: average_last_n(full_months, 6, |point| point.net_minor),
+        latest_runway_months: runway.last().map(|point| point.runway_months),
+        latest_available_minor: latest_reserve.map(|point| point.available_minor),
+        latest_tax_reserve_minor: latest_reserve.map(|point| point.tax_reserve_minor),
+        latest_expense_reserve_minor: latest_reserve.map(|point| point.expense_reserve_minor),
+        median_expense_minor: runway.last().map(|point| point.median_expense_minor),
+        burn_rate_minor: runway.last().map(|point| point.burn_rate_minor),
+        recent_months,
+        runway_snapshots: runway
+            .iter()
+            .rev()
+            .take(6)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .map(|point| RunwaySnapshotRow {
+                date: point.date.clone(),
+                runway_months: point.runway_months,
+                balance_minor: point.balance_minor,
+                burn_rate_minor: point.burn_rate_minor,
+            })
+            .collect(),
+        reserve_snapshots: reserves
+            .iter()
+            .rev()
+            .take(6)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .map(|point| ReserveSnapshotRow {
+                date: point.date.clone(),
+                tax_reserve_minor: point.tax_reserve_minor,
+                expense_reserve_minor: point.expense_reserve_minor,
+                available_minor: point.available_minor,
+            })
+            .collect(),
+    }))
 }
 
 fn resolve_group(runtime: &RuntimeContext, requested_group: &str) -> String {
@@ -756,6 +758,19 @@ fn average_last_n(
     }
     let total = sample.iter().map(|point| selector(point)).sum::<i64>();
     Some(total / i64::try_from(sample.len()).unwrap_or(1))
+}
+
+fn map_cashflow_point(point: MonthlyCashflowPoint) -> CashflowPoint {
+    CashflowPoint {
+        month: point.month,
+        income_minor: point.income_minor,
+        expense_minor: point.expense_minor,
+        net_minor: point.net_minor,
+        savings_rate_pct: point.savings_rate_pct,
+        rolling_median_expense_minor: point.rolling_median_expense_minor,
+        expense_deviation_ratio: point.expense_deviation_ratio,
+        is_anomaly: point.is_anomaly,
+    }
 }
 
 fn current_month(connection: &Connection) -> Result<String, String> {
@@ -1120,6 +1135,19 @@ mod tests {
                 assert!(!payload.flow.is_empty());
             }
             other => panic!("unexpected categories payload: {other:?}"),
+        }
+
+        let reports = client
+            .fetch_route(Route::Reports, &FetchContext::default())
+            .expect("reports payload");
+        match reports {
+            RoutePayload::ReportsDashboard(payload) => {
+                assert!(!payload.recent_months.is_empty());
+                assert!(!payload.runway_snapshots.is_empty());
+                assert!(!payload.reserve_snapshots.is_empty());
+                assert!(payload.latest_runway_months.is_some());
+            }
+            other => panic!("unexpected reports payload: {other:?}"),
         }
 
         let transactions = client

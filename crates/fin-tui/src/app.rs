@@ -435,6 +435,7 @@ impl App {
             | Some(RoutePayload::SummaryDashboard(_))
             | Some(RoutePayload::CashflowDashboard(_))
             | Some(RoutePayload::CategoriesDashboard(_))
+            | Some(RoutePayload::ReportsDashboard(_))
             | None => 0,
         }
     }

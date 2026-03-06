@@ -239,6 +239,41 @@ pub struct OverviewDashboardPayload {
 }
 
 #[derive(Debug, Clone)]
+pub struct RunwaySnapshotRow {
+    pub date: String,
+    pub runway_months: f64,
+    pub balance_minor: i64,
+    pub burn_rate_minor: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReserveSnapshotRow {
+    pub date: String,
+    pub tax_reserve_minor: i64,
+    pub expense_reserve_minor: i64,
+    pub available_minor: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReportsDashboardPayload {
+    pub group_id: String,
+    pub totals_income_minor: i64,
+    pub totals_expense_minor: i64,
+    pub totals_net_minor: i64,
+    pub latest_full_month_net_minor: Option<i64>,
+    pub avg_six_month_net_minor: Option<i64>,
+    pub latest_runway_months: Option<f64>,
+    pub latest_available_minor: Option<i64>,
+    pub latest_tax_reserve_minor: Option<i64>,
+    pub latest_expense_reserve_minor: Option<i64>,
+    pub median_expense_minor: Option<i64>,
+    pub burn_rate_minor: Option<i64>,
+    pub recent_months: Vec<CashflowPoint>,
+    pub runway_snapshots: Vec<RunwaySnapshotRow>,
+    pub reserve_snapshots: Vec<ReserveSnapshotRow>,
+}
+
+#[derive(Debug, Clone)]
 pub enum RoutePayload {
     Text(String),
     Transactions(TransactionsPayload),
@@ -246,4 +281,5 @@ pub enum RoutePayload {
     CashflowDashboard(CashflowDashboardPayload),
     OverviewDashboard(OverviewDashboardPayload),
     CategoriesDashboard(CategoriesDashboardPayload),
+    ReportsDashboard(ReportsDashboardPayload),
 }

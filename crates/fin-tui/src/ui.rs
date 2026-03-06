@@ -57,7 +57,7 @@ fn render_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
     frame.render_widget(center, chunks[1]);
 
     let right = Paragraph::new(Line::from(Span::styled(
-        "cmd+p | ctrl+p command palette",
+        header_shortcuts(app),
         app.theme.header_meta,
     )))
     .alignment(Alignment::Right);
@@ -142,24 +142,7 @@ fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .constraints([Constraint::Min(10), Constraint::Length(88)])
         .split(area);
 
-    let hints = Paragraph::new(Line::from(vec![
-        Span::styled("tab ", app.theme.section_heading),
-        Span::styled("focus ", app.theme.footer_meta),
-        Span::styled("left/right ", app.theme.section_heading),
-        Span::styled("tabs ", app.theme.footer_meta),
-        Span::styled("1-6 ", app.theme.section_heading),
-        Span::styled("routes ", app.theme.footer_meta),
-        Span::styled("up/down ", app.theme.section_heading),
-        Span::styled("rows ", app.theme.footer_meta),
-        Span::styled("cmd/ctrl+f ", app.theme.section_heading),
-        Span::styled("find ", app.theme.footer_meta),
-        Span::styled("cmd/ctrl+p ", app.theme.section_heading),
-        Span::styled("palette ", app.theme.footer_meta),
-        Span::styled("r ", app.theme.section_heading),
-        Span::styled("refresh ", app.theme.footer_meta),
-        Span::styled("q ", app.theme.section_heading),
-        Span::styled("quit", app.theme.footer_meta),
-    ]));
+    let hints = Paragraph::new(Line::from(footer_hint_spans(app)));
     frame.render_widget(hints, chunks[0]);
 
     let (route_index, route_total) = app.route_position();
@@ -180,6 +163,67 @@ fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let right = Paragraph::new(Line::from(Span::styled(status, app.theme.footer_status)))
         .alignment(Alignment::Right);
     frame.render_widget(right, chunks[1]);
+}
+
+fn header_shortcuts(app: &App) -> String {
+    if app.route == Route::Transactions {
+        return "cmd/ctrl+p palette | cmd/ctrl+f find".to_owned();
+    }
+    "cmd+p | ctrl+p command palette".to_owned()
+}
+
+fn footer_hint_spans(app: &App) -> Vec<Span<'static>> {
+    let mut spans = vec![
+        hint_key("tab ", app),
+        hint_meta("focus ", app),
+        hint_key("left/right ", app),
+        hint_meta("tabs ", app),
+        hint_key("1-6 ", app),
+        hint_meta("routes ", app),
+        hint_key("cmd/ctrl+p ", app),
+        hint_meta("palette ", app),
+    ];
+
+    match (app.is_navigation_focused(), app.route) {
+        (true, _) => {
+            spans.push(hint_key("enter ", app));
+            spans.push(hint_meta("inspect ", app));
+        }
+        (false, Route::Transactions) => {
+            spans.push(hint_key("up/down ", app));
+            spans.push(hint_meta("rows ", app));
+            spans.push(hint_key("home/end ", app));
+            spans.push(hint_meta("bounds ", app));
+            spans.push(hint_key("pgup/pgdn ", app));
+            spans.push(hint_meta("pages ", app));
+            spans.push(hint_key("cmd/ctrl+f ", app));
+            spans.push(hint_meta("find ", app));
+        }
+        (false, Route::Overview) => {
+            spans.push(hint_key("up/down ", app));
+            spans.push(hint_meta("rows ", app));
+            spans.push(hint_key("home/end ", app));
+            spans.push(hint_meta("bounds ", app));
+        }
+        (false, Route::Summary | Route::Cashflow | Route::Categories | Route::Reports) => {
+            spans.push(hint_key("palette ", app));
+            spans.push(hint_meta("group/sort/scope ", app));
+        }
+    }
+
+    spans.push(hint_key("r ", app));
+    spans.push(hint_meta("refresh ", app));
+    spans.push(hint_key("q ", app));
+    spans.push(hint_meta("quit", app));
+    spans
+}
+
+fn hint_key(text: &'static str, app: &App) -> Span<'static> {
+    Span::styled(text, app.theme.section_heading)
+}
+
+fn hint_meta(text: &'static str, app: &App) -> Span<'static> {
+    Span::styled(text, app.theme.footer_meta)
 }
 
 fn render_palette(frame: &mut Frame<'_>, app: &App) {
