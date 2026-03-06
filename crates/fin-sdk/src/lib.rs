@@ -21,6 +21,7 @@ pub mod sanitize;
 mod stats;
 pub mod testing;
 pub mod timeseries;
+pub mod transactions;
 pub mod units;
 
 pub use allocation::{
@@ -78,6 +79,11 @@ pub use timeseries::{
     all_accounts_daily_balance_series, cumulative_contribution_series,
     group_account_balance_series, group_daily_balance_series, merge_balance_series_by_date,
     merged_accounts_daily_balance_series,
+};
+pub use transactions::{
+    SortDirection, TransactionCounterpartyPosting, TransactionCursor, TransactionCursorValue,
+    TransactionDetail, TransactionListRow, TransactionPage, TransactionPageQuery,
+    TransactionSortField, load_transaction_detail, query_transactions_page,
 };
 
 pub const SDK_NAME: &str = "fin-sdk";

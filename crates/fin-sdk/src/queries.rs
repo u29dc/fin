@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::FinConfig;
 use crate::error::Result;
 use crate::stats::{median_i64, round_ratio};
+use crate::transactions::{
+    SortDirection, TransactionPageQuery, TransactionSortField, query_transactions_page_for_accounts,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountBalanceRow {
@@ -185,66 +188,37 @@ pub fn view_transactions(
     connection: &Connection,
     options: &TransactionQueryOptions,
 ) -> Result<Vec<TransactionRow>> {
-    let mut where_clauses = Vec::new();
-    let mut params: Vec<String> = Vec::new();
-    if let Some(account_ids) = &options.chart_account_ids
-        && !account_ids.is_empty()
-    {
-        where_clauses.push(format!(
-            "p.account_id IN ({})",
-            placeholders(account_ids.len())
-        ));
-        params.extend(account_ids.clone());
-    }
-    if let Some(from) = &options.from {
-        where_clauses.push("je.posted_at >= ?".to_owned());
-        params.push(format!("{from}T00:00:00"));
-    }
-    if let Some(to) = &options.to {
-        where_clauses.push("je.posted_at <= ?".to_owned());
-        params.push(format!("{to}T23:59:59.999"));
-    }
-    if let Some(search) = &options.search {
-        where_clauses.push(
-            "(COALESCE(je.clean_description, '') LIKE ? OR COALESCE(je.raw_description, '') LIKE ? OR COALESCE(je.counterparty, '') LIKE ?)"
-                .to_owned(),
-        );
-        let pattern = format!("%{search}%");
-        params.push(pattern.clone());
-        params.push(pattern.clone());
-        params.push(pattern);
-    }
-    let where_sql = if where_clauses.is_empty() {
-        String::new()
-    } else {
-        format!("WHERE {}", where_clauses.join(" AND "))
-    };
-    let limit = if options.limit == 0 {
-        50
-    } else {
-        options.limit
-    };
-    let sql = format!(
-        "SELECT je.id,\n                p.account_id,\n                GROUP_CONCAT(DISTINCT p2.account_id),\n                je.posted_at,\n                p.amount_minor,\n                p.currency,\n                COALESCE(je.raw_description, je.description),\n                COALESCE(je.clean_description, je.description),\n                je.counterparty\n         FROM journal_entries je\n         JOIN postings p ON p.journal_entry_id = je.id\n         LEFT JOIN postings p2 ON p2.journal_entry_id = je.id AND p2.id != p.id\n         {where_sql}\n         GROUP BY je.id, p.id\n         ORDER BY je.posted_at DESC\n         LIMIT ?"
-    );
-    params.push(limit.to_string());
-    let mut statement = connection.prepare(&sql)?;
-    let mut rows = statement.query(rusqlite::params_from_iter(params.iter()))?;
-    let mut result = Vec::new();
-    while let Some(row) = rows.next()? {
-        result.push(TransactionRow {
-            id: row.get(0)?,
-            chart_account_id: row.get(1)?,
-            pair_account_id: row.get::<usize, Option<String>>(2)?.unwrap_or_default(),
-            posted_at: row.get(3)?,
-            amount_minor: row.get(4)?,
-            currency: row.get(5)?,
-            raw_description: row.get(6)?,
-            clean_description: row.get(7)?,
-            counterparty: row.get(8)?,
-        });
-    }
-    Ok(result)
+    let page = query_transactions_page_for_accounts(
+        connection,
+        options.chart_account_ids.as_deref(),
+        &TransactionPageQuery {
+            chart_account_ids: options.chart_account_ids.clone(),
+            from: options.from.clone(),
+            to: options.to.clone(),
+            search: options.search.clone(),
+            limit: options.limit,
+            sort_field: TransactionSortField::PostedAt,
+            sort_direction: SortDirection::Desc,
+            after: None,
+            ..TransactionPageQuery::default()
+        },
+    )?;
+
+    Ok(page
+        .items
+        .into_iter()
+        .map(|row| TransactionRow {
+            id: row.journal_entry_id,
+            chart_account_id: row.chart_account_id,
+            pair_account_id: row.pair_account_ids.join(","),
+            posted_at: row.posted_at,
+            amount_minor: row.amount_minor,
+            currency: row.currency,
+            raw_description: row.raw_description,
+            clean_description: row.clean_description,
+            counterparty: row.counterparty,
+        })
+        .collect())
 }
 
 pub fn view_ledger(
