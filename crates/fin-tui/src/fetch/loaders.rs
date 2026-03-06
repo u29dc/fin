@@ -289,6 +289,10 @@ fn fetch_cashflow_dashboard(
             income_minor: point.income_minor,
             expense_minor: point.expense_minor,
             net_minor: point.net_minor,
+            savings_rate_pct: point.savings_rate_pct,
+            rolling_median_expense_minor: point.rolling_median_expense_minor,
+            expense_deviation_ratio: point.expense_deviation_ratio,
+            is_anomaly: point.is_anomaly,
         })
         .collect::<Vec<_>>();
 
@@ -296,6 +300,15 @@ fn fetch_cashflow_dashboard(
     let avg_six_month_income_minor = average_last_n(full_months, 6, |point| point.income_minor);
     let avg_six_month_expense_minor = average_last_n(full_months, 6, |point| point.expense_minor);
     let avg_six_month_net_minor = average_last_n(full_months, 6, |point| point.net_minor);
+    let cashflow_kpis = report_cashflow_kpis(
+        runtime.connection(),
+        runtime.config(),
+        &group_id,
+        CASHFLOW_LOOKBACK_MONTHS,
+        None,
+        None,
+    )
+    .map_err(|error| error.to_string())?;
 
     let runway = report_runway(
         runtime.connection(),
@@ -328,6 +341,10 @@ fn fetch_cashflow_dashboard(
         available_minor: latest_reserve.map(|point| point.available_minor),
         expense_reserve_minor: latest_reserve.map(|point| point.expense_reserve_minor),
         tax_reserve_minor: latest_reserve.map(|point| point.tax_reserve_minor),
+        median_spend_minor: cashflow_kpis.median_spend_minor,
+        short_term_trend: cashflow_kpis.short_term_trend,
+        anomaly_count_last_12_months: cashflow_kpis.anomaly_count_last_12_months,
+        recent_anomaly_months: cashflow_kpis.recent_anomaly_months,
     }))
 }
 
@@ -823,6 +840,24 @@ mod tests {
                 );
             }
             other => panic!("unexpected payload: {other:?}"),
+        }
+
+        let cashflow = client
+            .fetch_route(Route::Cashflow, &FetchContext::default())
+            .expect("cashflow payload");
+        match cashflow {
+            RoutePayload::CashflowDashboard(payload) => {
+                assert!(!payload.points.is_empty());
+                assert!(payload.median_spend_minor.is_some());
+                assert!(payload.short_term_trend.is_some());
+                assert!(
+                    payload
+                        .points
+                        .iter()
+                        .any(|point| point.expense_deviation_ratio.is_some())
+                );
+            }
+            other => panic!("unexpected cashflow payload: {other:?}"),
         }
     }
 }

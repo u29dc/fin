@@ -98,6 +98,10 @@ pub struct CashflowPoint {
     pub income_minor: i64,
     pub expense_minor: i64,
     pub net_minor: i64,
+    pub savings_rate_pct: Option<f64>,
+    pub rolling_median_expense_minor: Option<i64>,
+    pub expense_deviation_ratio: Option<f64>,
+    pub is_anomaly: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -112,6 +116,10 @@ pub struct CashflowDashboardPayload {
     pub available_minor: Option<i64>,
     pub expense_reserve_minor: Option<i64>,
     pub tax_reserve_minor: Option<i64>,
+    pub median_spend_minor: Option<i64>,
+    pub short_term_trend: Option<ShortTermTrend>,
+    pub anomaly_count_last_12_months: usize,
+    pub recent_anomaly_months: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
