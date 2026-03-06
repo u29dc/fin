@@ -10,6 +10,7 @@ pub mod db;
 pub mod error;
 pub mod health;
 pub mod import;
+pub mod insights;
 pub mod mutations;
 pub mod queries;
 pub mod reports;
@@ -41,6 +42,10 @@ pub use health::{
     Severity, run_health_checks,
 };
 pub use import::{ImportInboxOptions, ImportResult, SkippedFile, import_inbox};
+pub use insights::{
+    ExpenseHierarchyNode, ExpenseHierarchyNodeKind, FlowEdge, FlowGraph, FlowNode, FlowNodeKind,
+    FlowQueryOptions, HierarchyQueryOptions, RollupMode, group_expense_hierarchy, group_flow_graph,
+};
 pub use mutations::{EditTransactionPreview, VoidPreview, edit_transaction, void_entry};
 pub use queries::{
     AccountBalanceRow, AuditPayeePoint, BalanceSheet, CategoryBreakdownPoint, CategoryMedianPoint,
