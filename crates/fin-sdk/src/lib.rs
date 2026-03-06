@@ -12,6 +12,7 @@ pub mod health;
 pub mod import;
 pub mod insights;
 pub mod mutations;
+pub mod projection;
 pub mod queries;
 pub mod reports;
 pub mod rules;
@@ -47,6 +48,12 @@ pub use insights::{
     FlowQueryOptions, HierarchyQueryOptions, RollupMode, group_expense_hierarchy, group_flow_graph,
 };
 pub use mutations::{EditTransactionPreview, VoidPreview, edit_transaction, void_entry};
+pub use projection::{
+    ProjectionScenarioKind, ProjectionScopeKind, RunwayProjectionAssumptions,
+    RunwayProjectionOptions, RunwayProjectionPoint, RunwayProjectionReport,
+    RunwayProjectionScenario, RunwayThresholdCrossing, RunwayThresholds,
+    project_consolidated_runway, project_group_runway,
+};
 pub use queries::{
     AccountBalanceRow, AuditPayeePoint, BalanceSheet, CategoryBreakdownPoint, CategoryMedianPoint,
     JournalEntryRow, LedgerQueryOptions, MonthlyCashflowPoint, PostingRow, TransactionQueryOptions,
