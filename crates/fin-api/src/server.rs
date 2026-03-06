@@ -2,11 +2,10 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use axum::{Json, Router, extract::State, routing::get};
-use serde::Serialize;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
+use crate::api::{ApiState, build_router};
 use crate::runtime::{StartPlan, TransportBinding};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,18 +40,6 @@ impl BoundEndpoint {
     }
 }
 
-#[derive(Debug, Clone)]
-struct ProbeState {
-    endpoint: BoundEndpoint,
-}
-
-#[derive(Debug, Serialize)]
-struct ProbeResponse {
-    ok: bool,
-    transport: &'static str,
-    endpoint: String,
-}
-
 pub async fn serve_with_shutdown<F>(
     plan: StartPlan,
     shutdown: F,
@@ -61,11 +48,19 @@ pub async fn serve_with_shutdown<F>(
 where
     F: Future<Output = ()> + Send + 'static,
 {
+    let state = ApiState::new(
+        match &plan.transport {
+            TransportBinding::Unix { socket_path } => BoundEndpoint::Unix(socket_path.clone()),
+            TransportBinding::Tcp { bind_addr } => BoundEndpoint::Tcp(*bind_addr),
+        },
+        plan.config_path_override.clone(),
+        plan.db_path_override.clone(),
+    );
     match plan.transport {
         TransportBinding::Unix { socket_path } => {
             #[cfg(unix)]
             {
-                serve_unix(socket_path, shutdown, ready).await
+                serve_unix(socket_path, state, shutdown, ready).await
             }
             #[cfg(not(unix))]
             {
@@ -74,12 +69,13 @@ where
                 bail!("unix transport is unavailable on this platform")
             }
         }
-        TransportBinding::Tcp { bind_addr } => serve_tcp(bind_addr, shutdown, ready).await,
+        TransportBinding::Tcp { bind_addr } => serve_tcp(bind_addr, state, shutdown, ready).await,
     }
 }
 
 async fn serve_tcp<F>(
     bind_addr: std::net::SocketAddr,
+    state: ApiState,
     shutdown: F,
     ready: Option<oneshot::Sender<BoundEndpoint>>,
 ) -> Result<()>
@@ -94,7 +90,11 @@ where
             .local_addr()
             .context("read bound fin-api tcp address")?,
     );
-    let router = build_router(endpoint.clone());
+    let router = build_router(ApiState::new(
+        endpoint.clone(),
+        state.config_path_override,
+        state.db_path_override,
+    ));
     if let Some(sender) = ready {
         let _ = sender.send(endpoint);
     }
@@ -108,6 +108,7 @@ where
 #[cfg(unix)]
 async fn serve_unix<F>(
     socket_path: PathBuf,
+    state: ApiState,
     shutdown: F,
     ready: Option<oneshot::Sender<BoundEndpoint>>,
 ) -> Result<()>
@@ -122,7 +123,11 @@ where
     let listener = UnixListener::bind(&socket_path)
         .with_context(|| format!("bind fin-api unix socket at {}", socket_path.display()))?;
     let endpoint = BoundEndpoint::Unix(socket_path.clone());
-    let router = build_router(endpoint.clone());
+    let router = build_router(ApiState::new(
+        endpoint.clone(),
+        state.config_path_override,
+        state.db_path_override,
+    ));
     if let Some(sender) = ready {
         let _ = sender.send(endpoint);
     }
@@ -132,20 +137,6 @@ where
     cleanup_socket_file(&socket_path)?;
     serve_result.context("serve fin-api over unix socket")?;
     Ok(())
-}
-
-fn build_router(endpoint: BoundEndpoint) -> Router {
-    Router::new()
-        .route("/__probe", get(probe_handler))
-        .with_state(ProbeState { endpoint })
-}
-
-async fn probe_handler(State(state): State<ProbeState>) -> Json<ProbeResponse> {
-    Json(ProbeResponse {
-        ok: true,
-        transport: state.endpoint.transport_name(),
-        endpoint: state.endpoint.endpoint_label(),
-    })
 }
 
 #[cfg(unix)]
@@ -244,7 +235,7 @@ mod tests {
         let BoundEndpoint::Tcp(address) = endpoint else {
             panic!("expected tcp endpoint");
         };
-        let response = request_probe_tcp(address).await?;
+        let response = request_tcp(address, "/__probe").await?;
         assert!(response.contains("200 OK"));
         assert!(response.contains("\"transport\":\"tcp\""));
 
@@ -287,7 +278,7 @@ mod tests {
         let BoundEndpoint::Unix(bound_path) = endpoint else {
             panic!("expected unix endpoint");
         };
-        let response = request_probe_unix(&bound_path).await?;
+        let response = request_unix(&bound_path, "/__probe").await?;
         assert!(response.contains("200 OK"));
         assert!(response.contains("\"transport\":\"unix\""));
         assert!(socket_path.exists());
@@ -337,7 +328,7 @@ mod tests {
         let BoundEndpoint::Unix(bound_path) = endpoint else {
             panic!("expected unix endpoint");
         };
-        let response = request_probe_unix(&bound_path).await?;
+        let response = request_unix(&bound_path, "/__probe").await?;
         assert!(response.contains("200 OK"));
 
         let _ = shutdown_tx.send(());
@@ -345,14 +336,171 @@ mod tests {
         Ok(())
     }
 
-    async fn request_probe_tcp(address: std::net::SocketAddr) -> Result<String> {
+    #[tokio::test]
+    async fn version_endpoint_matches_cli_contract() -> Result<()> {
+        let plan = prepare_start_plan(&StartArgs {
+            config_path: None,
+            db_path: None,
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })?;
+
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            serve_with_shutdown(
+                plan,
+                async move {
+                    let _ = shutdown_rx.await;
+                },
+                Some(ready_tx),
+            )
+            .await
+        });
+
+        let endpoint = timeout(Duration::from_secs(3), ready_rx)
+            .await
+            .expect("ready timeout")
+            .expect("ready sender dropped");
+        let BoundEndpoint::Tcp(address) = endpoint else {
+            panic!("expected tcp endpoint");
+        };
+        let response = request_tcp(address, "/v1/version").await?;
+        let (status, body) = parse_http_json(&response)?;
+        assert_eq!(status, 200);
+        assert_eq!(body["ok"], true);
+        assert_eq!(body["data"]["tool"], "version");
+        assert!(body["data"]["sdk"].as_str().is_some());
+        assert_eq!(body["meta"]["tool"], "version");
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn tools_endpoints_expose_catalog_and_detail() -> Result<()> {
+        let plan = prepare_start_plan(&StartArgs {
+            config_path: None,
+            db_path: None,
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })?;
+
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            serve_with_shutdown(
+                plan,
+                async move {
+                    let _ = shutdown_rx.await;
+                },
+                Some(ready_tx),
+            )
+            .await
+        });
+
+        let endpoint = timeout(Duration::from_secs(3), ready_rx)
+            .await
+            .expect("ready timeout")
+            .expect("ready sender dropped");
+        let BoundEndpoint::Tcp(address) = endpoint else {
+            panic!("expected tcp endpoint");
+        };
+
+        let catalog = request_tcp(address, "/v1/tools").await?;
+        let (status, body) = parse_http_json(&catalog)?;
+        assert_eq!(status, 200);
+        assert_eq!(body["ok"], true);
+        assert_eq!(body["meta"]["tool"], "tools");
+        assert!(body["meta"]["count"].as_u64().is_some());
+        assert!(body["data"]["tools"].as_array().is_some());
+        assert!(body["data"]["globalFlags"].as_array().is_some());
+
+        let detail = request_tcp(address, "/v1/tools/view.transactions").await?;
+        let (detail_status, detail_body) = parse_http_json(&detail)?;
+        assert_eq!(detail_status, 200);
+        assert_eq!(detail_body["ok"], true);
+        assert_eq!(detail_body["data"]["tool"]["name"], "view.transactions");
+
+        let missing = request_tcp(address, "/v1/tools/nope").await?;
+        let (missing_status, missing_body) = parse_http_json(&missing)?;
+        assert_eq!(missing_status, 404);
+        assert_eq!(missing_body["ok"], false);
+        assert_eq!(missing_body["error"]["code"], "NOT_FOUND");
+        assert_eq!(missing_body["meta"]["tool"], "tools");
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn health_endpoint_uses_runtime_overrides() -> Result<()> {
+        let temp = tempdir().expect("tempdir");
+        let fixture = fin_sdk::testing::fixture::materialize_fixture_home(
+            temp.path(),
+            &fin_sdk::testing::fixture::FixtureBuildOptions::default(),
+        )?;
+        let plan = prepare_start_plan(&StartArgs {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })?;
+
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            serve_with_shutdown(
+                plan,
+                async move {
+                    let _ = shutdown_rx.await;
+                },
+                Some(ready_tx),
+            )
+            .await
+        });
+
+        let endpoint = timeout(Duration::from_secs(3), ready_rx)
+            .await
+            .expect("ready timeout")
+            .expect("ready sender dropped");
+        let BoundEndpoint::Tcp(address) = endpoint else {
+            panic!("expected tcp endpoint");
+        };
+
+        let response = request_tcp(address, "/v1/health").await?;
+        let (status, body) = parse_http_json(&response)?;
+        assert_eq!(status, 200);
+        assert_eq!(body["ok"], true);
+        assert_eq!(body["meta"]["tool"], "health");
+        assert!(body["data"]["checks"].as_array().is_some());
+        assert!(body["data"]["status"].as_str().is_some());
+        assert!(body["data"]["summary"]["ok"].as_u64().is_some());
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
+    async fn request_tcp(address: std::net::SocketAddr, path: &str) -> Result<String> {
         let mut stream = tokio::net::TcpStream::connect(address)
             .await
             .context("connect fin-api tcp probe")?;
         stream
-            .write_all(b"GET /__probe HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .write_all(
+                format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
             .await
-            .context("write fin-api tcp probe request")?;
+            .with_context(|| format!("write fin-api tcp request for {path}"))?;
         let mut bytes = Vec::new();
         stream
             .read_to_end(&mut bytes)
@@ -362,19 +510,37 @@ mod tests {
     }
 
     #[cfg(unix)]
-    async fn request_probe_unix(socket_path: &std::path::Path) -> Result<String> {
+    async fn request_unix(socket_path: &std::path::Path, path: &str) -> Result<String> {
         let mut stream = tokio::net::UnixStream::connect(socket_path)
             .await
             .context("connect fin-api unix probe")?;
         stream
-            .write_all(b"GET /__probe HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .write_all(
+                format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
             .await
-            .context("write fin-api unix probe request")?;
+            .with_context(|| format!("write fin-api unix request for {path}"))?;
         let mut bytes = Vec::new();
         stream
             .read_to_end(&mut bytes)
             .await
             .context("read fin-api unix probe response")?;
         String::from_utf8(bytes).context("decode fin-api unix probe response")
+    }
+
+    fn parse_http_json(response: &str) -> Result<(u16, serde_json::Value)> {
+        let (head, body) = response
+            .split_once("\r\n\r\n")
+            .context("split http response")?;
+        let status = head
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .context("extract http status")?
+            .parse::<u16>()
+            .context("parse http status")?;
+        let json = serde_json::from_str(body).context("parse json response body")?;
+        Ok((status, json))
     }
 }

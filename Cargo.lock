@@ -407,6 +407,7 @@ dependencies = [
  "clap",
  "fin-sdk",
  "serde",
+ "serde_json",
  "tempfile",
  "tokio",
 ]

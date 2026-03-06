@@ -19,6 +19,8 @@ pub struct StartPlan {
     pub transport: TransportBinding,
     pub runtime_checked: bool,
     pub group_count: Option<usize>,
+    pub config_path_override: Option<PathBuf>,
+    pub db_path_override: Option<PathBuf>,
     pub db_path: Option<PathBuf>,
 }
 
@@ -102,6 +104,8 @@ pub fn prepare_start_plan(args: &StartArgs) -> Result<StartPlan> {
         transport,
         runtime_checked: false,
         group_count: None,
+        config_path_override: args.config_path.clone(),
+        db_path_override: args.db_path.clone(),
         db_path: None,
     };
 
