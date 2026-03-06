@@ -13,6 +13,9 @@ fn render_tool_detail(tool: &ToolMeta) -> String {
         format!("  Command: {}", tool.command),
         format!("  Category: {}", tool.category),
         format!("  Idempotent: {}", tool.idempotent),
+        format!("  Read only: {}", tool.read_only),
+        format!("  JSON: {}", tool.supports_json),
+        format!("  Interactive only: {}", tool.interactive_only),
     ];
     if let Some(limit) = &tool.rate_limit {
         lines.push(format!("  Rate limit: {limit}"));

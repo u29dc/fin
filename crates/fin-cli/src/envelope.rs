@@ -2,46 +2,15 @@ use std::time::Instant;
 
 use serde::Serialize;
 
-use crate::error::{CliError, ExitCode};
+use fin_sdk::contracts::{EnvelopeMeta, ErrorEnvelope, SuccessEnvelope};
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Meta {
-    pub tool: String,
-    pub elapsed: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub count: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub total: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub has_more: Option<bool>,
-}
+use crate::error::{CliError, ExitCode};
 
 #[derive(Debug, Clone, Default)]
 pub struct MetaExtras {
     pub count: Option<usize>,
     pub total: Option<usize>,
     pub has_more: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-struct SuccessEnvelope<T: Serialize> {
-    ok: bool,
-    data: T,
-    meta: Meta,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorMeta {
-    tool: String,
-    elapsed: u64,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorEnvelope {
-    ok: bool,
-    error: crate::error::ErrorPayload,
-    meta: ErrorMeta,
 }
 
 fn elapsed_ms(start: Instant) -> u64 {
@@ -55,17 +24,11 @@ pub fn emit_success<T: Serialize>(
     extras: MetaExtras,
     exit_code: ExitCode,
 ) -> ExitCode {
-    let envelope = SuccessEnvelope {
-        ok: true,
-        data,
-        meta: Meta {
-            tool: tool.to_string(),
-            elapsed: elapsed_ms(start),
-            count: extras.count,
-            total: extras.total,
-            has_more: extras.has_more,
-        },
-    };
+    let mut meta = EnvelopeMeta::new(tool, elapsed_ms(start));
+    meta.count = extras.count;
+    meta.total = extras.total;
+    meta.has_more = extras.has_more;
+    let envelope = SuccessEnvelope::new(data, meta);
 
     match serde_json::to_string(&envelope) {
         Ok(json) => {
@@ -88,10 +51,7 @@ pub fn emit_error(tool: &str, error: &CliError, start: Instant) -> ExitCode {
     let envelope = ErrorEnvelope {
         ok: false,
         error: error.payload(),
-        meta: ErrorMeta {
-            tool: tool.to_string(),
-            elapsed: elapsed_ms(start),
-        },
+        meta: EnvelopeMeta::new(tool, elapsed_ms(start)),
     };
 
     match serde_json::to_string(&envelope) {

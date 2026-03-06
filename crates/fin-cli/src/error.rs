@@ -1,4 +1,4 @@
-use serde::Serialize;
+use fin_sdk::contracts::ErrorPayload;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -55,13 +55,6 @@ impl ExitCode {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct ErrorPayload {
-    pub code: String,
-    pub message: String,
-    pub hint: String,
-}
-
 #[derive(Debug, Clone)]
 pub struct CliError {
     pub code: ErrorCode,
@@ -79,11 +72,7 @@ impl CliError {
     }
 
     pub fn payload(&self) -> ErrorPayload {
-        ErrorPayload {
-            code: self.code.as_str().to_string(),
-            message: self.message.clone(),
-            hint: self.hint.clone(),
-        }
+        ErrorPayload::new(self.code.as_str(), &self.message, &self.hint)
     }
 
     pub const fn exit_code(&self) -> ExitCode {

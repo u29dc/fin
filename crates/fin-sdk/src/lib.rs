@@ -21,6 +21,10 @@ pub use compat::{
     AccountSummary, ConfigShowData, ConfigValidationResult, FinSdkError, GroupMetadata,
     ValidationError, build_config_show, resolve_config_path, run_health, validate_config,
 };
+pub use contracts::{
+    Envelope, EnvelopeMeta, ErrorEnvelope, ErrorPayload, GlobalFlag, OutputFieldSchema,
+    OutputSchema, ParameterMeta, SuccessEnvelope, ToolMeta, global_flags, tool_registry,
+};
 pub use db::schema::{REQUIRED_TABLES, SCHEMA_VERSION};
 pub use error::{FinError, Result};
 pub use health::{

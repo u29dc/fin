@@ -1,0 +1,843 @@
+{
+  "ok": true,
+  "data": {
+    "globalFlags": [
+      {
+        "description": "Output as JSON envelope",
+        "name": "--json"
+      },
+      {
+        "description": "Override database path",
+        "name": "--db"
+      },
+      {
+        "description": "Output format (table|tsv)",
+        "name": "--format"
+      }
+    ],
+    "tools": [
+      {
+        "category": "config",
+        "command": "fin config show",
+        "description": "Show parsed configuration",
+        "example": "fin config show --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "config.show",
+        "outputFields": [
+          "groups",
+          "accounts",
+          "financial",
+          "configPath"
+        ],
+        "parameters": [],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "config",
+        "command": "fin config validate",
+        "description": "Validate config file",
+        "example": "fin config validate --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "config.validate",
+        "outputFields": [
+          "valid",
+          "errors",
+          "configPath"
+        ],
+        "parameters": [],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "edit",
+        "command": "fin edit transaction",
+        "description": "Edit transaction description/account",
+        "example": "fin edit transaction <id> --description=... --json",
+        "idempotent": false,
+        "interactiveOnly": false,
+        "name": "edit.transaction",
+        "outputFields": [
+          "entryId",
+          "dryRun",
+          "accountCreated",
+          "changes"
+        ],
+        "parameters": [
+          {
+            "description": "Journal entry id",
+            "name": "<id>",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "New description",
+            "name": "--description",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "New expense account id",
+            "name": "--account",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Preview only",
+            "name": "--dry-run",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": false,
+        "supportsJson": true
+      },
+      {
+        "category": "import",
+        "command": "fin import",
+        "description": "Import transactions from inbox",
+        "example": "fin import --json",
+        "idempotent": false,
+        "interactiveOnly": false,
+        "name": "import",
+        "outputFields": [
+          "processedFiles",
+          "archivedFiles",
+          "skippedFiles",
+          "totalTransactions",
+          "uniqueTransactions",
+          "duplicateTransactions",
+          "journalEntriesAttempted",
+          "journalEntriesCreated",
+          "transferPairsCreated",
+          "entryErrors",
+          "accountsTouched",
+          "unmappedDescriptions"
+        ],
+        "parameters": [
+          {
+            "description": "Override inbox directory",
+            "name": "--inbox",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": false,
+        "supportsJson": true
+      },
+      {
+        "category": "report",
+        "command": "fin report audit",
+        "description": "Payee drill-down for expense account",
+        "example": "fin report audit --account=Expenses:Uncategorized --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "report.audit",
+        "outputFields": [
+          "payees",
+          "total"
+        ],
+        "parameters": [
+          {
+            "description": "Expense account id",
+            "name": "--account",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Months window",
+            "name": "--months",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Max rows",
+            "name": "--limit",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "report",
+        "command": "fin report cashflow",
+        "description": "Monthly cashflow series",
+        "example": "fin report cashflow --group=personal --months=6 --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "report.cashflow",
+        "outputFields": [
+          "series",
+          "totals"
+        ],
+        "parameters": [
+          {
+            "description": "Group id",
+            "name": "--group",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Months window",
+            "name": "--months",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Start date YYYY-MM-DD",
+            "name": "--from",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "report",
+        "command": "fin report categories",
+        "description": "Category breakdown or monthly median",
+        "example": "fin report categories --group=personal --mode=breakdown --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "report.categories",
+        "outputFields": [
+          "categories",
+          "estimatedMonthly",
+          "total"
+        ],
+        "parameters": [
+          {
+            "description": "Group id",
+            "name": "--group",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "breakdown|median",
+            "name": "--mode",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Months window",
+            "name": "--months",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Max rows",
+            "name": "--limit",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "report",
+        "command": "fin report health",
+        "description": "Financial health series",
+        "example": "fin report health --group=personal --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "report.health",
+        "outputFields": [
+          "series",
+          "latest"
+        ],
+        "parameters": [
+          {
+            "description": "Group id",
+            "name": "--group",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Start date YYYY-MM-DD",
+            "name": "--from",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "report",
+        "command": "fin report reserves",
+        "description": "Reserve breakdown series",
+        "example": "fin report reserves --group=business --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "report.reserves",
+        "outputFields": [
+          "series",
+          "latest"
+        ],
+        "parameters": [
+          {
+            "description": "Group id",
+            "name": "--group",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Start date YYYY-MM-DD",
+            "name": "--from",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "report",
+        "command": "fin report runway",
+        "description": "Runway projection series",
+        "example": "fin report runway --group=personal --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "report.runway",
+        "outputFields": [
+          "series",
+          "latest",
+          "groups"
+        ],
+        "parameters": [
+          {
+            "description": "Group id",
+            "name": "--group",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Consolidated mode",
+            "name": "--consolidated",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Groups csv for consolidated",
+            "name": "--include",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Start date YYYY-MM-DD",
+            "name": "--from",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "report",
+        "command": "fin report summary",
+        "description": "Comprehensive summary payload",
+        "example": "fin report summary --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "report.summary",
+        "outputFields": [
+          "generatedAt",
+          "periodMonths",
+          "currency",
+          "groups",
+          "consolidated",
+          "balanceSheet"
+        ],
+        "parameters": [
+          {
+            "description": "Months window",
+            "name": "--months",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "rules",
+        "command": "fin rules migrate-ts",
+        "description": "Migrate legacy TypeScript rules to JSON",
+        "example": "fin rules migrate-ts --json",
+        "idempotent": false,
+        "interactiveOnly": false,
+        "name": "rules.migrate_ts",
+        "outputFields": [
+          "sourcePath",
+          "targetPath",
+          "ruleCount",
+          "warnOnUnmapped",
+          "fallbackToRaw"
+        ],
+        "parameters": [
+          {
+            "description": "Source fin.rules.ts path",
+            "name": "--source",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Target fin.rules.json path",
+            "name": "--target",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": false,
+        "supportsJson": true
+      },
+      {
+        "category": "rules",
+        "command": "fin rules show",
+        "description": "Show merged rules metadata",
+        "example": "fin rules show --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "rules.show",
+        "outputFields": [
+          "rulesPath",
+          "externalLoaded",
+          "ruleCount",
+          "warnOnUnmapped",
+          "fallbackToRaw"
+        ],
+        "parameters": [
+          {
+            "description": "Override rules path",
+            "name": "--path",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "rules",
+        "command": "fin rules validate",
+        "description": "Validate JSON rules file",
+        "example": "fin rules validate --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "rules.validate",
+        "outputFields": [
+          "valid",
+          "errors",
+          "rulesPath",
+          "externalLoaded",
+          "ruleCount"
+        ],
+        "parameters": [
+          {
+            "description": "Override rules path",
+            "name": "--path",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "sanitize",
+        "command": "fin sanitize discover",
+        "description": "Discover description patterns",
+        "example": "fin sanitize discover --unmapped --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "sanitize.discover",
+        "outputFields": [
+          "descriptions",
+          "count"
+        ],
+        "parameters": [
+          {
+            "description": "Only include unmapped descriptions",
+            "name": "--unmapped",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Minimum occurrences",
+            "name": "--min",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Filter account id",
+            "name": "--account",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "sanitize",
+        "command": "fin sanitize migrate",
+        "description": "Apply description sanitization rules",
+        "example": "fin sanitize migrate --dry-run --json",
+        "idempotent": false,
+        "interactiveOnly": false,
+        "name": "sanitize.migrate",
+        "outputFields": [
+          "plan",
+          "result"
+        ],
+        "parameters": [
+          {
+            "description": "Preview changes only",
+            "name": "--dry-run",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": false,
+        "supportsJson": true
+      },
+      {
+        "category": "sanitize",
+        "command": "fin sanitize recategorize",
+        "description": "Recategorize uncategorized postings",
+        "example": "fin sanitize recategorize --dry-run --json",
+        "idempotent": false,
+        "interactiveOnly": false,
+        "name": "sanitize.recategorize",
+        "outputFields": [
+          "plan",
+          "result"
+        ],
+        "parameters": [
+          {
+            "description": "Preview changes only",
+            "name": "--dry-run",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": false,
+        "supportsJson": true
+      },
+      {
+        "category": "system",
+        "command": "fin health",
+        "description": "Check prerequisites and local runtime health",
+        "example": "fin health --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "health",
+        "outputFields": [
+          "checks",
+          "status",
+          "summary"
+        ],
+        "parameters": [],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "system",
+        "command": "fin tools",
+        "description": "Capability discovery and contract metadata",
+        "example": "fin tools --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "tools",
+        "outputFields": [
+          "globalFlags",
+          "tool",
+          "tools",
+          "version"
+        ],
+        "parameters": [
+          {
+            "description": "Tool name to inspect in detail",
+            "name": "name",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "system",
+        "command": "fin version",
+        "description": "Print version and sdk identity",
+        "example": "fin version --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "version",
+        "outputFields": [
+          "sdk",
+          "tool"
+        ],
+        "parameters": [],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "tui",
+        "command": "fin start",
+        "description": "Launch fin terminal UI (interactive only; not supported with --json)",
+        "example": "fin start",
+        "idempotent": true,
+        "interactiveOnly": true,
+        "name": "tui.start",
+        "outputFields": [
+          "binary",
+          "exitCode"
+        ],
+        "parameters": [],
+        "rateLimit": null,
+        "readOnly": false,
+        "supportsJson": false
+      },
+      {
+        "category": "view",
+        "command": "fin view accounts",
+        "description": "List accounts with balances",
+        "example": "fin view accounts --group=personal --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "view.accounts",
+        "outputFields": [
+          "accounts",
+          "total"
+        ],
+        "parameters": [
+          {
+            "description": "Filter by group",
+            "name": "--group",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "view",
+        "command": "fin view balance",
+        "description": "Show balance sheet",
+        "example": "fin view balance --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "view.balance",
+        "outputFields": [
+          "assets",
+          "liabilities",
+          "equity",
+          "income",
+          "expenses",
+          "netWorth",
+          "netIncome"
+        ],
+        "parameters": [
+          {
+            "description": "As-of date YYYY-MM-DD",
+            "name": "--as-of",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "view",
+        "command": "fin view ledger",
+        "description": "Query journal entries with postings",
+        "example": "fin view ledger --limit=50 --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "view.ledger",
+        "outputFields": [
+          "entries",
+          "count",
+          "total"
+        ],
+        "parameters": [
+          {
+            "description": "Filter account id",
+            "name": "--account",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Start date YYYY-MM-DD",
+            "name": "--from",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Maximum rows",
+            "name": "--limit",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "view",
+        "command": "fin view transactions",
+        "description": "Query transactions",
+        "example": "fin view transactions --group=personal --limit=50 --json",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "view.transactions",
+        "outputFields": [
+          "transactions",
+          "count"
+        ],
+        "parameters": [
+          {
+            "description": "Filter account id",
+            "name": "--account",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Filter group id",
+            "name": "--group",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Start date YYYY-MM-DD",
+            "name": "--from",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Description search",
+            "name": "--search",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Maximum rows",
+            "name": "--limit",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "view",
+        "command": "fin view void",
+        "description": "Create reversing journal entry",
+        "example": "fin view void <id> --json",
+        "idempotent": false,
+        "interactiveOnly": false,
+        "name": "view.void",
+        "outputFields": [
+          "originalEntryId",
+          "voidEntryId",
+          "postingsReversed",
+          "dryRun"
+        ],
+        "parameters": [
+          {
+            "description": "Journal entry id",
+            "name": "<id>",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Preview only",
+            "name": "--dry-run",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": false,
+        "supportsJson": true
+      }
+    ],
+    "version": "0.1.0"
+  },
+  "meta": {
+    "tool": "tools",
+    "elapsed": 0,
+    "count": 26
+  }
+}
