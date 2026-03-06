@@ -6,7 +6,8 @@ pub use context::{FetchContext, OverviewScope};
 pub use loaders::FetchClient;
 pub use models::{
     CashflowDashboardPayload, CategoriesDashboardPayload, OverviewDashboardPayload, RoutePayload,
-    SummaryDashboardPayload, TransactionsPayload, transaction_matches_query,
+    SummaryAllocation, SummaryDashboardPayload, SummaryGroupPanel, SummaryMonthSnapshot,
+    TransactionsPayload, transaction_matches_query,
 };
 
 #[cfg(test)]

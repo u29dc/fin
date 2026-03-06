@@ -1,3 +1,5 @@
+use fin_sdk::{AllocationBucket, ShortTermTrend};
+
 #[derive(Debug, Clone)]
 pub struct TransactionTableRow {
     pub posted_at: String,
@@ -30,31 +32,64 @@ pub struct TransactionsPayload {
 }
 
 #[derive(Debug, Clone)]
-pub struct GroupKpiRow {
+pub struct SummaryAllocationSegment {
+    pub bucket: AllocationBucket,
+    pub label: String,
+    pub amount_minor: i64,
+    pub share_pct: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct SummaryAllocation {
+    pub basis_label: String,
+    pub balance_basis_minor: i64,
+    pub display_total_minor: i64,
+    pub available_minor: i64,
+    pub expense_reserve_minor: i64,
+    pub expense_reserve_display_minor: i64,
+    pub tax_reserve_minor: i64,
+    pub emergency_fund_minor: i64,
+    pub savings_minor: i64,
+    pub investment_minor: i64,
+    pub shortfall_minor: i64,
+    pub under_reserved: bool,
+    pub segments: Vec<SummaryAllocationSegment>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SummaryMonthSnapshot {
+    pub month: String,
+    pub income_minor: i64,
+    pub expense_minor: i64,
+    pub net_minor: i64,
+    pub savings_rate_pct: Option<f64>,
+    pub income_change_pct: Option<f64>,
+    pub expense_change_pct: Option<f64>,
+    pub net_change_pct: Option<f64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SummaryGroupPanel {
     pub group_id: String,
+    pub label: String,
     pub net_worth_minor: i64,
     pub runway_months: Option<f64>,
     pub available_minor: Option<i64>,
     pub last_full_month_net_minor: Option<i64>,
     pub avg_six_month_net_minor: Option<i64>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ReserveGaugeRow {
-    pub group_id: String,
-    pub runway_months: Option<f64>,
-    pub available_minor: i64,
-    pub target_minor: i64,
-    pub expense_reserve_minor: i64,
-    pub tax_reserve_minor: i64,
+    pub median_spend_minor: Option<i64>,
+    pub short_term_trend: Option<ShortTermTrend>,
+    pub anomaly_count_last_12_months: usize,
+    pub recent_anomaly_months: Vec<String>,
+    pub allocation: SummaryAllocation,
+    pub last_month: Option<SummaryMonthSnapshot>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SummaryDashboardPayload {
     pub generated_at: String,
     pub consolidated_net_worth_minor: i64,
-    pub group_rows: Vec<GroupKpiRow>,
-    pub reserve_rows: Vec<ReserveGaugeRow>,
+    pub groups: Vec<SummaryGroupPanel>,
 }
 
 #[derive(Debug, Clone)]

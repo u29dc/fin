@@ -77,3 +77,86 @@ pub fn label_value_line(label: &str, value: String, theme: Theme) -> Line<'stati
         Span::styled(value, theme.body),
     ])
 }
+
+pub fn proportional_widths(values: &[i64], width: usize) -> Vec<usize> {
+    if values.is_empty() {
+        return Vec::new();
+    }
+    if width == 0 {
+        return vec![0; values.len()];
+    }
+
+    let positives = values
+        .iter()
+        .map(|value| (*value).max(0) as f64)
+        .collect::<Vec<_>>();
+    let total = positives.iter().sum::<f64>();
+    if total <= 0.0 {
+        return vec![0; values.len()];
+    }
+
+    let mut widths = vec![0usize; values.len()];
+    let mut remainders = Vec::new();
+    let mut used = 0usize;
+
+    for (index, value) in positives.iter().enumerate() {
+        if *value <= 0.0 {
+            continue;
+        }
+        let raw = (*value / total) * width as f64;
+        let base = raw.floor() as usize;
+        widths[index] = base;
+        used += base;
+        remainders.push((index, raw - base as f64, *value));
+    }
+
+    remainders.sort_by(|left, right| {
+        right
+            .1
+            .partial_cmp(&left.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                right
+                    .2
+                    .partial_cmp(&left.2)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| left.0.cmp(&right.0))
+    });
+
+    let mut remaining = width.saturating_sub(used);
+    for (index, _, _) in remainders {
+        if remaining == 0 {
+            break;
+        }
+        widths[index] += 1;
+        remaining -= 1;
+    }
+
+    widths
+}
+
+#[cfg(test)]
+mod tests {
+    use super::proportional_widths;
+
+    #[test]
+    fn proportional_widths_matches_requested_width() {
+        let widths = proportional_widths(&[500, 300, 200], 20);
+        assert_eq!(widths.iter().sum::<usize>(), 20);
+        assert!(widths[0] >= widths[1]);
+        assert!(widths[1] >= widths[2]);
+    }
+
+    #[test]
+    fn proportional_widths_handles_zero_width_and_values() {
+        assert_eq!(proportional_widths(&[1, 2, 3], 0), vec![0, 0, 0]);
+        assert_eq!(proportional_widths(&[0, 0, 0], 10), vec![0, 0, 0]);
+    }
+
+    #[test]
+    fn proportional_widths_assigns_remainder_to_larger_values() {
+        let widths = proportional_widths(&[9, 1], 3);
+        assert_eq!(widths, vec![3, 0]);
+    }
+}

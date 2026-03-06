@@ -3,9 +3,10 @@ use std::collections::{BTreeSet, HashMap};
 use fin_sdk::config::LoadedConfig;
 use fin_sdk::runtime::{RuntimeContext, RuntimeContextOptions};
 use fin_sdk::{
-    MonthlyCashflowPoint, TransactionQueryOptions, group_asset_account_ids,
-    group_category_breakdown, report_cashflow, report_reserves, report_runway, report_summary,
-    view_accounts, view_transactions,
+    DashboardAllocationBasis, MonthlyCashflowPoint, TransactionQueryOptions,
+    group_asset_account_ids, group_category_breakdown, report_cashflow, report_cashflow_kpis,
+    report_group_allocation, report_reserves, report_runway, report_summary, view_accounts,
+    view_transactions,
 };
 use rusqlite::{Connection, params_from_iter};
 
@@ -18,9 +19,9 @@ use super::context::{
 };
 use super::models::{
     AccountFreshnessRow, CashflowDashboardPayload, CashflowPoint, CategoriesDashboardPayload,
-    CategoryParetoPoint, CategoryStabilityRow, GroupKpiRow, OverviewDashboardPayload,
-    ReserveGaugeRow, RoutePayload, SummaryDashboardPayload, TransactionTableRow,
-    TransactionsPayload, UncategorizedLeakage,
+    CategoryParetoPoint, CategoryStabilityRow, OverviewDashboardPayload, RoutePayload,
+    SummaryAllocation, SummaryAllocationSegment, SummaryDashboardPayload, SummaryGroupPanel,
+    SummaryMonthSnapshot, TransactionTableRow, TransactionsPayload, UncategorizedLeakage,
 };
 
 #[derive(Debug, Default)]
@@ -85,14 +86,11 @@ fn fetch_summary_dashboard(
         context.trailing_months,
     )
     .map_err(|error| error.to_string())?;
-    let current_month = current_month(runtime.connection())?;
-
-    let mut group_rows = Vec::new();
-    let mut reserve_rows = Vec::new();
+    let mut groups = Vec::new();
 
     for group_id in runtime.config().group_ids() {
         let group = summary.groups.get(&group_id);
-        let (series, _) = report_cashflow(
+        let cashflow_kpis = report_cashflow_kpis(
             runtime.connection(),
             runtime.config(),
             &group_id,
@@ -101,48 +99,105 @@ fn fetch_summary_dashboard(
             None,
         )
         .map_err(|error| error.to_string())?;
-        let full_months = full_month_series(&series, &current_month);
-        let last_full_month_net_minor = full_months.last().map(|point| point.net_minor);
-        let avg_six_month_net_minor = average_last_n(full_months, 6, |point| point.net_minor);
+        let allocation = report_group_allocation(runtime.connection(), runtime.config(), &group_id)
+            .map_err(|error| error.to_string())?;
+        let dashboard = allocation.dashboard;
 
-        group_rows.push(GroupKpiRow {
+        let last_month = cashflow_kpis
+            .last_full_month
+            .as_ref()
+            .map(|point| SummaryMonthSnapshot {
+                month: point.month.clone(),
+                income_minor: point.income_minor,
+                expense_minor: point.expense_minor,
+                net_minor: point.net_minor,
+                savings_rate_pct: point.savings_rate_pct,
+                income_change_pct: pct_change(
+                    point.income_minor,
+                    cashflow_kpis
+                        .previous_full_month
+                        .as_ref()
+                        .map(|value| value.income_minor),
+                ),
+                expense_change_pct: pct_change(
+                    point.expense_minor,
+                    cashflow_kpis
+                        .previous_full_month
+                        .as_ref()
+                        .map(|value| value.expense_minor),
+                ),
+                net_change_pct: pct_change(
+                    point.net_minor,
+                    cashflow_kpis
+                        .previous_full_month
+                        .as_ref()
+                        .map(|value| value.net_minor),
+                ),
+            });
+
+        groups.push(SummaryGroupPanel {
             group_id: group_id.clone(),
+            label: group
+                .map(|value| value.label.clone())
+                .unwrap_or_else(|| group_id.clone()),
             net_worth_minor: group.map_or(0, |value| value.net_worth_minor),
             runway_months: group.and_then(|value| value.latest_runway_months),
-            available_minor: group.and_then(|value| value.latest_available_minor),
-            last_full_month_net_minor,
-            avg_six_month_net_minor,
-        });
-
-        let reserves = report_reserves(
-            runtime.connection(),
-            runtime.config(),
-            &group_id,
-            None,
-            None,
-        )
-        .map_err(|error| error.to_string())?;
-        let latest_reserve = reserves.last();
-        let expense_reserve_minor = latest_reserve.map_or(0, |value| value.expense_reserve_minor);
-        let tax_reserve_minor = latest_reserve.map_or(0, |value| value.tax_reserve_minor);
-        let available_minor = latest_reserve.map_or(0, |value| value.available_minor);
-
-        reserve_rows.push(ReserveGaugeRow {
-            group_id: group_id.clone(),
-            runway_months: group.and_then(|value| value.latest_runway_months),
-            available_minor,
-            target_minor: expense_reserve_minor + tax_reserve_minor,
-            expense_reserve_minor,
-            tax_reserve_minor,
+            available_minor: group
+                .and_then(|value| value.latest_available_minor)
+                .or(Some(dashboard.available_minor)),
+            last_full_month_net_minor: group.and_then(|value| value.last_full_month_net_minor),
+            avg_six_month_net_minor: group.and_then(|value| value.trailing_average_net_minor),
+            median_spend_minor: group.and_then(|value| value.median_spend_minor),
+            short_term_trend: group.and_then(|value| value.short_term_trend),
+            anomaly_count_last_12_months: group
+                .map_or(0, |value| value.anomaly_count_last_12_months),
+            recent_anomaly_months: cashflow_kpis.recent_anomaly_months,
+            allocation: SummaryAllocation {
+                basis_label: match dashboard.basis {
+                    DashboardAllocationBasis::PersonalBuffer => "personal buffer".to_owned(),
+                    DashboardAllocationBasis::ReserveComposition => {
+                        "reserve composition".to_owned()
+                    }
+                },
+                balance_basis_minor: dashboard.balance_basis_minor,
+                display_total_minor: dashboard.display_total_minor,
+                available_minor: dashboard.available_minor,
+                expense_reserve_minor: dashboard.expense_reserve_minor,
+                expense_reserve_display_minor: dashboard.expense_reserve_display_minor,
+                tax_reserve_minor: dashboard.tax_reserve_minor,
+                emergency_fund_minor: dashboard.emergency_fund_minor,
+                savings_minor: dashboard.savings_minor,
+                investment_minor: dashboard.investment_minor,
+                shortfall_minor: dashboard.shortfall_minor,
+                under_reserved: dashboard.under_reserved,
+                segments: dashboard
+                    .segments
+                    .into_iter()
+                    .map(|segment| SummaryAllocationSegment {
+                        bucket: segment.bucket,
+                        label: segment.label,
+                        amount_minor: segment.amount_minor,
+                        share_pct: segment.share_pct,
+                    })
+                    .collect(),
+            },
+            last_month,
         });
     }
 
     Ok(RoutePayload::SummaryDashboard(SummaryDashboardPayload {
         generated_at: summary.generated_at,
         consolidated_net_worth_minor: summary.consolidated.net_worth_minor,
-        group_rows,
-        reserve_rows,
+        groups,
     }))
+}
+
+fn pct_change(current: i64, previous: Option<i64>) -> Option<f64> {
+    let previous = previous?;
+    if previous == 0 {
+        return None;
+    }
+    Some(((current - previous) as f64 / previous.abs() as f64) * 100.0)
 }
 
 fn fetch_transactions(
@@ -747,8 +802,25 @@ mod tests {
             .expect("summary payload");
         match payload {
             RoutePayload::SummaryDashboard(payload) => {
-                assert_eq!(payload.group_rows.len(), 3);
-                assert_eq!(payload.reserve_rows.len(), 3);
+                assert_eq!(payload.groups.len(), 3);
+                assert!(
+                    payload
+                        .groups
+                        .iter()
+                        .all(|group| !group.allocation.segments.is_empty())
+                );
+                assert!(
+                    payload
+                        .groups
+                        .iter()
+                        .all(|group| group.last_month.as_ref().is_some())
+                );
+                assert!(
+                    payload
+                        .groups
+                        .iter()
+                        .all(|group| group.avg_six_month_net_minor.is_some())
+                );
             }
             other => panic!("unexpected payload: {other:?}"),
         }
