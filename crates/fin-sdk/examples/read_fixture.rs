@@ -7,7 +7,9 @@ use fin_sdk::queries::{
     LedgerQueryOptions, TransactionQueryOptions, group_asset_account_ids, view_accounts,
     view_ledger, view_transactions,
 };
-use fin_sdk::reports::{report_cashflow, report_reserves, report_runway, report_summary};
+use fin_sdk::reports::{
+    report_cashflow, report_health, report_reserves, report_runway, report_summary,
+};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -106,6 +108,12 @@ fn main() {
             serde_json::to_writer(std::io::stdout(), &payload)
                 .expect("write summary dashboard payload");
         }
+        "summary-report" => {
+            let payload = run_iterations(iterations, || {
+                report_summary(&connection, &loaded.config, 12).expect("summary report")
+            });
+            serde_json::to_writer(std::io::stdout(), &payload).expect("write summary report");
+        }
         "transactions-personal" => {
             let payload = run_iterations(iterations, || {
                 view_transactions(
@@ -142,6 +150,53 @@ fn main() {
                 ]),
             )
             .expect("write cashflow");
+        }
+        "cashflow" => {
+            let group_id = args.next().unwrap_or_else(|| "business".to_owned());
+            let months = args
+                .next()
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(24);
+            let (series, totals) = run_iterations(iterations, || {
+                report_cashflow(&connection, &loaded.config, &group_id, months, None, None)
+                    .expect("cashflow")
+            });
+            serde_json::to_writer(
+                std::io::stdout(),
+                &BTreeMap::from([
+                    (
+                        "series",
+                        serde_json::to_value(series).expect("series value"),
+                    ),
+                    (
+                        "totals",
+                        serde_json::to_value(totals).expect("totals value"),
+                    ),
+                ]),
+            )
+            .expect("write cashflow");
+        }
+        "health" => {
+            let group_id = args.next().unwrap_or_else(|| "business".to_owned());
+            let payload = run_iterations(iterations, || {
+                report_health(&connection, &loaded.config, &group_id, None, None).expect("health")
+            });
+            serde_json::to_writer(std::io::stdout(), &payload).expect("write health");
+        }
+        "runway" => {
+            let group_id = args.next().unwrap_or_else(|| "business".to_owned());
+            let payload = run_iterations(iterations, || {
+                report_runway(&connection, &loaded.config, &group_id, None, None).expect("runway")
+            });
+            serde_json::to_writer(std::io::stdout(), &payload).expect("write runway");
+        }
+        "reserves" => {
+            let group_id = args.next().unwrap_or_else(|| "business".to_owned());
+            let payload = run_iterations(iterations, || {
+                report_reserves(&connection, &loaded.config, &group_id, None, None)
+                    .expect("reserves")
+            });
+            serde_json::to_writer(std::io::stdout(), &payload).expect("write reserves");
         }
         "accounts" => {
             let group_id = args.next();
