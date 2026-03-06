@@ -4,6 +4,7 @@ pub mod categories;
 pub mod compat;
 pub mod config;
 pub mod contracts;
+pub mod dashboard;
 pub mod db;
 pub mod error;
 pub mod health;
@@ -14,6 +15,7 @@ pub mod reports;
 pub mod rules;
 pub mod runtime;
 pub mod sanitize;
+mod stats;
 pub mod testing;
 pub mod units;
 
@@ -25,6 +27,7 @@ pub use contracts::{
     Envelope, EnvelopeMeta, ErrorEnvelope, ErrorPayload, GlobalFlag, OutputFieldSchema,
     OutputSchema, ParameterMeta, SuccessEnvelope, ToolMeta, global_flags, tool_registry,
 };
+pub use dashboard::{CashflowKpis, ShortTermTrend, current_reporting_month, report_cashflow_kpis};
 pub use db::schema::{REQUIRED_TABLES, SCHEMA_VERSION};
 pub use error::{FinError, Result};
 pub use health::{

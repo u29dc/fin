@@ -4,11 +4,13 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 use crate::config::FinConfig;
+use crate::dashboard::{ShortTermTrend, report_cashflow_kpis};
 use crate::error::Result;
 use crate::queries::{
     MonthlyCashflowPoint, all_group_ids, consolidated_net_worth_by_group, get_balance_sheet,
     group_monthly_cashflow, view_accounts,
 };
+use crate::stats::{mean_i64, median_i64};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CashflowTotals {
@@ -48,6 +50,11 @@ pub struct GroupSummary {
     pub latest_runway_months: Option<f64>,
     pub latest_health_minor: Option<i64>,
     pub latest_available_minor: Option<i64>,
+    pub last_full_month_net_minor: Option<i64>,
+    pub trailing_average_net_minor: Option<i64>,
+    pub median_spend_minor: Option<i64>,
+    pub short_term_trend: Option<ShortTermTrend>,
+    pub anomaly_count_last_12_months: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,33 +71,11 @@ pub struct ConsolidatedSummary {
     pub balance_sheet: crate::queries::BalanceSheet,
 }
 
-fn median(values: &[i64]) -> i64 {
-    if values.is_empty() {
-        return 0;
-    }
-    let mut sorted = values.to_vec();
-    sorted.sort_unstable();
-    if sorted.len() % 2 == 1 {
-        sorted[sorted.len() / 2]
-    } else {
-        let left = sorted[(sorted.len() / 2) - 1];
-        let right = sorted[sorted.len() / 2];
-        (left + right) / 2
-    }
-}
-
-fn mean(values: &[i64]) -> i64 {
-    if values.is_empty() {
-        return 0;
-    }
-    values.iter().sum::<i64>() / i64::try_from(values.len()).unwrap_or(1)
-}
-
 fn burn_rate(values: &[i64], method: &str) -> i64 {
     if method == "mean" {
-        return mean(values);
+        return mean_i64(values).unwrap_or(0);
     }
-    median(values)
+    median_i64(values).unwrap_or(0)
 }
 
 fn group_total_balance(connection: &Connection, config: &FinConfig, group_id: &str) -> Result<i64> {
@@ -143,7 +128,7 @@ pub fn report_health(
         .iter()
         .map(|point| point.expense_minor)
         .collect::<Vec<_>>();
-    let typical_expense = median(&expenses);
+    let typical_expense = median_i64(&expenses).unwrap_or(0);
     let reserve = typical_expense * reserve_months;
     let mut balance = 0i64;
     let points = series
@@ -179,7 +164,7 @@ pub fn report_runway(
             .and_then(toml::Value::as_str)
             .unwrap_or("median"),
     );
-    let median_expense_minor = median(&burn_values);
+    let median_expense_minor = median_i64(&burn_values).unwrap_or(0);
     let mut rolling_balance = 0i64;
     let points = series
         .into_iter()
@@ -252,7 +237,7 @@ pub fn report_reserves(
         .iter()
         .map(|point| point.expense_minor)
         .collect::<Vec<_>>();
-    let typical_expense = median(&expenses);
+    let typical_expense = median_i64(&expenses).unwrap_or(0);
     let mut ytd_profit = 0i64;
     let mut balance = 0i64;
     let points = series
@@ -287,6 +272,7 @@ pub fn report_summary(
         let runway = report_runway(connection, config, &group_id, None, None)?;
         let health = report_health(connection, config, &group_id, None, None)?;
         let reserves = report_reserves(connection, config, &group_id, None, None)?;
+        let cashflow_kpis = report_cashflow_kpis(connection, config, &group_id, 120, None, None)?;
         groups.insert(
             group_id.clone(),
             GroupSummary {
@@ -295,6 +281,14 @@ pub fn report_summary(
                 latest_runway_months: runway.last().map(|point| point.runway_months),
                 latest_health_minor: health.last().map(|point| point.health_minor),
                 latest_available_minor: reserves.last().map(|point| point.available_minor),
+                last_full_month_net_minor: cashflow_kpis
+                    .last_full_month
+                    .as_ref()
+                    .map(|point| point.net_minor),
+                trailing_average_net_minor: cashflow_kpis.trailing_average_net_minor,
+                median_spend_minor: cashflow_kpis.median_spend_minor,
+                short_term_trend: cashflow_kpis.short_term_trend,
+                anomaly_count_last_12_months: cashflow_kpis.anomaly_count_last_12_months,
             },
         );
     }

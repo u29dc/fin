@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::FinConfig;
 use crate::error::Result;
+use crate::stats::{median_i64, round_ratio};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountBalanceRow {
@@ -72,6 +73,9 @@ pub struct MonthlyCashflowPoint {
     pub expense_minor: i64,
     pub net_minor: i64,
     pub savings_rate_pct: Option<f64>,
+    pub rolling_median_expense_minor: Option<i64>,
+    pub expense_deviation_ratio: Option<f64>,
+    pub is_anomaly: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -407,7 +411,7 @@ pub fn group_monthly_cashflow(
         let expense_minor: i64 = row.get(2)?;
         let net_minor = income_minor - expense_minor;
         let savings_rate_pct = if income_minor > 0 {
-            Some(((net_minor as f64) / (income_minor as f64)) * 100.0)
+            Some((((net_minor as f64) / (income_minor as f64)) * 1000.0).round() / 10.0)
         } else {
             None
         };
@@ -417,9 +421,47 @@ pub fn group_monthly_cashflow(
             expense_minor,
             net_minor,
             savings_rate_pct,
+            rolling_median_expense_minor: None,
+            expense_deviation_ratio: None,
+            is_anomaly: false,
         });
     }
-    Ok(points)
+    Ok(annotate_cashflow_rolling_stats(points))
+}
+
+fn annotate_cashflow_rolling_stats(
+    mut points: Vec<MonthlyCashflowPoint>,
+) -> Vec<MonthlyCashflowPoint> {
+    const ROLLING_WINDOW_MONTHS: usize = 6;
+    const MIN_HISTORY_MONTHS: usize = 3;
+    const HIGH_ANOMALY_RATIO: f64 = 1.2;
+    const LOW_ANOMALY_RATIO: f64 = 0.8;
+
+    for index in 0..points.len() {
+        let start = index.saturating_sub(ROLLING_WINDOW_MONTHS);
+        let prev_expenses = points[start..index]
+            .iter()
+            .map(|point| point.expense_minor)
+            .collect::<Vec<_>>();
+        if prev_expenses.len() < MIN_HISTORY_MONTHS {
+            continue;
+        }
+        let Some(rolling_median_expense_minor) = median_i64(&prev_expenses) else {
+            continue;
+        };
+        if rolling_median_expense_minor <= 0 {
+            continue;
+        }
+
+        let expense_deviation_ratio = round_ratio(
+            (points[index].expense_minor as f64) / (rolling_median_expense_minor as f64),
+        );
+        points[index].rolling_median_expense_minor = Some(rolling_median_expense_minor);
+        points[index].expense_deviation_ratio = Some(expense_deviation_ratio);
+        points[index].is_anomaly =
+            !(LOW_ANOMALY_RATIO..=HIGH_ANOMALY_RATIO).contains(&expense_deviation_ratio);
+    }
+    points
 }
 
 pub fn group_category_breakdown(
