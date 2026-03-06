@@ -359,10 +359,10 @@ impl App {
                     transaction_matches_query(row, &self.fetch_context.transactions.search_query)
                 })
                 .count(),
+            Some(RoutePayload::OverviewDashboard(payload)) => payload.accounts.len(),
             Some(RoutePayload::Text(_))
             | Some(RoutePayload::SummaryDashboard(_))
             | Some(RoutePayload::CashflowDashboard(_))
-            | Some(RoutePayload::OverviewDashboard(_))
             | Some(RoutePayload::CategoriesDashboard(_))
             | None => 0,
         }
@@ -780,7 +780,10 @@ mod tests {
 
     use super::{App, FocusTarget};
     use crate::{
-        fetch::{RoutePayload, TransactionTableRow, TransactionsPayload},
+        fetch::{
+            AccountFreshnessRow, OverviewDashboardPayload, RoutePayload, TransactionTableRow,
+            TransactionsPayload,
+        },
         routes::Route,
     };
 
@@ -801,6 +804,30 @@ mod tests {
                 rows,
                 limit: 1000,
                 has_more: false,
+            }),
+        );
+    }
+
+    fn seed_overview(app: &mut App, count: usize) {
+        let accounts = (0..count)
+            .map(|index| AccountFreshnessRow {
+                label: format!("Account {index}"),
+                balance_minor: (index as i64 + 1) * 1_000,
+                updated_at: Some("2026-03-01".to_owned()),
+                stale_days: Some(index as i64),
+                is_investment: index % 2 == 0,
+                history: Vec::new(),
+                contributions: Vec::new(),
+            })
+            .collect::<Vec<_>>();
+        app.cache.store(
+            app.fetch_context.route_cache_key(Route::Overview),
+            RoutePayload::OverviewDashboard(OverviewDashboardPayload {
+                scope_label: "all accounts".to_owned(),
+                total_balance_minor: accounts.iter().map(|row| row.balance_minor).sum(),
+                scope_history: Vec::new(),
+                projection: None,
+                accounts,
             }),
         );
     }
@@ -850,6 +877,23 @@ mod tests {
 
         app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(app.selected_row(), 4);
+    }
+
+    #[test]
+    fn main_focus_moves_overview_selection() {
+        let mut app = App::new();
+        seed_overview(&mut app, 4);
+        app.set_route(Route::Overview);
+
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.focus, FocusTarget::Main);
+        assert_eq!(app.selected_row(), 0);
+
+        app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.selected_row(), 1);
+
+        app.on_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        assert_eq!(app.selected_row(), 3);
     }
 
     #[test]

@@ -1,4 +1,6 @@
-use fin_sdk::{AllocationBucket, ShortTermTrend};
+use fin_sdk::{
+    AllocationBucket, ContributionPoint, DailyBalancePoint, RunwayProjectionReport, ShortTermTrend,
+};
 
 #[derive(Debug, Clone)]
 pub struct TransactionTableRow {
@@ -160,12 +162,17 @@ pub struct AccountFreshnessRow {
     pub balance_minor: i64,
     pub updated_at: Option<String>,
     pub stale_days: Option<i64>,
+    pub is_investment: bool,
+    pub history: Vec<DailyBalancePoint>,
+    pub contributions: Vec<ContributionPoint>,
 }
 
 #[derive(Debug, Clone)]
 pub struct OverviewDashboardPayload {
     pub scope_label: String,
     pub total_balance_minor: i64,
+    pub scope_history: Vec<DailyBalancePoint>,
+    pub projection: Option<RunwayProjectionReport>,
     pub accounts: Vec<AccountFreshnessRow>,
 }
 

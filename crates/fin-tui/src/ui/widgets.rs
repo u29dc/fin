@@ -1,9 +1,4 @@
-use ratatui::{
-    Frame,
-    layout::Rect,
-    text::{Line, Span},
-    widgets::Paragraph,
-};
+use ratatui::{Frame, layout::Rect, widgets::Paragraph};
 
 use crate::theme::Theme;
 
@@ -69,13 +64,6 @@ pub fn truncate_text(value: &str, max_len: usize) -> String {
     let mut output = value.chars().take(max_len - 3).collect::<String>();
     output.push_str("...");
     output
-}
-
-pub fn label_value_line(label: &str, value: String, theme: Theme) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(label.to_owned(), theme.section_heading),
-        Span::styled(value, theme.body),
-    ])
 }
 
 pub fn proportional_widths(values: &[i64], width: usize) -> Vec<usize> {

@@ -27,7 +27,9 @@ pub fn render_payload(frame: &mut Frame<'_>, area: Rect, app: &App, payload: &Ro
         }
         RoutePayload::SummaryDashboard(payload) => summary::render(frame, area, payload, app),
         RoutePayload::CashflowDashboard(payload) => cashflow::render(frame, area, payload, app),
-        RoutePayload::OverviewDashboard(payload) => overview::render(frame, area, payload, app),
+        RoutePayload::OverviewDashboard(payload) => {
+            overview::render(frame, area, app.selected_row(), payload, app)
+        }
         RoutePayload::CategoriesDashboard(payload) => categories::render(frame, area, payload, app),
     }
 }

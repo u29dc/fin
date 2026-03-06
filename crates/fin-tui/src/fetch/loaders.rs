@@ -3,10 +3,12 @@ use std::collections::{BTreeSet, HashMap};
 use fin_sdk::config::LoadedConfig;
 use fin_sdk::runtime::{RuntimeContext, RuntimeContextOptions};
 use fin_sdk::{
-    DashboardAllocationBasis, MonthlyCashflowPoint, TransactionQueryOptions,
-    group_asset_account_ids, group_category_breakdown, report_cashflow, report_cashflow_kpis,
-    report_group_allocation, report_reserves, report_runway, report_summary, view_accounts,
-    view_transactions,
+    BalanceSeriesQueryOptions, DashboardAllocationBasis, MonthlyCashflowPoint,
+    RunwayProjectionOptions, TransactionQueryOptions, all_accounts_daily_balance_series,
+    cumulative_contribution_series, group_asset_account_ids, group_category_breakdown,
+    merged_accounts_daily_balance_series, project_consolidated_runway, project_group_runway,
+    report_cashflow, report_cashflow_kpis, report_group_allocation, report_reserves, report_runway,
+    report_summary, view_accounts, view_transactions,
 };
 use rusqlite::{Connection, params_from_iter};
 
@@ -376,31 +378,112 @@ fn fetch_overview_dashboard(
             .then(left.id.cmp(&right.id))
     });
 
-    if accounts.len() > context.max_accounts {
-        accounts.truncate(context.max_accounts);
-    }
+    let scope_account_ids = accounts
+        .iter()
+        .map(|account| account.id.clone())
+        .collect::<Vec<_>>();
+    let scope_total_balance_minor = accounts
+        .iter()
+        .map(|account| account.balance_minor.unwrap_or(0))
+        .sum::<i64>();
 
-    let rows = accounts
+    let displayed_accounts = if accounts.len() > context.max_accounts {
+        accounts
+            .into_iter()
+            .take(context.max_accounts)
+            .collect::<Vec<_>>()
+    } else {
+        accounts
+    };
+
+    let series_options = BalanceSeriesQueryOptions {
+        limit: 180,
+        downsample_min_step_days: Some(7),
+        ..BalanceSeriesQueryOptions::default()
+    };
+    let displayed_account_ids = displayed_accounts
+        .iter()
+        .map(|account| account.id.clone())
+        .collect::<Vec<_>>();
+    let history_by_account = all_accounts_daily_balance_series(
+        runtime.connection(),
+        &displayed_account_ids,
+        &series_options,
+    )
+    .map_err(|error| error.to_string())?;
+    let scope_history = merged_accounts_daily_balance_series(
+        runtime.connection(),
+        &scope_account_ids,
+        &series_options,
+    )
+    .map_err(|error| error.to_string())?;
+    let projection_options = RunwayProjectionOptions {
+        months: 12,
+        ..RunwayProjectionOptions::default()
+    };
+    let projection = match scope {
+        OverviewScope::All => Some(
+            project_consolidated_runway(
+                runtime.connection(),
+                runtime.config(),
+                &runtime.config().group_ids(),
+                &projection_options,
+            )
+            .map_err(|error| error.to_string())?,
+        ),
+        OverviewScope::Group(group) => Some(
+            project_group_runway(
+                runtime.connection(),
+                runtime.config(),
+                group,
+                &projection_options,
+            )
+            .map_err(|error| error.to_string())?,
+        ),
+    };
+
+    let rows = displayed_accounts
         .into_iter()
-        .map(|account| {
+        .map(|account| -> Result<AccountFreshnessRow, String> {
             let stale_days = account
                 .updated_at
                 .as_deref()
                 .and_then(|value| days_since(runtime.connection(), value).ok());
-            AccountFreshnessRow {
+            let is_investment = runtime
+                .config()
+                .account_by_id(&account.id)
+                .and_then(|config| config.subtype.as_deref())
+                .map(|subtype| subtype.eq_ignore_ascii_case("investment"))
+                .unwrap_or(false);
+            Ok(AccountFreshnessRow {
                 label: account.name,
                 balance_minor: account.balance_minor.unwrap_or(0),
                 updated_at: account.updated_at,
                 stale_days,
-            }
+                is_investment,
+                history: history_by_account
+                    .get(&account.id)
+                    .cloned()
+                    .unwrap_or_default(),
+                contributions: if is_investment {
+                    cumulative_contribution_series(
+                        runtime.connection(),
+                        &account.id,
+                        &series_options,
+                    )
+                    .map_err(|error| error.to_string())?
+                } else {
+                    Vec::new()
+                },
+            })
         })
-        .collect::<Vec<_>>();
-
-    let total_balance_minor = rows.iter().map(|row| row.balance_minor).sum::<i64>();
+        .collect::<Result<Vec<_>, String>>()?;
 
     Ok(RoutePayload::OverviewDashboard(OverviewDashboardPayload {
         scope_label: scope.label(),
-        total_balance_minor,
+        total_balance_minor: scope_total_balance_minor,
+        scope_history,
+        projection,
         accounts: rows,
     }))
 }
@@ -858,6 +941,24 @@ mod tests {
                 );
             }
             other => panic!("unexpected cashflow payload: {other:?}"),
+        }
+
+        let overview = client
+            .fetch_route(Route::Overview, &FetchContext::default())
+            .expect("overview payload");
+        match overview {
+            RoutePayload::OverviewDashboard(payload) => {
+                assert!(!payload.accounts.is_empty());
+                assert!(!payload.scope_history.is_empty());
+                assert!(payload.projection.is_some());
+                assert!(
+                    payload
+                        .accounts
+                        .iter()
+                        .any(|account| !account.history.is_empty())
+                );
+            }
+            other => panic!("unexpected overview payload: {other:?}"),
         }
     }
 }
