@@ -4,6 +4,7 @@ members = [
   "crates/fin-sdk",
   "crates/fin-cli",
   "crates/fin-tui",
+  "crates/fin-api",
 ]
 
 [workspace.package]
