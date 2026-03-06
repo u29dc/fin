@@ -13,8 +13,11 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+axum.workspace = true
 clap.workspace = true
 fin-sdk = { path = "../fin-sdk" }
+serde.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tempfile = "3.19.1"
