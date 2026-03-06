@@ -1,19 +1,12 @@
-import {
-	fallbackGroupMetadata,
-	fallbackGroups,
-	placeholderConnection,
-	resolveGroup,
-	resolveSort,
-	resolveSortDirection,
-} from "$lib/server/skeleton";
+import { loadShellState } from "$lib/server/api";
+import { resolveGroup, resolveSort, resolveSortDirection } from "$lib/server/skeleton";
 
-export function load({ url }: { url: URL }) {
+export async function load({ url }: { url: URL }) {
+	const shell = await loadShellState();
 	return {
-		availableGroups: fallbackGroups,
-		groupMetadata: fallbackGroupMetadata,
-		initialGroup: resolveGroup(url),
+		...shell,
+		initialGroup: resolveGroup(url, shell.availableGroups),
 		initialSort: resolveSort(url),
 		initialDir: resolveSortDirection(url),
-		connection: placeholderConnection,
 	};
 }

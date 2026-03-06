@@ -2,6 +2,7 @@
 	import Briefcase from '@lucide/svelte/icons/briefcase';
 	import Building from '@lucide/svelte/icons/building';
 	import Heart from '@lucide/svelte/icons/heart';
+import Home from '@lucide/svelte/icons/home';
 	import Layers from '@lucide/svelte/icons/layers';
 	import LayoutGrid from '@lucide/svelte/icons/layout-grid';
 	import List from '@lucide/svelte/icons/list';
@@ -33,6 +34,7 @@
 		briefcase: Briefcase,
 		user: User,
 		heart: Heart,
+		home: Home,
 		building: Building,
 		wallet: Wallet,
 		'piggy-bank': PiggyBank,

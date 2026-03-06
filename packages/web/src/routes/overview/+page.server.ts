@@ -1,9 +1,5 @@
-import { fallbackGroupMetadata, fallbackGroups, placeholderConnection } from "$lib/server/skeleton";
+import { loadShellState } from "$lib/server/api";
 
-export function load() {
-	return {
-		availableGroups: fallbackGroups,
-		groupMetadata: fallbackGroupMetadata,
-		connection: placeholderConnection,
-	};
+export async function load() {
+	return loadShellState();
 }

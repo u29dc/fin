@@ -27,9 +27,9 @@ export const placeholderConnection: ConnectionState = {
 	detail: "The archived shell is restored. Route data will be rewired to fin-api in the next ticket.",
 };
 
-export function resolveGroup(url: URL): GroupId {
+export function resolveGroup(url: URL, availableGroups: readonly string[] = fallbackGroups): GroupId {
 	const group = url.searchParams.get("group");
-	return group && DEFAULT_GROUPS.some(([id]) => id === group) ? group : fallbackGroups[0] ?? "personal";
+	return group && availableGroups.includes(group) ? group : availableGroups[0] ?? "personal";
 }
 
 export function resolveSort(url: URL): "postedAt" | "cleanDescription" | "pairAccountId" | "amountMinor" {
