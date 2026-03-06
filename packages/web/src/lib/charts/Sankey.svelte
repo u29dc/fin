@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { echarts, createSankeyOption, type ColorScheme, type SankeyNode, type SankeyLink } from './echarts';
+	import { loadEchartsRuntime, type EChartsType, type EchartsRuntime } from './runtime';
+	import type { ColorScheme, SankeyLink, SankeyNode } from './types';
 
 	type Props = {
 		nodes: SankeyNode[];
@@ -12,30 +13,43 @@
 	const { nodes, links, colorScheme = 'dark', compact = false }: Props = $props();
 
 	let container: HTMLDivElement;
-	let chart: ReturnType<typeof echarts.init> | null = null;
+	let chart: EChartsType | null = null;
+	let runtime: EchartsRuntime | null = $state(null);
 
 	function initChart() {
-		if (!container) return;
+		let resizeObserver: ResizeObserver | null = null;
+		let disposed = false;
 
-		chart = echarts.init(container, undefined, { renderer: 'canvas' });
-		updateChart();
+		void (async () => {
+			if (!container) return;
 
-		const resizeObserver = new ResizeObserver(() => {
-			chart?.resize();
-		});
-		resizeObserver.observe(container);
+			runtime = await loadEchartsRuntime();
+			if (disposed) {
+				return;
+			}
+
+			chart = runtime.echarts.init(container, undefined, { renderer: 'canvas' });
+			updateChart();
+
+			resizeObserver = new ResizeObserver(() => {
+				chart?.resize();
+			});
+			resizeObserver.observe(container);
+		})();
 
 		return () => {
-			resizeObserver.disconnect();
+			disposed = true;
+			resizeObserver?.disconnect();
 			chart?.dispose();
 			chart = null;
+			runtime = null;
 		};
 	}
 
 	function updateChart() {
-		if (!chart) return;
+		if (!chart || !runtime) return;
 
-		const option = createSankeyOption(nodes, links, colorScheme, compact);
+		const option = runtime.createSankeyOption(nodes, links, colorScheme, compact);
 		chart.setOption(option, true);
 	}
 

@@ -231,6 +231,7 @@
 		{groupMetadata}
 		loading={connection.loading}
 		error={connection.error}
+		detail={connection.detail}
 	/>
 
 	<section class="border border-border bg-panel flex-1 min-h-0 grid xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)] fade-in overflow-hidden">

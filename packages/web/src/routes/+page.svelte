@@ -7,7 +7,8 @@
 	import Sankey from "$lib/charts/Sankey.svelte";
 	import SeriesChart from "$lib/charts/SeriesChart.svelte";
 	import Treemap from "$lib/charts/Treemap.svelte";
-	import { SANKEY_PALETTE, type SankeyLink, type SankeyNode, type TreemapDataItem } from "$lib/charts/echarts";
+	import { SANKEY_PALETTE } from "$lib/charts/palette";
+	import type { SankeyLink, SankeyNode, TreemapDataItem } from "$lib/charts/types";
 	import { SEMANTIC_COLORS, type BalancePoint, type CashflowPoint, type InvestmentPoint } from "$lib/charts/utils";
 	import Header from "$lib/Header.svelte";
 	import { theme } from "$lib/theme.svelte";
@@ -271,6 +272,7 @@
 		allGroupsActive={isLargeScreen}
 		loading={connection.loading}
 		error={connection.error}
+		detail={connection.detail}
 	/>
 
 	{#if !hasRenderableData}

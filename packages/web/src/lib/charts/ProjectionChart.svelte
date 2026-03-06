@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 
 	import { theme } from '$lib/theme.svelte';
-	import { echarts, ECHARTS_COLORS, DEFAULT_FONT_FAMILY, LINE_SEMANTIC_COLORS, formatGbpMinor } from './echarts';
+	import { loadEchartsRuntime, type EChartsType, type EchartsRuntime } from './runtime';
 	import type { ProjectionPoint } from './utils';
 
 	type Props = {
@@ -26,12 +26,11 @@
 	}: Props = $props();
 
 	let container: HTMLDivElement | null = $state(null);
-	let chart: ReturnType<typeof echarts.init> | null = null;
+	let chart: EChartsType | null = null;
+	let runtime: EchartsRuntime | null = $state(null);
 	let hoverValueLabel: string | null = $state(null);
 
 	const colorScheme = $derived(theme.resolved);
-	const colors = $derived(ECHARTS_COLORS[colorScheme]);
-	const semantic = $derived(LINE_SEMANTIC_COLORS[colorScheme]);
 
 	function formatThresholdLabel(value: number): string {
 		if (Math.abs(value) >= 1000) {
@@ -41,6 +40,13 @@
 	}
 
 	function buildChartOption() {
+		if (!runtime) {
+			return null;
+		}
+		const loadedRuntime = runtime;
+		const colors = loadedRuntime.ECHARTS_COLORS[colorScheme];
+		const semantic = loadedRuntime.LINE_SEMANTIC_COLORS[colorScheme];
+
 		// Convert data to [date, value] format (value in pounds, not pence)
 		const currentData = currentBurn.map((p) => [p.date, p.balanceMinor / 100] as [string, number]);
 		const minimumData = minimumBurn.map((p) => [p.date, p.balanceMinor / 100] as [string, number]);
@@ -54,7 +60,7 @@
 							formatter: formatThresholdLabel(warningLine),
 							position: "end",
 							color: colors.textMuted,
-							fontFamily: DEFAULT_FONT_FAMILY,
+							fontFamily: loadedRuntime.DEFAULT_FONT_FAMILY,
 							fontSize: 11,
 						},
 						lineStyle: {
@@ -73,7 +79,7 @@
 							formatter: formatThresholdLabel(threshold),
 							position: "end",
 							color: colors.textMuted,
-							fontFamily: DEFAULT_FONT_FAMILY,
+							fontFamily: loadedRuntime.DEFAULT_FONT_FAMILY,
 							fontSize: 11,
 						},
 						lineStyle: {
@@ -98,11 +104,11 @@
 				trigger: 'axis',
 				backgroundColor: colors.tooltip.background,
 				borderColor: colors.tooltip.border,
-				textStyle: {
-					color: colors.tooltip.text,
-					fontFamily: DEFAULT_FONT_FAMILY,
-					fontSize: 12,
-				},
+					textStyle: {
+						color: colors.tooltip.text,
+						fontFamily: loadedRuntime.DEFAULT_FONT_FAMILY,
+						fontSize: 12,
+					},
 				formatter: (params: unknown) => {
 					const p = params as { dataIndex?: number }[];
 					const dataIndex = p[0]?.dataIndex;
@@ -116,9 +122,9 @@
 								month: 'short',
 								year: 'numeric',
 							});
-							hoverValueLabel = `${dateStr} (Month ${current.month})\nCurrent: ${formatGbpMinor(current.balanceMinor)}\nMinimum: ${formatGbpMinor(minimum.balanceMinor)}`;
+							hoverValueLabel = `${dateStr} (Month ${current.month})\nCurrent: ${loadedRuntime.formatGbpMinor(current.balanceMinor)}\nMinimum: ${loadedRuntime.formatGbpMinor(minimum.balanceMinor)}`;
 						}
-						return `<span style="font-family: ${DEFAULT_FONT_FAMILY}; font-size: 11px; white-space: pre-line;">${hoverValueLabel}</span>`;
+						return `<span style="font-family: ${loadedRuntime.DEFAULT_FONT_FAMILY}; font-size: 11px; white-space: pre-line;">${hoverValueLabel}</span>`;
 					}
 					return '';
 				},
@@ -131,21 +137,21 @@
 					label: {
 						backgroundColor: colorScheme === 'dark' ? '#1b1e22' : '#f3f4f6',
 						color: colors.text,
-						fontFamily: DEFAULT_FONT_FAMILY,
+						fontFamily: loadedRuntime.DEFAULT_FONT_FAMILY,
 						fontSize: 11,
 					},
 				},
 			},
-			xAxis: {
-				type: 'time',
-				show: !compact,
-				axisLine: { show: false },
-				axisTick: { show: false },
-				axisLabel: {
-					color: colors.textMuted,
-					fontFamily: DEFAULT_FONT_FAMILY,
-					fontSize: 11,
-				},
+				xAxis: {
+					type: 'time',
+					show: !compact,
+					axisLine: { show: false },
+					axisTick: { show: false },
+					axisLabel: {
+						color: colors.textMuted,
+						fontFamily: loadedRuntime.DEFAULT_FONT_FAMILY,
+						fontSize: 11,
+					},
 				splitLine: {
 					show: !compact,
 					lineStyle: {
@@ -161,9 +167,9 @@
 				axisTick: { show: false },
 				axisLabel: {
 					color: colors.textMuted,
-					fontFamily: DEFAULT_FONT_FAMILY,
+					fontFamily: loadedRuntime.DEFAULT_FONT_FAMILY,
 					fontSize: 11,
-					formatter: (value: number) => formatGbpMinor(value * 100),
+					formatter: (value: number) => loadedRuntime.formatGbpMinor(value * 100),
 				},
 				splitLine: {
 					show: true,
@@ -229,36 +235,53 @@
 			return;
 		}
 
-		chart.setOption(buildChartOption(), true);
+		const option = buildChartOption();
+		if (!option) {
+			return;
+		}
+		chart.setOption(option, true);
 	}
 
 	onMount(() => {
-		if (!container) {
-			return;
-		}
-
-		chart = echarts.init(container, undefined, { renderer: 'canvas' });
-		render();
-
-		const resizeObserver = new ResizeObserver(() => {
-			chart?.resize();
-		});
-		resizeObserver.observe(container);
-
-		container.addEventListener('mouseleave', () => {
+		let resizeObserver: ResizeObserver | null = null;
+		let disposed = false;
+		const handleMouseLeave = () => {
 			hoverValueLabel = null;
-		});
+		};
+
+		void (async () => {
+			if (!container) {
+				return;
+			}
+
+			runtime = await loadEchartsRuntime();
+			if (disposed || !container) {
+				return;
+			}
+
+			chart = runtime.echarts.init(container, undefined, { renderer: 'canvas' });
+			render();
+
+			resizeObserver = new ResizeObserver(() => {
+				chart?.resize();
+			});
+			resizeObserver.observe(container);
+			container.addEventListener('mouseleave', handleMouseLeave);
+		})();
 
 		return () => {
-			resizeObserver.disconnect();
+			disposed = true;
+			resizeObserver?.disconnect();
+			container?.removeEventListener('mouseleave', handleMouseLeave);
 			chart?.dispose();
 			chart = null;
+			runtime = null;
 		};
 	});
 
 	// Re-render when data, theme, or compact changes
 	$effect(() => {
-		if (currentBurn && minimumBurn && colorScheme !== undefined) {
+		if (currentBurn && minimumBurn && colorScheme !== undefined && runtime) {
 			compact;
 			threshold;
 			warningLine;

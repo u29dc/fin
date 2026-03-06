@@ -24,9 +24,20 @@ import Home from '@lucide/svelte/icons/home';
 		allGroupsActive?: boolean;
 		loading?: boolean;
 		error?: string | null;
+		detail?: string | null;
 	};
 
-	const { activePage, activeGroup, onGroupChange, availableGroups, groupMetadata, allGroupsActive = false, loading = false, error = null }: Props =
+	const {
+		activePage,
+		activeGroup,
+		onGroupChange,
+		availableGroups,
+		groupMetadata,
+		allGroupsActive = false,
+		loading = false,
+		error = null,
+		detail = null,
+	}: Props =
 		$props();
 
 	// Icon mapping from config icon names to Lucide components
@@ -78,6 +89,41 @@ import Home from '@lucide/svelte/icons/home';
 			const tabs = tablist?.querySelectorAll('[role="tab"]');
 			(tabs?.[newIndex] as HTMLElement)?.focus();
 		}
+	}
+
+	function deriveStatusLabel(): string {
+		if (loading) {
+			return "CONNECTING";
+		}
+		if (!error) {
+			return "API CONNECTED";
+		}
+		switch (error) {
+			case "api blocked":
+				return "API BLOCKED";
+			case "api degraded":
+				return "API DEGRADED";
+			case "health unavailable":
+				return "HEALTH UNKNOWN";
+			case "api unavailable":
+				return "API OFFLINE";
+			default:
+				return "API ERROR";
+		}
+	}
+
+	function statusToneClass(): string {
+		if (loading) {
+			return "text-pending";
+		}
+		return error ? "text-error" : "text-success";
+	}
+
+	function statusDotClass(): string {
+		if (loading) {
+			return "bg-pending";
+		}
+		return error ? "bg-error" : "bg-success";
 	}
 </script>
 
@@ -159,17 +205,14 @@ import Home from '@lucide/svelte/icons/home';
 
 	<!-- Right: Status + Theme -->
 	<div class="flex items-center gap-3">
-		<div class="text-xs uppercase tracking-wider flex items-center gap-1.5" role="status" aria-live="polite">
-			{#if error}
-				<span class="hidden md:inline text-error">ERROR: {error}</span>
-				<span class="size-1.5 rounded-full shrink-0 bg-error"></span>
-			{:else if loading}
-				<span class="hidden md:inline text-pending">CONNECTING</span>
-				<span class="size-1.5 rounded-full shrink-0 bg-pending"></span>
-			{:else}
-				<span class="hidden md:inline text-success">API CONNECTED</span>
-				<span class="size-1.5 rounded-full shrink-0 bg-success"></span>
-			{/if}
+		<div
+			class="text-xs uppercase tracking-wider flex items-center gap-1.5"
+			role="status"
+			aria-live="polite"
+			title={detail ?? undefined}
+		>
+			<span class={`hidden md:inline ${statusToneClass()}`}>{deriveStatusLabel()}</span>
+			<span class={`size-1.5 rounded-full shrink-0 ${statusDotClass()}`}></span>
 		</div>
 		<ThemeToggle />
 	</div>

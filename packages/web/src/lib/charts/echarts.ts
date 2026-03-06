@@ -3,57 +3,15 @@ import { DataZoomComponent, GridComponent, LegendComponent, MarkLineComponent, T
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 
+import { DEFAULT_FONT_FAMILY, ECHARTS_COLORS, TREEMAP_PALETTE } from './palette';
+import type { ColorScheme, LineChartDataPoint, LineChartOptions, LineSeriesDefinition, SankeyLink, SankeyNode, TreemapDataItem } from './types';
+
 // Register required components
 echarts.use([LineChart, TreemapChart, SankeyChart, CanvasRenderer, GridComponent, TooltipComponent, TitleComponent, LegendComponent, DataZoomComponent, MarkLineComponent, VisualMapComponent]);
 
 export { echarts };
-
-export type ColorScheme = 'light' | 'dark';
-
-export const ECHARTS_COLORS = {
-	light: {
-		background: 'transparent',
-		text: '#374151',
-		textMuted: '#6b7280',
-		border: 'rgba(0, 0, 0, 0.08)',
-		tooltip: {
-			background: '#ffffff',
-			border: '#e5e7eb',
-			text: '#374151',
-		},
-	},
-	dark: {
-		background: 'transparent',
-		text: '#e6e6e8',
-		textMuted: '#9aa0a6',
-		border: 'rgba(230, 230, 232, 0.08)',
-		tooltip: {
-			background: '#1b1e22',
-			border: '#2d3139',
-			text: '#e6e6e8',
-		},
-	},
-} as const;
-
-export const TREEMAP_PALETTE = {
-	light: ['#e2e8f0', '#d8dfe8', '#ced6e0', '#c4ccd6', '#bac3cd'], // very light grays
-	dark: ['#2d3139', '#282d34', '#23282f', '#1e2329', '#1a1e24'], // near-black grays
-};
-
-export const SANKEY_PALETTE = {
-	light: {
-		income: '#0d9488', // teal-600 (color-blind safe)
-		asset: '#94a3b8', // slate-400
-		expense: '#94a3b8', // slate-400
-	},
-	dark: {
-		income: '#2dd4bf', // teal-400 (color-blind safe)
-		asset: '#64748b', // slate-500
-		expense: '#64748b', // slate-500
-	},
-};
-
-export const DEFAULT_FONT_FAMILY = "'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace";
+export type { ColorScheme, LineChartDataPoint, LineChartOptions, LineSeriesDefinition, MarkLineItem, SankeyLink, SankeyNode, TreemapDataItem } from './types';
+export { DEFAULT_FONT_FAMILY, ECHARTS_COLORS, LINE_SEMANTIC_COLORS, SANKEY_PALETTE, TREEMAP_PALETTE } from './palette';
 
 export function formatGbpMinor(valueMinor: number): string {
 	const pounds = valueMinor / 100;
@@ -133,7 +91,7 @@ export function createTreemapOption(data: TreemapDataItem[], colorScheme: ColorS
 				data,
 			},
 		],
-		color: TREEMAP_PALETTE[colorScheme],
+		color: [...TREEMAP_PALETTE[colorScheme]],
 	};
 }
 
@@ -197,100 +155,6 @@ export function createSankeyOption(nodes: SankeyNode[], links: SankeyLink[], col
 		],
 	};
 }
-
-export type TreemapDataItem = {
-	name: string;
-	value: number;
-	children?: TreemapDataItem[];
-};
-
-export type SankeyNode = {
-	name: string;
-	itemStyle?: {
-		color: string;
-	};
-};
-
-export type SankeyLink = {
-	source: string;
-	target: string;
-	value: number;
-};
-
-// ============================================================================
-// Line Chart Types and Options
-// ============================================================================
-
-export type LineChartDataPoint = [string | number, number]; // [time, value]
-
-export type LineSeriesDefinition = {
-	key: string;
-	data: LineChartDataPoint[];
-	color: string;
-	lineStyle?: 'solid' | 'dashed' | 'dotted';
-	lineWidth?: number;
-	smooth?: boolean;
-	showSymbol?: boolean;
-	areaStyle?: {
-		color?: string | object;
-		opacity?: number;
-	};
-};
-
-export type MarkLineItem = {
-	yAxis: number;
-	name?: string;
-	label?: {
-		formatter?: string;
-		position?: 'start' | 'middle' | 'end';
-	};
-	lineStyle?: {
-		color?: string;
-		type?: 'solid' | 'dashed' | 'dotted';
-		width?: number;
-	};
-};
-
-export type LineChartOptions = {
-	colorScheme?: ColorScheme;
-	height?: number;
-	compact?: boolean;
-	showTooltip?: boolean;
-	formatTooltip?: (params: unknown) => string;
-	formatYAxis?: (value: number) => string;
-	markLines?: MarkLineItem[];
-	xAxisType?: 'time' | 'category';
-};
-
-// Semantic colors for income/expense visualizations (color-blind safe: teal/orange)
-export const LINE_SEMANTIC_COLORS = {
-	light: {
-		income: '#0d9488', // teal-600
-		incomeMuted: 'rgba(13, 148, 136, 0.6)',
-		incomeFill: 'rgba(13, 148, 136, 0.28)',
-		incomeFillFaint: 'rgba(13, 148, 136, 0.04)',
-		expense: '#ea580c', // orange-600
-		expenseMuted: 'rgba(234, 88, 12, 0.6)',
-		expenseFill: 'rgba(234, 88, 12, 0.28)',
-		expenseFillFaint: 'rgba(234, 88, 12, 0.04)',
-		warning: 'rgba(217, 119, 6, 0.8)', // amber-700
-		neutral: '#e6e6e8',
-		neutralMuted: 'rgba(230, 230, 232, 0.16)',
-	},
-	dark: {
-		income: '#2dd4bf', // teal-400
-		incomeMuted: 'rgba(45, 212, 191, 0.6)',
-		incomeFill: 'rgba(45, 212, 191, 0.28)',
-		incomeFillFaint: 'rgba(45, 212, 191, 0.04)',
-		expense: '#fb923c', // orange-400
-		expenseMuted: 'rgba(251, 146, 60, 0.6)',
-		expenseFill: 'rgba(251, 146, 60, 0.28)',
-		expenseFillFaint: 'rgba(251, 146, 60, 0.04)',
-		warning: 'rgba(240, 180, 41, 0.8)', // amber-400
-		neutral: '#e6e6e8',
-		neutralMuted: 'rgba(230, 230, 232, 0.16)',
-	},
-} as const;
 
 function mapLineStyle(style?: 'solid' | 'dashed' | 'dotted'): 'solid' | 'dashed' | 'dotted' {
 	return style ?? 'solid';

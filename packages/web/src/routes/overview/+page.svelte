@@ -254,6 +254,7 @@
 		allGroupsActive
 		loading={connection.loading}
 		error={connection.error}
+		detail={connection.detail}
 	/>
 
 	{#if hasOverviewData}

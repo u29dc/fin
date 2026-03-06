@@ -2,14 +2,8 @@
 	import { onMount } from 'svelte';
 
 	import { theme } from '$lib/theme.svelte';
-	import {
-		echarts,
-		createLineChartOption,
-		ECHARTS_COLORS,
-		DEFAULT_FONT_FAMILY,
-		type LineSeriesDefinition,
-		type MarkLineItem,
-	} from './echarts';
+	import { loadEchartsRuntime, type EChartsType, type EchartsRuntime } from './runtime';
+	import type { LineSeriesDefinition, MarkLineItem } from './types';
 	import { asRgba } from './utils';
 
 	type SeriesDefinition = {
@@ -58,15 +52,17 @@
 	}: Props = $props();
 
 	let container: HTMLDivElement | null = $state(null);
-	let chart: ReturnType<typeof echarts.init> | null = null;
+	let chart: EChartsType | null = null;
+	let runtime: EchartsRuntime | null = $state(null);
 
 	const colorScheme = $derived(theme.resolved);
 
 	// Memoize chart option - only recomputes when dependencies change
 	const chartOption = $derived.by(() => {
-		if (data.length === 0) {
+		if (data.length === 0 || !runtime) {
 			return null;
 		}
+		const loadedRuntime = runtime;
 
 		const echartsSeriesList: LineSeriesDefinition[] = [];
 
@@ -118,7 +114,7 @@
 			},
 		}));
 
-		return createLineChartOption(echartsSeriesList, {
+		return loadedRuntime.createLineChartOption(echartsSeriesList, {
 			colorScheme,
 			compact,
 			showTooltip: !compact,
@@ -129,7 +125,7 @@
 				const dataIndex = p[0]?.dataIndex;
 				if (dataIndex !== undefined && data[dataIndex]) {
 					const point = data[dataIndex];
-					return `<span style="font-family: ${DEFAULT_FONT_FAMILY}; font-size: 11px;">${formatHover(point)}</span>`;
+					return `<span style="font-family: ${loadedRuntime.DEFAULT_FONT_FAMILY}; font-size: 11px;">${formatHover(point)}</span>`;
 				}
 				return '';
 			},
@@ -145,22 +141,34 @@
 	}
 
 	onMount(() => {
-		if (!container) {
-			return;
-		}
+		let resizeObserver: ResizeObserver | null = null;
+		let disposed = false;
 
-		chart = echarts.init(container, undefined, { renderer: 'canvas' });
-		render();
+		void (async () => {
+			if (!container) {
+				return;
+			}
 
-		const resizeObserver = new ResizeObserver(() => {
-			chart?.resize();
-		});
-		resizeObserver.observe(container);
+			runtime = await loadEchartsRuntime();
+			if (disposed || !container) {
+				return;
+			}
+
+			chart = runtime.echarts.init(container, undefined, { renderer: 'canvas' });
+			render();
+
+			resizeObserver = new ResizeObserver(() => {
+				chart?.resize();
+			});
+			resizeObserver.observe(container);
+		})();
 
 		return () => {
-			resizeObserver.disconnect();
+			disposed = true;
+			resizeObserver?.disconnect();
 			chart?.dispose();
 			chart = null;
+			runtime = null;
 		};
 	});
 

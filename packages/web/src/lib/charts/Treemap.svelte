@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { echarts, createTreemapOption, type ColorScheme, type TreemapDataItem } from './echarts';
+	import { loadEchartsRuntime, type EChartsType, type EchartsRuntime } from './runtime';
+	import type { ColorScheme, TreemapDataItem } from './types';
 
 	type Props = {
 		data: TreemapDataItem[];
@@ -11,30 +12,43 @@
 	const { data, colorScheme = 'dark', compact = false }: Props = $props();
 
 	let container: HTMLDivElement;
-	let chart: ReturnType<typeof echarts.init> | null = null;
+	let chart: EChartsType | null = null;
+	let runtime: EchartsRuntime | null = $state(null);
 
 	function initChart() {
-		if (!container) return;
+		let resizeObserver: ResizeObserver | null = null;
+		let disposed = false;
 
-		chart = echarts.init(container, undefined, { renderer: 'canvas' });
-		updateChart();
+		void (async () => {
+			if (!container) return;
 
-		const resizeObserver = new ResizeObserver(() => {
-			chart?.resize();
-		});
-		resizeObserver.observe(container);
+			runtime = await loadEchartsRuntime();
+			if (disposed) {
+				return;
+			}
+
+			chart = runtime.echarts.init(container, undefined, { renderer: 'canvas' });
+			updateChart();
+
+			resizeObserver = new ResizeObserver(() => {
+				chart?.resize();
+			});
+			resizeObserver.observe(container);
+		})();
 
 		return () => {
-			resizeObserver.disconnect();
+			disposed = true;
+			resizeObserver?.disconnect();
 			chart?.dispose();
 			chart = null;
+			runtime = null;
 		};
 	}
 
 	function updateChart() {
-		if (!chart) return;
+		if (!chart || !runtime) return;
 
-		const option = createTreemapOption(data, colorScheme, compact);
+		const option = runtime.createTreemapOption(data, colorScheme, compact);
 		chart.setOption(option, true);
 	}
 

@@ -2,14 +2,8 @@
 	import { onMount } from 'svelte';
 
 	import { theme } from '$lib/theme.svelte';
-	import {
-		echarts,
-		createLineChartOption,
-		toEchartsLineData,
-		ECHARTS_COLORS,
-		DEFAULT_FONT_FAMILY,
-		type LineSeriesDefinition,
-	} from './echarts';
+	import { loadEchartsRuntime, type EChartsType, type EchartsRuntime } from './runtime';
+	import type { LineSeriesDefinition } from './types';
 
 	type Props = {
 		data: T[];
@@ -38,14 +32,20 @@
 	}: Props = $props();
 
 	let container: HTMLDivElement | null = $state(null);
-	let chart: ReturnType<typeof echarts.init> | null = null;
+	let chart: EChartsType | null = null;
+	let runtime: EchartsRuntime | null = $state(null);
 	let hoverValueLabel: string | null = $state(null);
 
 	const colorScheme = $derived(theme.resolved);
 
 	function buildChartOption() {
-		const colors = ECHARTS_COLORS[colorScheme];
-		const chartData = toEchartsLineData(data, getDate, getValue);
+		if (!runtime) {
+			return null;
+		}
+
+		const loadedRuntime = runtime;
+		const colors = loadedRuntime.ECHARTS_COLORS[colorScheme];
+		const chartData = loadedRuntime.toEchartsLineData(data, getDate, getValue);
 
 		const series: LineSeriesDefinition[] = [];
 
@@ -71,7 +71,7 @@
 			showSymbol: false,
 		});
 
-		const option = createLineChartOption(series, {
+		const option = loadedRuntime.createLineChartOption(series, {
 			colorScheme,
 			compact,
 			showTooltip: !compact,
@@ -88,7 +88,7 @@
 						year: 'numeric',
 					});
 					hoverValueLabel = formatValue(value);
-					return `<span style="font-family: ${DEFAULT_FONT_FAMILY}; font-size: 11px;">${dateStr}<br/><strong>${formatValue(value)}</strong></span>`;
+					return `<span style="font-family: ${loadedRuntime.DEFAULT_FONT_FAMILY}; font-size: 11px;">${dateStr}<br/><strong>${formatValue(value)}</strong></span>`;
 				}
 				return '';
 			},
@@ -102,31 +102,47 @@
 			return;
 		}
 
-		chart.setOption(buildChartOption(), true);
+		const option = buildChartOption();
+		if (!option) {
+			return;
+		}
+		chart.setOption(option, true);
 	}
 
 	onMount(() => {
-		if (!container) {
-			return;
-		}
-
-		chart = echarts.init(container, undefined, { renderer: 'canvas' });
-		render();
-
-		const resizeObserver = new ResizeObserver(() => {
-			chart?.resize();
-		});
-		resizeObserver.observe(container);
-
-		// Handle mouse leave to clear hover label
-		container.addEventListener('mouseleave', () => {
+		let resizeObserver: ResizeObserver | null = null;
+		let disposed = false;
+		const handleMouseLeave = () => {
 			hoverValueLabel = null;
-		});
+		};
+
+		void (async () => {
+			if (!container) {
+				return;
+			}
+
+			runtime = await loadEchartsRuntime();
+			if (disposed || !container) {
+				return;
+			}
+
+			chart = runtime.echarts.init(container, undefined, { renderer: 'canvas' });
+			render();
+
+			resizeObserver = new ResizeObserver(() => {
+				chart?.resize();
+			});
+			resizeObserver.observe(container);
+			container.addEventListener('mouseleave', handleMouseLeave);
+		})();
 
 		return () => {
-			resizeObserver.disconnect();
+			disposed = true;
+			resizeObserver?.disconnect();
+			container?.removeEventListener('mouseleave', handleMouseLeave);
 			chart?.dispose();
 			chart = null;
+			runtime = null;
 		};
 	});
 

@@ -21,12 +21,6 @@ export const fallbackGroups = DEFAULT_GROUPS.map(([id]) => id);
 
 export const fallbackGroupMetadata = Object.fromEntries(DEFAULT_GROUPS) as Record<GroupId, GroupMeta>;
 
-export const placeholderConnection: ConnectionState = {
-	loading: true,
-	error: "fin-api client pending",
-	detail: "The archived shell is restored. Route data will be rewired to fin-api in the next ticket.",
-};
-
 export function resolveGroup(url: URL, availableGroups: readonly string[] = fallbackGroups): GroupId {
 	const group = url.searchParams.get("group");
 	return group && availableGroups.includes(group) ? group : availableGroups[0] ?? "personal";
