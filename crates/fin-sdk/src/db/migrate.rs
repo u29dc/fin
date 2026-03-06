@@ -81,6 +81,12 @@ WHERE id IN (
 CREATE INDEX IF NOT EXISTS idx_journal_entries_is_transfer_posted ON journal_entries(is_transfer, posted_at);
 "#;
 
+const MIGRATION_V6_SQL: &str = r#"
+CREATE INDEX IF NOT EXISTS idx_postings_journal_entry_id ON postings(journal_entry_id, id);
+CREATE INDEX IF NOT EXISTS idx_postings_account_journal_entry_id ON postings(account_id, journal_entry_id, id);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_posted_id ON journal_entries(posted_at, id);
+"#;
+
 pub fn get_user_version(connection: &Connection) -> Result<i32> {
     connection
         .query_row("PRAGMA user_version", [], |row| row.get::<usize, i32>(0))
@@ -194,6 +200,9 @@ pub fn migrate_to_latest(connection: &mut Connection) -> Result<MigrationReport>
         )?;
         transaction.execute_batch(MIGRATION_V5_SQL)?;
     }
+    if current_version < 6 {
+        transaction.execute_batch(MIGRATION_V6_SQL)?;
+    }
 
     set_user_version(&transaction, SCHEMA_VERSION)?;
     transaction.commit().map_err(|error| FinError::Migration {
@@ -220,7 +229,7 @@ mod tests {
         let plan = plan_migrations(2);
         assert_eq!(plan.current_version, 2);
         assert_eq!(plan.target_version, SCHEMA_VERSION);
-        assert_eq!(plan.steps.len(), 3);
+        assert_eq!(plan.steps.len(), 4);
     }
 
     #[test]
@@ -235,6 +244,26 @@ mod tests {
         assert_eq!(
             missing_required_tables(&connection).expect("missing tables"),
             Vec::<&str>::new()
+        );
+    }
+
+    #[test]
+    fn migrate_to_latest_adds_transaction_query_index() {
+        let mut connection = Connection::open_in_memory().expect("open in-memory sqlite");
+        migrate_to_latest(&mut connection).expect("migrate");
+
+        let index_names = connection
+            .prepare("PRAGMA index_list(postings)")
+            .expect("prepare index list")
+            .query_map([], |row| row.get::<usize, String>(1))
+            .expect("query index list")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect index names");
+
+        assert!(
+            index_names
+                .iter()
+                .any(|name| name == "idx_postings_account_journal_entry_id")
         );
     }
 }

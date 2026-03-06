@@ -10,6 +10,7 @@ use fin_sdk::queries::{
 use fin_sdk::reports::{
     report_cashflow, report_health, report_reserves, report_runway, report_summary,
 };
+use fin_sdk::transactions::{TransactionPageQuery, query_transactions_page};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -130,6 +131,28 @@ fn main() {
                 .expect("transactions")
             });
             serde_json::to_writer(std::io::stdout(), &payload).expect("write transactions");
+        }
+        "transactions-page" => {
+            let group_id = args.next().unwrap_or_else(|| "personal".to_owned());
+            let limit = args
+                .next()
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(1_000);
+            let search = args.next().filter(|value| !value.is_empty());
+            let payload = run_iterations(iterations, || {
+                query_transactions_page(
+                    &connection,
+                    &loaded.config,
+                    &TransactionPageQuery {
+                        group_id: Some(group_id.clone()),
+                        search: search.clone(),
+                        limit,
+                        ..TransactionPageQuery::default()
+                    },
+                )
+                .expect("transaction page")
+            });
+            serde_json::to_writer(std::io::stdout(), &payload).expect("write transaction page");
         }
         "cashflow-business" => {
             let (series, totals) = run_iterations(iterations, || {

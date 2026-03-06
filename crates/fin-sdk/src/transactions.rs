@@ -136,6 +136,14 @@ struct BaseTransactionRow {
     counterparty: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct TransactionSqlPlan {
+    items_from_sql: String,
+    count_from_sql: String,
+    where_sql: String,
+    params: Vec<String>,
+}
+
 pub fn query_transactions_page(
     connection: &Connection,
     config: &FinConfig,
@@ -153,13 +161,21 @@ pub(crate) fn query_transactions_page_for_accounts(
     validate_cursor(query)?;
 
     let limit = normalize_limit(query.limit);
-    let (where_sql, mut params) = build_transaction_filters(chart_account_ids, query)?;
-    let total_count = count_transactions(connection, &where_sql, &params)?;
+    let plan = build_transaction_sql_plan(chart_account_ids, query)?;
+    let total_count = count_transactions(
+        connection,
+        &plan.count_from_sql,
+        &plan.where_sql,
+        &plan.params,
+    )?;
 
     let order_by = order_by_sql(query.sort_field, query.sort_direction);
+    let mut params = plan.params.clone();
     params.push((limit + 1).to_string());
     let sql = format!(
-        "SELECT p.id,\n                je.id,\n                p.account_id,\n                je.posted_at,\n                je.posted_date,\n                p.amount_minor,\n                p.currency,\n                COALESCE(je.raw_description, je.description),\n                COALESCE(je.clean_description, je.description),\n                je.counterparty\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         {where_sql}\n         ORDER BY {order_by}\n         LIMIT ?"
+        "SELECT p.id,\n                je.id,\n                p.account_id,\n                je.posted_at,\n                je.posted_date,\n                p.amount_minor,\n                p.currency,\n                COALESCE(je.raw_description, je.description),\n                COALESCE(je.clean_description, je.description),\n                je.counterparty\n         {items_from_sql}\n         {where_sql}\n         ORDER BY {order_by}\n         LIMIT ?",
+        items_from_sql = plan.items_from_sql,
+        where_sql = plan.where_sql,
     );
 
     let mut statement = connection.prepare(&sql)?;
@@ -327,28 +343,38 @@ fn normalize_limit(limit: usize) -> usize {
 
 fn count_transactions(
     connection: &Connection,
+    from_sql: &str,
     where_sql: &str,
     params: &[String],
 ) -> Result<usize> {
-    let sql = format!(
-        "SELECT COUNT(*)\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         {where_sql}"
-    );
+    let sql = format!("SELECT COUNT(*)\n         {from_sql}\n         {where_sql}");
     let count = connection.query_row(&sql, params_from_iter(params.iter()), |row| {
         row.get::<usize, i64>(0)
     })?;
     Ok(usize::try_from(count).unwrap_or_default())
 }
 
-fn build_transaction_filters(
+fn build_transaction_sql_plan(
     chart_account_ids: Option<&[String]>,
     query: &TransactionPageQuery,
-) -> Result<(String, Vec<String>)> {
-    let mut clauses = vec!["coa.account_type = 'asset'".to_owned()];
+) -> Result<TransactionSqlPlan> {
+    let mut clauses = Vec::new();
     let mut params = Vec::new();
+    let scoped_accounts = chart_account_ids.filter(|account_ids| !account_ids.is_empty());
 
-    if let Some(chart_account_ids) = chart_account_ids
-        && !chart_account_ids.is_empty()
-    {
+    let (items_from_sql, count_from_sql) = if scoped_accounts.is_some() {
+        let count_from_sql =
+            "FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id"
+                .to_owned();
+        let items_from_sql = count_from_sql.clone();
+        (items_from_sql, count_from_sql)
+    } else {
+        let generic_from_sql = "FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id".to_owned();
+        clauses.push("coa.account_type = 'asset'".to_owned());
+        (generic_from_sql.clone(), generic_from_sql)
+    };
+
+    if let Some(chart_account_ids) = scoped_accounts {
         let (account_clause, account_params) = account_match_clause("p", chart_account_ids);
         clauses.push(account_clause);
         params.extend(account_params);
@@ -387,7 +413,12 @@ fn build_transaction_filters(
         extend_cursor_params(&mut params, query.sort_field, cursor);
     }
 
-    Ok((format!("WHERE {}", clauses.join(" AND ")), params))
+    Ok(TransactionSqlPlan {
+        items_from_sql,
+        count_from_sql,
+        where_sql: format!("WHERE {}", clauses.join(" AND ")),
+        params,
+    })
 }
 
 fn cursor_clause(
@@ -554,16 +585,13 @@ fn load_pair_postings(
 }
 
 fn account_match_clause(alias: &str, account_ids: &[String]) -> (String, Vec<String>) {
-    let mut clauses = Vec::new();
-    let mut params = Vec::new();
-    for account_id in account_ids {
-        clauses.push(format!(
-            "({alias}.account_id = ? OR {alias}.account_id LIKE ?)"
-        ));
-        params.push(account_id.clone());
-        params.push(format!("{account_id}:%"));
-    }
-    (format!("({})", clauses.join(" OR ")), params)
+    (
+        format!(
+            "{alias}.account_id IN ({})",
+            placeholders(account_ids.len())
+        ),
+        account_ids.to_vec(),
+    )
 }
 
 fn placeholders(count: usize) -> String {
@@ -750,6 +778,35 @@ mod tests {
 
         assert_eq!(second_page_a.items, second_page_b.items);
         assert_eq!(second_page_a.next_cursor, second_page_b.next_cursor);
+    }
+
+    #[test]
+    fn explicit_chart_account_scope_only_returns_requested_account() {
+        let runtime = open_fixture();
+        let account_id = runtime
+            .config()
+            .accounts
+            .iter()
+            .find(|account| account.group == "personal" && account.id == "Assets:Personal:Checking")
+            .map(|account| account.id.clone())
+            .expect("personal checking");
+        let page = query_transactions_page(
+            runtime.connection(),
+            runtime.config(),
+            &TransactionPageQuery {
+                chart_account_ids: Some(vec![account_id.clone()]),
+                limit: 40,
+                ..TransactionPageQuery::default()
+            },
+        )
+        .expect("page");
+
+        assert!(!page.items.is_empty());
+        assert!(
+            page.items
+                .iter()
+                .all(|row| row.chart_account_id == account_id)
+        );
     }
 
     #[test]

@@ -7,11 +7,11 @@ pub struct MigrationMetadata {
     pub notes: &'static str,
 }
 
-pub const SCHEMA_VERSION: i32 = 5;
+pub const SCHEMA_VERSION: i32 = 6;
 
 pub const REQUIRED_TABLES: [&str; 3] = ["chart_of_accounts", "journal_entries", "postings"];
 
-pub const MIGRATION_METADATA: [MigrationMetadata; 5] = [
+pub const MIGRATION_METADATA: [MigrationMetadata; 6] = [
     MigrationMetadata {
         from_version: 0,
         to_version: 1,
@@ -46,6 +46,13 @@ pub const MIGRATION_METADATA: [MigrationMetadata; 5] = [
         name: "transfer-flag",
         parity_source: "archive:db/migrate:v5",
         notes: "Add is_transfer marker and transfer index.",
+    },
+    MigrationMetadata {
+        from_version: 5,
+        to_version: 6,
+        name: "transaction-query-indexes",
+        parity_source: "main:perf-003",
+        notes: "Add composite indexes for scoped transaction paging and ordering.",
     },
 ];
 
@@ -90,7 +97,10 @@ CREATE TABLE IF NOT EXISTS postings (
 CREATE INDEX IF NOT EXISTS idx_postings_journal_entry ON postings(journal_entry_id);
 CREATE INDEX IF NOT EXISTS idx_postings_account ON postings(account_id);
 CREATE INDEX IF NOT EXISTS idx_postings_journal_entry_account ON postings(journal_entry_id, account_id);
+CREATE INDEX IF NOT EXISTS idx_postings_journal_entry_id ON postings(journal_entry_id, id);
+CREATE INDEX IF NOT EXISTS idx_postings_account_journal_entry_id ON postings(account_id, journal_entry_id, id);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_posted ON journal_entries(posted_at);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_posted_id ON journal_entries(posted_at, id);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_posted_date ON journal_entries(posted_date);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_is_transfer_posted ON journal_entries(is_transfer, posted_at);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_source_file ON journal_entries(source_file);
