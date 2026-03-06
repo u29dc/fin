@@ -1,118 +1,234 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    text::Span,
-    widgets::{BarChart, Block, Borders, Cell, LineGauge, Paragraph, Row, Table},
+    text::{Line, Span},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Wrap},
 };
 
 use crate::{
     app::App,
     fetch::CategoriesDashboardPayload,
-    palette::{ACCENT_1, ACCENT_2, ACCENT_3},
-    ui::widgets::{format_minor_compact, sparkline_text, truncate_text},
+    palette::ACCENT_3,
+    ui::widgets::{format_minor_compact, render_empty_state, sparkline_text, truncate_text},
 };
 
 pub fn render(frame: &mut Frame<'_>, area: Rect, payload: &CategoriesDashboardPayload, app: &App) {
     let sections = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(8), Constraint::Length(4)])
+        .constraints([Constraint::Percentage(56), Constraint::Percentage(44)])
         .split(area);
     let top = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+        .constraints([Constraint::Percentage(46), Constraint::Percentage(54)])
         .split(sections[0]);
+    let bottom = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(6), Constraint::Length(4)])
+        .split(sections[1]);
 
-    let bars = payload
-        .pareto
-        .iter()
-        .map(|point| {
-            (
-                truncate_text(&point.category, 18),
-                (point.total_minor.abs() / 100).max(0) as u64,
-            )
-        })
-        .collect::<Vec<_>>();
-    let bar_refs = bars
-        .iter()
-        .map(|(label, value)| (label.as_str(), *value))
-        .collect::<Vec<_>>();
-    let pareto_max = bars.iter().map(|(_, value)| *value).max().unwrap_or(1);
-    let pareto_chart = BarChart::default()
-        .data(&bar_refs)
-        .bar_width(7)
-        .bar_gap(1)
-        .bar_style(app.theme.body.fg(ACCENT_2))
-        .value_style(app.theme.body.fg(ACCENT_1))
-        .label_style(app.theme.footer_meta)
-        .max(pareto_max)
-        .block(Block::default().borders(Borders::ALL).title(Span::styled(
-            format!(" Pareto ({}, {}m) ", payload.group_id, payload.months.len()),
-            app.theme.section_heading,
-        )));
-    frame.render_widget(pareto_chart, top[0]);
+    render_pareto(frame, top[0], payload, app);
+    render_hierarchy(frame, top[1], payload, app);
+    render_flow(frame, bottom[0], payload, app);
+    render_leakage(frame, bottom[1], payload, app);
+}
 
-    let stability_header = Row::new(vec![
+fn render_pareto(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    payload: &CategoriesDashboardPayload,
+    app: &App,
+) {
+    if payload.pareto.is_empty() {
+        render_empty_state(frame, area, "No pareto categories.", app.theme);
+        return;
+    }
+
+    let header = Row::new(vec![
         Cell::from("category").style(app.theme.section_heading),
         Cell::from("trend").style(app.theme.section_heading),
+        Cell::from("txns").style(app.theme.section_heading),
+        Cell::from("share").style(app.theme.section_heading),
         Cell::from("total").style(app.theme.section_heading),
     ]);
-    let stability_rows = payload.stability.iter().map(|row| {
+    let rows = payload.pareto.iter().map(|point| {
+        let stability = payload
+            .stability
+            .iter()
+            .find(|row| row.category == point.category);
+        let trend = stability
+            .map(|row| sparkline_text(&row.month_values_minor))
+            .unwrap_or_else(|| "-".to_owned());
+        let total_minor = stability
+            .map(|row| row.total_minor)
+            .unwrap_or(point.total_minor);
         Row::new(vec![
-            Cell::from(truncate_text(&row.category, 14)),
-            Cell::from(sparkline_text(&row.month_values_minor)),
+            Cell::from(truncate_text(&point.category, 18)),
+            Cell::from(trend),
+            Cell::from(point.transaction_count.to_string()),
+            Cell::from(format!("{:.1}%", point.share_pct)),
+            Cell::from(format_minor_compact(total_minor)),
+        ])
+    });
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Min(14),
+            Constraint::Length(8),
+            Constraint::Length(5),
+            Constraint::Length(7),
+            Constraint::Length(10),
+        ],
+    )
+    .header(header)
+    .column_spacing(1)
+    .block(Block::default().borders(Borders::ALL).title(Span::styled(
+        format!(" Pareto ({}, {}m) ", payload.group_id, payload.months.len()),
+        app.theme.section_heading,
+    )));
+    frame.render_widget(table, area);
+}
+
+fn render_hierarchy(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    payload: &CategoriesDashboardPayload,
+    app: &App,
+) {
+    if payload.hierarchy.is_empty() {
+        render_empty_state(frame, area, "No hierarchy rows.", app.theme);
+        return;
+    }
+
+    let header = Row::new(vec![
+        Cell::from("tree").style(app.theme.section_heading),
+        Cell::from("root %").style(app.theme.section_heading),
+        Cell::from("amount").style(app.theme.section_heading),
+    ]);
+    let rows = payload.hierarchy.iter().map(|row| {
+        let indent = "  ".repeat(row.depth.min(4));
+        let label = format!(
+            "{indent}{}",
+            truncate_text(&row.label, 22usize.saturating_sub(row.depth * 2))
+        );
+        Row::new(vec![
+            Cell::from(label),
+            Cell::from(format!("{:.1}%", row.share_of_root_pct)),
             Cell::from(format_minor_compact(row.total_minor)),
         ])
     });
-    let stability_table = Table::new(
-        stability_rows,
+    let table = Table::new(
+        rows,
         [
-            Constraint::Length(15),
+            Constraint::Min(18),
             Constraint::Length(8),
-            Constraint::Length(12),
+            Constraint::Length(10),
         ],
     )
-    .header(stability_header)
+    .header(header)
     .column_spacing(1)
-    .block(Block::default().borders(Borders::ALL).title(Span::styled(
-        " Category Stability (6 Full Months) ",
-        app.theme.section_heading,
-    )));
-    frame.render_widget(stability_table, top[1]);
-
-    let leakage_ratio = (payload.leakage.leakage_pct / 100.0).clamp(0.0, 1.0);
-    let top = payload.pareto.first();
-    let leakage = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
-        .split(sections[1]);
-    frame.render_widget(
-        Paragraph::new(format!(
-            "Uncategorized leakage: {} ({:.2}%) count={} total_expense={} | top={} ({:.1}%, {} txns)",
-            format_minor_compact(payload.leakage.uncategorized_minor),
-            payload.leakage.leakage_pct,
-            payload.leakage.uncategorized_count,
-            format_minor_compact(payload.leakage.total_expense_minor),
-            top.map(|point| point.category.as_str()).unwrap_or("n/a"),
-            top.map(|point| point.share_pct).unwrap_or(0.0),
-            top.map(|point| point.transaction_count).unwrap_or(0),
-        ))
-        .style(app.theme.footer_meta),
-        leakage[0],
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(" Expense Tree ", app.theme.section_heading)),
     );
-    frame.render_widget(
-        LineGauge::default()
-            .ratio(leakage_ratio)
-            .filled_style(app.theme.body.fg(ACCENT_3))
-            .unfilled_style(app.theme.footer_meta)
-            .line_set(ratatui::symbols::line::THICK)
-            .label(Span::styled(
-                format!("{:.2}% uncategorized", payload.leakage.leakage_pct),
-                app.theme.footer_meta,
+    frame.render_widget(table, area);
+}
+
+fn render_flow(frame: &mut Frame<'_>, area: Rect, payload: &CategoriesDashboardPayload, app: &App) {
+    if payload.flow.is_empty() {
+        render_empty_state(frame, area, "No flow edges.", app.theme);
+        return;
+    }
+
+    let header = Row::new(vec![
+        Cell::from("from").style(app.theme.section_heading),
+        Cell::from("to").style(app.theme.section_heading),
+        Cell::from("amount").style(app.theme.section_heading),
+        Cell::from("share").style(app.theme.section_heading),
+    ]);
+    let rows = payload.flow.iter().map(|row| {
+        Row::new(vec![
+            Cell::from(truncate_text(&row.source_label, 14)),
+            Cell::from(truncate_text(&row.target_label, 14)),
+            Cell::from(format_minor_compact(row.amount_minor)),
+            Cell::from(format!(
+                "{:.0}%/{:.0}%",
+                row.share_of_total_pct, row.share_of_source_pct
             )),
-        leakage[1],
+        ])
+    });
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(15),
+            Constraint::Length(15),
+            Constraint::Length(10),
+            Constraint::Length(9),
+        ],
+    )
+    .header(header)
+    .column_spacing(1)
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(" Flow Matrix ", app.theme.section_heading)),
+    );
+    frame.render_widget(table, area);
+}
+
+fn render_leakage(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    payload: &CategoriesDashboardPayload,
+    app: &App,
+) {
+    let top = payload.pareto.first();
+    let lines = vec![
+        Line::from(vec![
+            Span::styled("uncategorized ", app.theme.section_heading),
+            Span::styled(
+                format!(
+                    "{} ({:.2}%) count {}",
+                    format_minor_compact(payload.leakage.uncategorized_minor),
+                    payload.leakage.leakage_pct,
+                    payload.leakage.uncategorized_count,
+                ),
+                if payload.leakage.leakage_pct >= 5.0 {
+                    app.theme.body.fg(ACCENT_3)
+                } else {
+                    app.theme.body
+                },
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("expense base ", app.theme.section_heading),
+            Span::styled(
+                format_minor_compact(payload.leakage.total_expense_minor),
+                app.theme.footer_meta,
+            ),
+            Span::styled(" | top category ", app.theme.section_heading),
+            Span::styled(
+                top.map(|point| format!("{} {:.1}%", point.category, point.share_pct))
+                    .unwrap_or_else(|| "n/a".to_owned()),
+                app.theme.footer_meta,
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("read order ", app.theme.section_heading),
+            Span::styled(
+                "pareto -> tree -> flow to trace concentration, structure, then movement",
+                app.theme.footer_meta,
+            ),
+        ]),
+    ];
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(Span::styled(" Leakage + Guide ", app.theme.section_heading)),
+            )
+            .wrap(Wrap { trim: false }),
+        area,
     );
 }

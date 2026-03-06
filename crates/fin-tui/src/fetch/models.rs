@@ -148,12 +148,31 @@ pub struct UncategorizedLeakage {
 }
 
 #[derive(Debug, Clone)]
+pub struct ExpenseTreeRow {
+    pub depth: usize,
+    pub label: String,
+    pub total_minor: i64,
+    pub share_of_root_pct: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct FlowMatrixRow {
+    pub source_label: String,
+    pub target_label: String,
+    pub amount_minor: i64,
+    pub share_of_total_pct: f64,
+    pub share_of_source_pct: f64,
+}
+
+#[derive(Debug, Clone)]
 pub struct CategoriesDashboardPayload {
     pub group_id: String,
     pub pareto: Vec<CategoryParetoPoint>,
     pub months: Vec<String>,
     pub stability: Vec<CategoryStabilityRow>,
     pub leakage: UncategorizedLeakage,
+    pub hierarchy: Vec<ExpenseTreeRow>,
+    pub flow: Vec<FlowMatrixRow>,
 }
 
 #[derive(Debug, Clone)]

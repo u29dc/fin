@@ -3,9 +3,10 @@ use std::collections::{BTreeSet, HashMap};
 use fin_sdk::config::LoadedConfig;
 use fin_sdk::runtime::{RuntimeContext, RuntimeContextOptions};
 use fin_sdk::{
-    BalanceSeriesQueryOptions, DashboardAllocationBasis, MonthlyCashflowPoint,
-    RunwayProjectionOptions, TransactionQueryOptions, all_accounts_daily_balance_series,
-    cumulative_contribution_series, group_asset_account_ids, group_category_breakdown,
+    BalanceSeriesQueryOptions, DashboardAllocationBasis, FlowQueryOptions, HierarchyQueryOptions,
+    MonthlyCashflowPoint, RollupMode, RunwayProjectionOptions, TransactionQueryOptions,
+    all_accounts_daily_balance_series, cumulative_contribution_series, group_asset_account_ids,
+    group_category_breakdown, group_expense_hierarchy, group_flow_graph,
     merged_accounts_daily_balance_series, project_consolidated_runway, project_group_runway,
     report_cashflow, report_cashflow_kpis, report_group_allocation, report_reserves, report_runway,
     report_summary, view_accounts, view_transactions,
@@ -21,9 +22,10 @@ use super::context::{
 };
 use super::models::{
     AccountFreshnessRow, CashflowDashboardPayload, CashflowPoint, CategoriesDashboardPayload,
-    CategoryParetoPoint, CategoryStabilityRow, OverviewDashboardPayload, RoutePayload,
-    SummaryAllocation, SummaryAllocationSegment, SummaryDashboardPayload, SummaryGroupPanel,
-    SummaryMonthSnapshot, TransactionTableRow, TransactionsPayload, UncategorizedLeakage,
+    CategoryParetoPoint, CategoryStabilityRow, ExpenseTreeRow, FlowMatrixRow,
+    OverviewDashboardPayload, RoutePayload, SummaryAllocation, SummaryAllocationSegment,
+    SummaryDashboardPayload, SummaryGroupPanel, SummaryMonthSnapshot, TransactionTableRow,
+    TransactionsPayload, UncategorizedLeakage,
 };
 
 #[derive(Debug, Default)]
@@ -548,6 +550,28 @@ fn fetch_categories_dashboard(
         context.stability_limit,
         &current,
     )?;
+    let hierarchy = group_expense_hierarchy(
+        runtime.connection(),
+        runtime.config(),
+        &group_id,
+        &HierarchyQueryOptions {
+            months: context.months,
+            mode: RollupMode::MonthlyAverage,
+            to: None,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    let flow = group_flow_graph(
+        runtime.connection(),
+        runtime.config(),
+        &group_id,
+        &FlowQueryOptions {
+            months: context.months,
+            mode: RollupMode::MonthlyAverage,
+            to: None,
+        },
+    )
+    .map_err(|error| error.to_string())?;
 
     Ok(RoutePayload::CategoriesDashboard(
         CategoriesDashboardPayload {
@@ -556,6 +580,8 @@ fn fetch_categories_dashboard(
             months,
             stability,
             leakage,
+            hierarchy: flatten_expense_tree(&hierarchy, 18),
+            flow: flatten_flow_graph(&flow, 10),
         },
     ))
 }
@@ -861,6 +887,71 @@ fn summarize_accounts(accounts: &str) -> String {
     format!("{} (+{})", parts[0], parts.len() - 1)
 }
 
+fn flatten_expense_tree(
+    roots: &[fin_sdk::ExpenseHierarchyNode],
+    limit: usize,
+) -> Vec<ExpenseTreeRow> {
+    let mut rows = Vec::new();
+    for root in roots {
+        push_expense_tree_row(root, 0, limit, &mut rows);
+        if rows.len() >= limit {
+            break;
+        }
+    }
+    rows
+}
+
+fn push_expense_tree_row(
+    node: &fin_sdk::ExpenseHierarchyNode,
+    depth: usize,
+    limit: usize,
+    rows: &mut Vec<ExpenseTreeRow>,
+) {
+    if rows.len() >= limit {
+        return;
+    }
+    rows.push(ExpenseTreeRow {
+        depth,
+        label: node.name.clone(),
+        total_minor: node.total_minor,
+        share_of_root_pct: node.share_of_root_pct,
+    });
+    for child in &node.children {
+        if rows.len() >= limit {
+            break;
+        }
+        push_expense_tree_row(child, depth + 1, limit, rows);
+    }
+}
+
+fn flatten_flow_graph(graph: &fin_sdk::FlowGraph, limit: usize) -> Vec<FlowMatrixRow> {
+    let labels = graph
+        .nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node.label.as_str()))
+        .collect::<HashMap<_, _>>();
+    graph
+        .edges
+        .iter()
+        .take(limit)
+        .map(|edge| FlowMatrixRow {
+            source_label: labels
+                .get(edge.source_id.as_str())
+                .copied()
+                .unwrap_or(edge.source_id.as_str())
+                .to_owned(),
+            target_label: labels
+                .get(edge.target_id.as_str())
+                .copied()
+                .unwrap_or(edge.target_id.as_str())
+                .to_owned(),
+            amount_minor: edge.amount_minor,
+            share_of_total_pct: edge.share_of_total_pct,
+            share_of_source_pct: edge.share_of_source_pct,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
@@ -959,6 +1050,18 @@ mod tests {
                 );
             }
             other => panic!("unexpected overview payload: {other:?}"),
+        }
+
+        let categories = client
+            .fetch_route(Route::Categories, &FetchContext::default())
+            .expect("categories payload");
+        match categories {
+            RoutePayload::CategoriesDashboard(payload) => {
+                assert!(!payload.pareto.is_empty());
+                assert!(!payload.hierarchy.is_empty());
+                assert!(!payload.flow.is_empty());
+            }
+            other => panic!("unexpected categories payload: {other:?}"),
         }
     }
 }
