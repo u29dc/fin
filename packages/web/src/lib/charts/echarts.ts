@@ -119,22 +119,22 @@ export function createSankeyOption(nodes: SankeyNode[], links: SankeyLink[], col
 			},
 		},
 		animation: false,
-		series: [
-			{
-				type: 'sankey',
-				layout: 'none',
-				emphasis: {
-					focus: 'adjacency',
-				},
-				nodeAlign: 'left',
+        series: [
+            {
+                type: 'sankey',
+                emphasis: {
+                    focus: 'adjacency',
+                },
+                nodeAlign: 'left',
 				orient: 'horizontal',
 				left: compact ? 60 : 100,
 				right: compact ? 80 : 150,
-				top: compact ? 5 : 10,
-				bottom: compact ? 5 : 10,
-				nodeGap: compact ? 8 : 12,
-				nodeWidth: compact ? 14 : 20,
-				draggable: false,
+                top: compact ? 5 : 10,
+                bottom: compact ? 5 : 10,
+                nodeGap: compact ? 8 : 12,
+                nodeWidth: compact ? 14 : 20,
+                layoutIterations: compact ? 16 : 32,
+                draggable: false,
 				label: {
 					fontFamily: DEFAULT_FONT_FAMILY,
 					fontSize,

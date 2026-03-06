@@ -13,6 +13,7 @@
 		lineWidth?: number;
 		getValue: (point: T) => number;
 		visible?: boolean;
+		showSymbol?: boolean;
 		showInHover?: boolean;
 		lastValueVisible?: boolean;
 		priceLineVisible?: boolean;
@@ -72,15 +73,16 @@
 				continue;
 			}
 
-			const seriesData = data.map((p) => [getDate(p), def.getValue(p)] as [string, number]);
+            const seriesData = data.map((p) => [getDate(p), def.getValue(p)] as [string, number]);
+            const shouldShowSymbol = def.showSymbol ?? seriesData.length <= 2;
 
 			// Add raw overlay series if enabled
 			if (!compact && showRawOverlay) {
-				echartsSeriesList.push({
-					key: `${def.key}_raw`,
-					data: seriesData,
-					color: asRgba(def.color, 0.16),
-					lineWidth: 1,
+                echartsSeriesList.push({
+                    key: `${def.key}_raw`,
+                    data: seriesData,
+                    color: asRgba(def.color, 0.16),
+                    lineWidth: 1,
 					smooth: false,
 					...(def.lineStyle !== undefined ? { lineStyle: def.lineStyle } : {}),
 					showSymbol: false,
@@ -89,15 +91,15 @@
 
 			// Add main series
 			echartsSeriesList.push({
-				key: def.key,
-				data: seriesData,
-				color: def.color,
-				lineWidth: def.lineWidth ?? (compact ? 1 : 2),
-				smooth: curve,
-				...(def.lineStyle !== undefined ? { lineStyle: def.lineStyle } : {}),
-				showSymbol: false,
-			});
-		}
+                key: def.key,
+                data: seriesData,
+                color: def.color,
+                lineWidth: def.lineWidth ?? (compact ? 1 : 2),
+                smooth: curve,
+                ...(def.lineStyle !== undefined ? { lineStyle: def.lineStyle } : {}),
+                showSymbol: shouldShowSymbol,
+            });
+        }
 
 		// Convert thresholds to markLines
 		const markLines: MarkLineItem[] = thresholds.map((t) => ({

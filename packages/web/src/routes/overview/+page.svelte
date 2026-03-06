@@ -23,11 +23,12 @@
 	const chartAccounts = $derived(data.chartAccounts as OverviewChartAccount[]);
 	const totalBalanceSeries = $derived(data.totalBalanceSeries);
 	const accountBalanceSeries = $derived(data.accountBalanceSeries);
-	const projection = $derived(data.projection);
-	const totalSeriesId = $derived(data.totalSeriesId);
-	const colorScheme = $derived(theme.resolved);
+    const projection = $derived(data.projection);
+    const totalSeriesId = $derived(data.totalSeriesId);
+    const colorScheme = $derived(theme.resolved);
 
-	let isMobile = $state(false);
+    let isMobile = $state(false);
+    let enabledSeriesIds = $state<string[]>([]);
 
 	const moneyFormatter = new Intl.NumberFormat("en-GB", {
 		style: "currency",
@@ -60,16 +61,21 @@
 		return `${formatMonthYear(first)} to ${formatMonthYear(last)}`;
 	});
 
-	const balanceChartData = $derived.by(() => {
-		const seriesMap: Record<string, { date: string; balanceMinor: number }[]> = {};
-		if (totalBalanceSeries.length > 0) {
-			seriesMap[totalSeriesId] = totalBalanceSeries;
-		}
-		for (const account of chartAccounts) {
-			const series = accountBalanceSeries[account.id] ?? [];
-			if (series.length > 0) {
-				seriesMap[account.id] = series;
-			}
+    const enabledSeriesSet = $derived(new Set(enabledSeriesIds));
+
+    const balanceChartData = $derived.by(() => {
+        const seriesMap: Record<string, { date: string; balanceMinor: number }[]> = {};
+        if (totalBalanceSeries.length > 0 && enabledSeriesSet.has(totalSeriesId)) {
+            seriesMap[totalSeriesId] = totalBalanceSeries;
+        }
+        for (const account of chartAccounts) {
+            if (!enabledSeriesSet.has(account.id)) {
+                continue;
+            }
+            const series = accountBalanceSeries[account.id] ?? [];
+            if (series.length > 0) {
+                seriesMap[account.id] = series;
+            }
 		}
 		return mergeBalanceSeries(seriesMap);
 	});
@@ -83,19 +89,22 @@
 			getValue: (point: CashAssetsPoint) => number;
 		}>;
 
-		if (totalBalanceSeries.length > 0) {
-			definitions.push({
-				key: totalSeriesId,
-				color: linePalette.total,
-				lineWidth: 3,
-				getValue: (point: CashAssetsPoint) => (point.accounts[totalSeriesId] ?? 0) / 100,
+        if (totalBalanceSeries.length > 0 && enabledSeriesSet.has(totalSeriesId)) {
+            definitions.push({
+                key: totalSeriesId,
+                color: linePalette.total,
+                lineWidth: 3,
+                getValue: (point: CashAssetsPoint) => (point.accounts[totalSeriesId] ?? 0) / 100,
 			});
 		}
 
-		for (const account of chartAccounts) {
-			if ((accountBalanceSeries[account.id]?.length ?? 0) === 0) {
-				continue;
-			}
+        for (const account of chartAccounts) {
+            if (!enabledSeriesSet.has(account.id)) {
+                continue;
+            }
+            if ((accountBalanceSeries[account.id]?.length ?? 0) === 0) {
+                continue;
+            }
 			const nextIndex = groupIndices.get(account.groupId) ?? 0;
 			groupIndices.set(account.groupId, nextIndex + 1);
 			definitions.push({
@@ -118,16 +127,18 @@
 		}
 		return projection.groups.map((groupId) => groupMetadata[groupId]?.label ?? groupId).join(" + ");
 	});
-	const accountList = $derived.by(() => {
-		return chartAccounts.map((account) => ({
-			...account,
-			pointCount: accountBalanceSeries[account.id]?.length ?? 0,
-			groupLabel: groupMetadata[account.groupId]?.label ?? account.groupId,
-		}));
-	});
+    const accountList = $derived.by(() => {
+        return chartAccounts.map((account) => ({
+            ...account,
+            pointCount: accountBalanceSeries[account.id]?.length ?? 0,
+            groupLabel: groupMetadata[account.groupId]?.label ?? account.groupId,
+            enabled: enabledSeriesSet.has(account.id),
+            color: getAccountColor(account.groupId, chartAccounts.filter((entry) => entry.groupId === account.groupId).findIndex((entry) => entry.id === account.id)),
+        }));
+    });
 
-	onMount(() => {
-		const mobileQuery = window.matchMedia("(max-width: 640px)");
+    onMount(() => {
+        const mobileQuery = window.matchMedia("(max-width: 640px)");
 		const updateMobile = (event: MediaQueryList | MediaQueryListEvent) => {
 			isMobile = event.matches;
 		};
@@ -137,7 +148,25 @@
 		return () => {
 			mobileQuery.removeEventListener("change", updateMobile);
 		};
-	});
+    });
+
+    $effect(() => {
+        const nextIds = [totalSeriesId, ...chartAccounts.map((account) => account.id)];
+        if (nextIds.length === 0) {
+            enabledSeriesIds = [];
+            return;
+        }
+        if (enabledSeriesIds.length === 0) {
+            enabledSeriesIds = nextIds;
+            return;
+        }
+        enabledSeriesIds = enabledSeriesIds.filter((id) => nextIds.includes(id));
+        for (const id of nextIds) {
+            if (!enabledSeriesIds.includes(id)) {
+                enabledSeriesIds = [...enabledSeriesIds, id];
+            }
+        }
+    });
 
 	function getAccountColor(groupId: string, groupIndex: number): string {
 		const palette = linePalette[groupId as keyof typeof linePalette] ?? linePalette.other;
@@ -200,7 +229,7 @@
 		return lines.join("\n");
 	}
 
-	function formatProjectionHover(current: ProjectionPoint, minimum: ProjectionPoint): string {
+    function formatProjectionHover(current: ProjectionPoint, minimum: ProjectionPoint): string {
 		const lines = [formatLongDate(current.date)];
 		lines.push(`Current burn: ${formatMoney(current.balanceMinor)}`);
 		lines.push(`Minimum burn: ${formatMoney(minimum.balanceMinor)}`);
@@ -236,7 +265,22 @@
 			detail: "No zero-balance crossing appears within the projection window.",
 			toneClass: "text-success",
 		};
-	}
+    }
+
+    function toggleSeries(id: string) {
+        if (enabledSeriesSet.has(id)) {
+            if (enabledSeriesIds.length === 1) {
+                return;
+            }
+            enabledSeriesIds = enabledSeriesIds.filter((entry) => entry !== id);
+            return;
+        }
+        enabledSeriesIds = [...enabledSeriesIds, id];
+    }
+
+    function isSeriesEnabled(id: string): boolean {
+        return enabledSeriesSet.has(id);
+    }
 </script>
 
 <svelte:head>
@@ -259,42 +303,72 @@
 
 	{#if hasOverviewData}
 		<section class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 fade-in">
-			<article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
-				<div class="text-2xs uppercase tracking-widest text-muted">All assets</div>
-				<div class="text-2xl font-normal tabular-nums">{formatMoney(latestTotalBalanceMinor)}</div>
-				<div class="text-2xs uppercase tracking-widest text-muted">{historyCoverage}</div>
-			</article>
-			<article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
-				<div class="text-2xs uppercase tracking-widest text-muted">Liquid balance</div>
-				<div class="text-2xl font-normal tabular-nums">{formatMoney(projection?.liquidBalanceMinor)}</div>
-				<div class="text-2xs uppercase tracking-widest text-muted">{includedGroupsLabel}</div>
-			</article>
-			<article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
-				<div class="text-2xs uppercase tracking-widest text-muted">Current burn</div>
-				<div class="text-2xl font-normal tabular-nums">{formatMoney(projection?.currentBurnMinor)}</div>
-				<div class="text-2xs uppercase tracking-widest text-muted">
-					Minimum burn {formatMoney(projection?.minimumBurnMinor)}
-				</div>
-			</article>
-			<article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
-				<div class="text-2xs uppercase tracking-widest text-muted">Runway status</div>
-				<div class={`text-2xl font-normal tabular-nums ${projectionStatus.toneClass}`}>{projectionStatus.label}</div>
-				<div class="text-2xs uppercase tracking-widest text-muted">{projectionStatus.detail}</div>
-			</article>
-		</section>
+            <article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
+                <div class="text-2xs uppercase tracking-widest text-muted">All assets</div>
+                <div class="text-lg font-normal tabular-nums">{formatMoney(latestTotalBalanceMinor)}</div>
+                <div class="text-2xs uppercase tracking-widest text-muted">{historyCoverage}</div>
+            </article>
+            <article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
+                <div class="text-2xs uppercase tracking-widest text-muted">Runway assets</div>
+                <div class="text-lg font-normal tabular-nums">{formatMoney(projection?.liquidBalanceMinor)}</div>
+                <div class="text-2xs uppercase tracking-widest text-muted">{includedGroupsLabel}</div>
+            </article>
+            <article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
+                <div class="text-2xs uppercase tracking-widest text-muted">Current burn</div>
+                <div class="text-lg font-normal tabular-nums">{formatMoney(projection?.currentBurnMinor)}</div>
+                <div class="text-2xs uppercase tracking-widest text-muted">
+                    Minimum burn {formatMoney(projection?.minimumBurnMinor)}
+                </div>
+            </article>
+            <article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
+                <div class="text-2xs uppercase tracking-widest text-muted">Runway status</div>
+                <div class={`text-lg font-normal tabular-nums ${projectionStatus.toneClass}`}>{projectionStatus.label}</div>
+                <div class="text-2xs uppercase tracking-widest text-muted">{projectionStatus.detail}</div>
+            </article>
+        </section>
 
-		<article class="border border-border bg-panel p-2.5 flex flex-col gap-3 fade-in">
+        <article class="border border-border bg-panel p-2.5 flex flex-col gap-3 fade-in">
 			<header class="flex flex-col gap-1.5 xl:flex-row xl:items-end xl:justify-between">
-				<div>
-					<h2 class="font-normal text-sm uppercase tracking-widest">Account balance history</h2>
-					<div class="text-sm mt-0.5 leading-snug uppercase tracking-wider text-muted">
-						Merged daily history across all configured asset accounts
-					</div>
-				</div>
-				<div class="text-sm uppercase tracking-widest text-muted">{chartAccounts.length} chart accounts</div>
-			</header>
+                <div>
+                    <h2 class="font-normal text-sm uppercase tracking-widest">Account balance history</h2>
+                    <div class="text-sm mt-0.5 leading-snug uppercase tracking-wider text-muted">
+                        Merged daily history across all configured asset accounts
+                    </div>
+                </div>
+                <div class="text-sm uppercase tracking-widest text-muted">{chartAccounts.length} chart accounts</div>
+            </header>
 
-			<div class="grid gap-3 xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] xl:items-start">
+            <div class="flex flex-wrap gap-1.5">
+				<button
+					type="button"
+					class="min-h-[32px] px-2.5 border text-2xs uppercase tracking-widest transition-colors"
+					class:border-text={isSeriesEnabled(totalSeriesId)}
+					class:text-text={isSeriesEnabled(totalSeriesId)}
+					class:border-border-subtle={!isSeriesEnabled(totalSeriesId)}
+					class:text-muted={!isSeriesEnabled(totalSeriesId)}
+					aria-pressed={isSeriesEnabled(totalSeriesId)}
+					onclick={() => toggleSeries(totalSeriesId)}
+				>
+					All assets
+				</button>
+                {#each accountList as account (account.id)}
+                    <button
+                        type="button"
+                        class="min-h-[32px] px-2.5 border text-2xs uppercase tracking-widest transition-colors flex items-center gap-1.5"
+						class:border-text={account.enabled}
+						class:text-text={account.enabled}
+						class:border-border-subtle={!account.enabled}
+						class:text-muted={!account.enabled}
+						aria-pressed={account.enabled}
+						onclick={() => toggleSeries(account.id)}
+					>
+                        <span class="size-1.5 rounded-full shrink-0" style:background={account.color}></span>
+                        <span class="truncate max-w-[12rem]">{account.label}</span>
+                    </button>
+                {/each}
+            </div>
+
+            <div class="grid gap-3 xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] xl:items-start">
 				<div class="border border-border-subtle bg-panel/40 p-2 min-h-[280px]">
 					{#if balanceChartData.length > 0 && balanceSeriesDefinitions.length > 0}
 						<SeriesChart
@@ -321,25 +395,34 @@
 					</div>
 					{#if accountList.length > 0}
 						<div class="max-h-[420px] overflow-auto">
-							{#each accountList as account (account.id)}
-								<div class="p-2 flex flex-col gap-1.5 border-t border-border-subtle first:border-t-0">
-									<div class="flex items-start justify-between gap-2">
-										<div>
-											<div class="text-sm leading-snug">{account.label}</div>
-											<div class="text-2xs uppercase tracking-widest text-muted">
-												{account.groupLabel} · {account.provider}
-											</div>
-										</div>
-										<div class="text-sm tabular-nums">{formatMoney(account.latestBalanceMinor)}</div>
-									</div>
-									<div class="text-2xs uppercase tracking-widest text-muted">
-										{account.pointCount} points · updated {formatLongDate(account.updatedAt)}
-									</div>
-								</div>
-							{/each}
-						</div>
-					{:else}
-						<div class="p-3 text-sm text-muted">No asset accounts were available from fin-api.</div>
+                            {#each accountList as account (account.id)}
+								<button
+									type="button"
+									class="w-full p-2 flex flex-col gap-1.5 border-t border-border-subtle first:border-t-0 text-left transition-colors hover:bg-panel-subtle"
+									class:bg-panel-subtle={account.enabled}
+									aria-pressed={account.enabled}
+									onclick={() => toggleSeries(account.id)}
+								>
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <div class="text-sm leading-snug truncate">{account.label}</div>
+                                            <div class="text-2xs uppercase tracking-widest text-muted">
+                                                {account.groupLabel} · {account.provider}
+                                            </div>
+                                        </div>
+                                        <div class="text-sm tabular-nums shrink-0">{formatMoney(account.latestBalanceMinor)}</div>
+                                    </div>
+                                    <div class="text-2xs uppercase tracking-widest text-muted flex items-center gap-2">
+                                        <span class="size-1.5 rounded-full" style:background={account.color}></span>
+                                        <span>{account.enabled ? 'Shown' : 'Hidden'}</span>
+                                        <span>·</span>
+                                        {account.pointCount} points · updated {formatLongDate(account.updatedAt)}
+                                    </div>
+                                </button>
+                            {/each}
+                        </div>
+                    {:else}
+                        <div class="p-3 text-sm text-muted">No asset accounts were available from fin-api.</div>
 					{/if}
 				</div>
 			</div>
@@ -433,19 +516,14 @@
 				</div>
 			</div>
 		</article>
-	{:else}
-		<article class="border border-border bg-panel p-3 flex flex-col gap-3 fade-in">
+    {:else}
+        <article class="border border-border bg-panel p-3 flex flex-col gap-3 fade-in">
 			<div>
 				<h2 class="font-normal text-sm uppercase tracking-widest">Overview awaiting ledger data</h2>
 				<div class="text-sm mt-1 leading-relaxed text-muted">
 					The overview surface is wired to `fin-api`. Once the daemon can load config and ledger data, this page will show consolidated balance history and runway projection.
 				</div>
-			</div>
-			<div class="text-2xs uppercase tracking-widest text-muted">{connection.detail}</div>
-		</article>
-	{/if}
-
-	<footer class="px-0.5 text-2xs uppercase tracking-widest text-muted">
-		{connection.detail}
-	</footer>
+            </div>
+        </article>
+    {/if}
 </main>

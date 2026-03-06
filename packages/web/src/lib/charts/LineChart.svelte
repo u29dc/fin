@@ -50,26 +50,26 @@
 		const series: LineSeriesDefinition[] = [];
 
 		// Raw overlay series (semi-transparent) - same data, different styling
-		if (!compact && showRawOverlay) {
-			series.push({
-				key: 'raw',
-				data: chartData,
-				color: 'rgba(230, 230, 232, 0.16)',
-				lineWidth: 1,
-				smooth: false,
-				showSymbol: false,
-			});
-		}
+        if (!compact && showRawOverlay) {
+            series.push({
+                key: 'raw',
+                data: chartData,
+                color: 'rgba(230, 230, 232, 0.16)',
+                lineWidth: 1,
+                smooth: false,
+                showSymbol: false,
+            });
+        }
 
-		// Main series
-		series.push({
-			key: 'main',
-			data: chartData,
-			color: lineColor,
-			lineWidth: compact ? 1 : 2,
-			smooth: curve,
-			showSymbol: false,
-		});
+        // Main series
+        series.push({
+            key: 'main',
+            data: chartData,
+            color: lineColor,
+            lineWidth: compact ? 1 : 2,
+            smooth: curve,
+            showSymbol: chartData.length <= 2,
+        });
 
 		const option = loadedRuntime.createLineChartOption(series, {
 			colorScheme,

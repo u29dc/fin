@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { loadTransactionsPageData } from "$lib/server/transactions";
+import {
+	fetchTransactionDetail,
+	fetchTransactionsDataset,
+	filterTransactionItems,
+	loadTransactionsPageData,
+	TRANSACTION_LIST_LIMIT,
+	type TransactionListItem,
+} from "$lib/server/transactions";
 import type {
 	ConfigShowData,
 	FinApiClient,
@@ -142,7 +149,7 @@ function createMockClient(overrides: Partial<FinApiClient>): FinApiClient {
 }
 
 describe("loadTransactionsPageData", () => {
-	test("maps paginated transactions and selected detail from fin-api", async () => {
+	test("returns shell state and initial URL selections without loading list data", async () => {
 		const configShow: ConfigShowData = {
 			groups: [
 				{ id: "business", label: "Business", icon: "briefcase", taxType: "corp", expenseReserveMonths: 12 },
@@ -160,6 +167,45 @@ describe("loadTransactionsPageData", () => {
 			checks: [],
 			summary: { ok: 2, blocking: 0, degraded: 0 },
 		};
+		const transactionCalls: Array<Record<string, string | number | undefined>> = [];
+		const client = createMockClient({
+			configShow: async () => configShow,
+			health: async () => health,
+			viewTransactions: async (query) => {
+				transactionCalls.push({
+					group: query.group,
+					limit: query.limit,
+					sortField: query.sortField,
+					sortDirection: query.sortDirection,
+				});
+				return {
+					items: [],
+					count: 0,
+					totalCount: 0,
+					hasMore: false,
+					nextCursor: null,
+					nextCursorToken: null,
+				};
+			},
+		});
+
+		const page = await loadTransactionsPageData({
+			url: new URL("https://fin.test/transactions?group=business&sort=amountMinor&dir=asc&search=linear&selected=posting-2"),
+			client,
+		});
+
+		expect(page.availableGroups).toEqual(["business", "personal"]);
+		expect(page.initialGroup).toBe("business");
+		expect(page.initialSort).toBe("amountMinor");
+		expect(page.initialDir).toBe("asc");
+		expect(page.searchQuery).toBe("linear");
+		expect(page.selectedPostingId).toBe("posting-2");
+		expect(transactionCalls).toEqual([]);
+	});
+});
+
+describe("fetchTransactionsDataset", () => {
+	test("loads a large sorted dataset without pagination metadata", async () => {
 		const pagePayload: ViewTransactionsData = {
 			items: [
 				{
@@ -178,10 +224,67 @@ describe("loadTransactionsPageData", () => {
 			],
 			count: 1,
 			totalCount: 245,
-			hasMore: true,
+			hasMore: false,
 			nextCursor: null,
-			nextCursorToken: "token-3",
+			nextCursorToken: null,
 		};
+		const transactionQueries: Array<Record<string, string | number | undefined>> = [];
+		const client = createMockClient({
+			viewTransactions: async (query) => {
+				transactionQueries.push({
+					group: query.group,
+					limit: query.limit,
+					sortField: query.sortField,
+					sortDirection: query.sortDirection,
+					after: query.after,
+					search: query.search,
+				});
+				return pagePayload;
+			},
+		});
+
+		const list = await fetchTransactionsDataset(client, {
+			group: "business",
+			sort: "amountMinor",
+			direction: "asc",
+		});
+
+		expect(transactionQueries).toEqual([
+			{
+				group: "business",
+				limit: TRANSACTION_LIST_LIMIT,
+				sortField: "amount_minor",
+				sortDirection: "asc",
+				after: undefined,
+				search: undefined,
+			},
+		]);
+		expect(list).toEqual({
+			items: [
+				{
+					postingId: "posting-2",
+					journalEntryId: "entry-2",
+					chartAccountId: "Assets:Business:Monzo",
+					pairAccountIds: ["Expenses:Business:Software"],
+					postedAt: "2026-03-04T09:00:00Z",
+					postedDate: "2026-03-04",
+					amountMinor: -12900,
+					currency: "GBP",
+					rawDescription: "Linear",
+					cleanDescription: "Linear",
+					counterparty: "Linear",
+				},
+			],
+			loadedCount: 1,
+			totalCount: 245,
+			limit: TRANSACTION_LIST_LIMIT,
+			truncated: true,
+		});
+	});
+});
+
+describe("fetchTransactionDetail", () => {
+	test("maps selected detail payloads from fin-api", async () => {
 		const detailPayload: TransactionDetailData = {
 			posting_id: "posting-2",
 			journal_entry_id: "entry-2",
@@ -206,160 +309,57 @@ describe("loadTransactionsPageData", () => {
 				},
 			],
 		};
-		const transactionQueries: Array<Record<string, string | number | undefined>> = [];
 		const detailCalls: string[] = [];
 		const client = createMockClient({
-			configShow: async () => configShow,
-			health: async () => health,
-			viewTransactions: async (query) => {
-				transactionQueries.push({
-					group: query.group,
-					search: query.search,
-					limit: query.limit,
-					sortField: query.sortField,
-					sortDirection: query.sortDirection,
-					after: query.after,
-				});
-				return pagePayload;
-			},
 			viewTransactionDetail: async (postingId) => {
 				detailCalls.push(postingId);
 				return detailPayload;
 			},
 		});
 
-		const page = await loadTransactionsPageData({
-			url: new URL(
-				"https://fin.test/transactions?group=business&sort=amountMinor&dir=asc&search=linear&cursor=token-1&cursor=token-2&selected=posting-2",
-			),
-			client,
-		});
+		const detail = await fetchTransactionDetail(client, "posting-2");
 
-		expect(page.initialGroup).toBe("business");
-		expect(page.initialSort).toBe("amountMinor");
-		expect(page.initialDir).toBe("asc");
-		expect(page.searchQuery).toBe("linear");
-		expect(page.list.pageNumber).toBe(3);
-		expect(page.list.rangeStart).toBe(201);
-		expect(page.list.rangeEnd).toBe(201);
-		expect(page.list.nextCursorToken).toBe("token-3");
-		expect(page.list.items[0]).toEqual({
-			postingId: "posting-2",
-			journalEntryId: "entry-2",
-			chartAccountId: "Assets:Business:Monzo",
-			pairAccountIds: ["Expenses:Business:Software"],
-			postedAt: "2026-03-04T09:00:00Z",
-			postedDate: "2026-03-04",
-			amountMinor: -12900,
-			currency: "GBP",
-			rawDescription: "Linear",
-			cleanDescription: "Linear",
-			counterparty: "Linear",
-		});
-		expect(page.selectedPostingId).toBe("posting-2");
-		expect(page.selectedTransaction?.pairPostings[0]?.accountId).toBe("Expenses:Business:Software");
-		expect(transactionQueries).toEqual([
-			{
-				group: "business",
-				search: "linear",
-				limit: 100,
-				sortField: "amount_minor",
-				sortDirection: "asc",
-				after: "token-2",
-			},
-		]);
 		expect(detailCalls).toEqual(["posting-2"]);
+		expect(detail.pairPostings[0]?.accountId).toBe("Expenses:Business:Software");
+		expect(detail.cleanDescription).toBe("Linear");
 	});
+});
 
-	test("falls back to the first page when a cursor token becomes stale", async () => {
-		const configShow: ConfigShowData = {
-			groups: [{ id: "personal", label: "Personal", icon: "user", taxType: "income", expenseReserveMonths: 6 }],
-			accounts: {
-				personal: [{ id: "Assets:Personal:Monzo", label: "Personal Monzo", provider: "monzo" }],
+describe("filterTransactionItems", () => {
+	test("matches description, counterparty, account ids, and pair accounts with live multi-term filtering", () => {
+		const items: TransactionListItem[] = [
+			{
+				postingId: "posting-1",
+				journalEntryId: "entry-1",
+				chartAccountId: "Assets:Business:Monzo",
+				pairAccountIds: ["Expenses:Business:Software"],
+				postedAt: "2026-03-04T09:00:00Z",
+				postedDate: "2026-03-04",
+				amountMinor: -12900,
+				currency: "GBP",
+				rawDescription: "LINEAR LTD",
+				cleanDescription: "Linear",
+				counterparty: "Linear",
 			},
-			financial: {},
-			configPath: "/tmp/fin.config.toml",
-		};
-		const pagePayload: ViewTransactionsData = {
-			items: [
-				{
-					posting_id: "posting-1",
-					journal_entry_id: "entry-1",
-					chart_account_id: "Assets:Personal:Monzo",
-					pair_account_ids: ["Expenses:Personal:Food"],
-					posted_at: "2026-03-01T10:00:00Z",
-					posted_date: "2026-03-01",
-					amount_minor: -560,
-					currency: "GBP",
-					raw_description: "Pret",
-					clean_description: "Pret",
-					counterparty: "Pret",
-				},
-			],
-			count: 1,
-			totalCount: 1,
-			hasMore: false,
-			nextCursor: null,
-			nextCursorToken: null,
-		};
-		const detailPayload: TransactionDetailData = {
-			posting_id: "posting-1",
-			journal_entry_id: "entry-1",
-			chart_account_id: "Assets:Personal:Monzo",
-			posted_at: "2026-03-01T10:00:00Z",
-			posted_date: "2026-03-01",
-			amount_minor: -560,
-			currency: "GBP",
-			description: "Pret",
-			raw_description: "PRET",
-			clean_description: "Pret",
-			counterparty: "Pret",
-			source_file: "personal.csv",
-			is_transfer: false,
-			pair_postings: [],
-		};
-		const seenAfter: Array<string | undefined> = [];
-		const client = createMockClient({
-			configShow: async () => configShow,
-			viewTransactions: async (query) => {
-				seenAfter.push(query.after);
-				if (query.after) {
-					throw new Error("stale cursor");
-				}
-				return pagePayload;
+			{
+				postingId: "posting-2",
+				journalEntryId: "entry-2",
+				chartAccountId: "Assets:Personal:Monzo",
+				pairAccountIds: ["Expenses:Personal:Groceries"],
+				postedAt: "2026-03-01T09:00:00Z",
+				postedDate: "2026-03-01",
+				amountMinor: -1097,
+				currency: "GBP",
+				rawDescription: "ASDA",
+				cleanDescription: "Asda",
+				counterparty: "Asda",
 			},
-			viewTransactionDetail: async () => detailPayload,
-		});
+		];
 
-		const page = await loadTransactionsPageData({
-			url: new URL("https://fin.test/transactions?group=personal&cursor=expired-token"),
-			client,
-		});
-
-		expect(seenAfter).toEqual(["expired-token", undefined]);
-		expect(page.list.pageNumber).toBe(1);
-		expect(page.list.cursorTrail).toEqual([]);
-		expect(page.selectedPostingId).toBe("posting-1");
-	});
-
-	test("falls back to placeholder shell data when fin-api is unavailable", async () => {
-		const client = createMockClient({
-			configShow: async () => {
-				throw new Error("connect ENOENT /tmp/fin-home/run/fin-api.sock");
-			},
-			health: async () => {
-				throw new Error("connect ENOENT /tmp/fin-home/run/fin-api.sock");
-			},
-		});
-
-		const page = await loadTransactionsPageData({
-			url: new URL("https://fin.test/transactions"),
-			client,
-		});
-
-		expect(page.availableGroups).toEqual(["personal", "joint", "business"]);
-		expect(page.list.totalCount).toBe(0);
-		expect(page.selectedTransaction).toBeNull();
-		expect(page.connection.error).toBe("api unavailable");
+		expect(filterTransactionItems(items, "")).toEqual(items);
+		expect(filterTransactionItems(items, "linear")).toEqual([items[0]]);
+		expect(filterTransactionItems(items, "personal groceries")).toEqual([items[1]]);
+		expect(filterTransactionItems(items, "business software")).toEqual([items[0]]);
+		expect(filterTransactionItems(items, "no match")).toEqual([]);
 	});
 });

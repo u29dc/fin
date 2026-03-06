@@ -1,17 +1,28 @@
 <script lang="ts">
-	import { goto } from "$app/navigation";
-	import { page } from "$app/state";
+	import { onDestroy } from "svelte";
 
 	import Header from "$lib/Header.svelte";
-	import type {
-		TransactionDetail,
-		TransactionListItem,
-		TransactionsPageData,
-		TransactionsSortColumn,
-		TransactionsSortDirection,
-	} from "$lib/server/transactions";
+	import {
+		filterTransactionItems,
+		type TransactionDetail,
+		type TransactionListItem,
+		type TransactionListState,
+		type TransactionsSortColumn,
+		type TransactionsSortDirection,
+	} from "$lib/transactions";
+	import type { TransactionsPageData } from "$lib/server/transactions";
 
 	type GroupId = string;
+
+	type TransactionsApiListResponse = {
+		list?: TransactionListState;
+		error?: string;
+	};
+
+	type TransactionsApiDetailResponse = {
+		detail?: TransactionDetail;
+		error?: string;
+	};
 
 	const SORT_COLUMNS: Array<{ id: TransactionsSortColumn; label: string }> = [
 		{ id: "postedAt", label: "Date" },
@@ -20,143 +31,316 @@
 		{ id: "amountMinor", label: "Amount" },
 	];
 
-	let { data }: { data: TransactionsPageData } = $props();
+	const EMPTY_LIST: TransactionListState = {
+		items: [],
+		loadedCount: 0,
+		totalCount: 0,
+		limit: 10_000,
+		truncated: false,
+	};
 
-	const availableGroups = $derived(data.availableGroups as GroupId[]);
-	const groupMetadata = $derived(data.groupMetadata);
-	const connection = $derived(data.connection);
-	const group = $derived(data.initialGroup);
-	const sortColumn = $derived(data.initialSort);
-	const sortDirection = $derived(data.initialDir);
-	const searchQuery = $derived(data.searchQuery);
-	const list = $derived(data.list);
-	const selectedPostingId = $derived(data.selectedPostingId);
-	const selectedTransaction = $derived(data.selectedTransaction as TransactionDetail | null);
+	const listCache = new Map<string, TransactionListState>();
+	const detailCache = new Map<string, TransactionDetail>();
 
+	let { data: pageData }: { data: TransactionsPageData } = $props();
+
+	const availableGroups = $derived(pageData.availableGroups as GroupId[]);
+	const groupMetadata = $derived(pageData.groupMetadata);
+	const connection = $derived(pageData.connection);
+
+	let currentGroup = $state<GroupId>("personal");
+	let currentSort = $state<TransactionsSortColumn>("postedAt");
+	let currentDir = $state<TransactionsSortDirection>("desc");
 	let searchInput = $state("");
+	let committedSearch = $state("");
+	let selectedPostingId = $state<string | null>(null);
+	let didInitializeState = false;
 
-	$effect(() => {
-		searchInput = searchQuery;
+	let listState = $state<TransactionListState>(EMPTY_LIST);
+	let listLoading = $state(true);
+	let listRefreshing = $state(false);
+	let listError = $state<string | null>(null);
+
+	let selectedTransaction = $state<TransactionDetail | null>(null);
+	let detailLoading = $state(false);
+	let detailError = $state<string | null>(null);
+
+	let searchDebounceHandle: number | null = null;
+	let listAbortController: AbortController | null = null;
+	let detailAbortController: AbortController | null = null;
+
+	const effectiveGroup = $derived(didInitializeState ? currentGroup : pageData.initialGroup);
+	const filteredItems = $derived.by(() => filterTransactionItems(listState.items, committedSearch));
+	const activeGroupLabel = $derived(groupMetadata[effectiveGroup]?.label ?? effectiveGroup);
+	const listSummary = $derived.by(() => {
+		if (listLoading && listState.loadedCount === 0) {
+			return `Loading transactions for ${activeGroupLabel}`;
+		}
+		if (committedSearch) {
+			return `Showing ${filteredItems.length.toLocaleString("en-GB")} matches from ${listState.loadedCount.toLocaleString("en-GB")} loaded for ${activeGroupLabel}`;
+		}
+		if (listState.truncated) {
+			return `Showing ${filteredItems.length.toLocaleString("en-GB")} loaded of ${listState.totalCount.toLocaleString("en-GB")} for ${activeGroupLabel}`;
+		}
+		return `Showing ${filteredItems.length.toLocaleString("en-GB")} of ${listState.totalCount.toLocaleString("en-GB")} for ${activeGroupLabel}`;
+	});
+	const fetchStatusLabel = $derived.by(() => {
+		if (listLoading && listState.loadedCount === 0) {
+			return "Loading";
+		}
+		if (listRefreshing) {
+			return "Refreshing";
+		}
+		if (listState.truncated) {
+			return `Loaded first ${listState.loadedCount.toLocaleString("en-GB")}`;
+		}
+		return `${listState.loadedCount.toLocaleString("en-GB")} loaded`;
 	});
 
 	$effect(() => {
-		const currentTrail = page.url.searchParams.getAll("cursor");
-		const currentSelected = page.url.searchParams.get("selected");
-		const shouldNormalizeTrail = !cursorTrailMatches(currentTrail, list.cursorTrail);
-		const shouldNormalizeSelection = currentSelected !== selectedPostingId;
-		if (shouldNormalizeTrail || shouldNormalizeSelection) {
-			navigate((url) => {
-				if (shouldNormalizeTrail) {
-					setCursorTrail(url, list.cursorTrail);
-				}
-				if (selectedPostingId) {
-					url.searchParams.set("selected", selectedPostingId);
-				} else {
-					url.searchParams.delete("selected");
-				}
-			}, true);
+		if (didInitializeState) {
+			return;
 		}
+		currentGroup = pageData.initialGroup;
+		currentSort = pageData.initialSort;
+		currentDir = pageData.initialDir;
+		searchInput = pageData.searchQuery;
+		committedSearch = pageData.searchQuery;
+		selectedPostingId = pageData.selectedPostingId;
+		didInitializeState = true;
 	});
 
-	function cursorTrailMatches(left: string[], right: string[]): boolean {
-		if (left.length !== right.length) {
-			return false;
+	$effect(() => {
+		if (typeof window === "undefined") {
+			return;
 		}
-		return left.every((value, index) => value === right[index]);
-	}
-
-	function navigate(update: (url: URL) => void, replaceState = false) {
-		const url = new URL(page.url);
-		update(url);
-		goto(url.toString(), { replaceState, noScroll: true, keepFocus: true });
-	}
-
-	function setCursorTrail(url: URL, cursorTrail: string[]) {
-		url.searchParams.delete("cursor");
-		for (const cursor of cursorTrail) {
-			url.searchParams.append("cursor", cursor);
+		if (!didInitializeState) {
+			return;
 		}
-	}
+		if (searchDebounceHandle) {
+			window.clearTimeout(searchDebounceHandle);
+		}
+		searchDebounceHandle = window.setTimeout(() => {
+			committedSearch = searchInput.trim();
+		}, 160);
 
-	function clearPaging(url: URL) {
-		setCursorTrail(url, []);
-	}
+		return () => {
+			if (searchDebounceHandle) {
+				window.clearTimeout(searchDebounceHandle);
+				searchDebounceHandle = null;
+			}
+		};
+	});
+
+	$effect(() => {
+		if (typeof window === "undefined") {
+			return;
+		}
+		if (!didInitializeState) {
+			return;
+		}
+		void loadList(currentGroup, currentSort, currentDir);
+	});
+
+	$effect(() => {
+		if (!didInitializeState) {
+			return;
+		}
+		const visibleIds = new Set(filteredItems.map((item) => item.postingId));
+		if (selectedPostingId && visibleIds.has(selectedPostingId)) {
+			return;
+		}
+		selectedPostingId = filteredItems[0]?.postingId ?? null;
+	});
+
+	$effect(() => {
+		if (typeof window === "undefined") {
+			return;
+		}
+		if (!didInitializeState) {
+			return;
+		}
+		const postingId = selectedPostingId;
+		if (!postingId) {
+			selectedTransaction = null;
+			detailError = null;
+			detailLoading = false;
+			syncUrl();
+			return;
+		}
+		void loadDetail(postingId);
+	});
+
+	$effect(() => {
+		if (typeof window === "undefined") {
+			return;
+		}
+		if (!didInitializeState) {
+			return;
+		}
+		syncUrl();
+	});
+
+	onDestroy(() => {
+		if (searchDebounceHandle) {
+			window.clearTimeout(searchDebounceHandle);
+		}
+		listAbortController?.abort();
+		detailAbortController?.abort();
+	});
 
 	function handleGroupChange(nextGroup: GroupId) {
-		navigate((url) => {
-			url.searchParams.set("group", nextGroup);
-			clearPaging(url);
-			url.searchParams.delete("selected");
-		});
+		if (nextGroup === currentGroup) {
+			return;
+		}
+		currentGroup = nextGroup;
+		selectedPostingId = null;
+		selectedTransaction = null;
 	}
 
 	function handleSort(nextSort: TransactionsSortColumn) {
 		const nextDirection: TransactionsSortDirection =
-			sortColumn === nextSort
-				? sortDirection === "asc"
+			currentSort === nextSort
+				? currentDir === "asc"
 					? "desc"
 					: "asc"
 				: nextSort === "cleanDescription" || nextSort === "pairAccountId"
 					? "asc"
 					: "desc";
 
-		navigate((url) => {
-			url.searchParams.set("sort", nextSort);
-			url.searchParams.set("dir", nextDirection);
-			clearPaging(url);
-			url.searchParams.delete("selected");
-		});
+		currentSort = nextSort;
+		currentDir = nextDirection;
+		selectedPostingId = null;
+		selectedTransaction = null;
 	}
 
-	function handleSearchSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		navigate((url) => {
-			if (searchInput.trim().length > 0) {
-				url.searchParams.set("search", searchInput.trim());
-			} else {
-				url.searchParams.delete("search");
-			}
-			clearPaging(url);
-			url.searchParams.delete("selected");
-		});
+	function handleSelect(postingId: string) {
+		selectedPostingId = postingId;
 	}
 
 	function handleClearSearch() {
 		searchInput = "";
-		navigate((url) => {
+	}
+
+	function syncUrl() {
+		const url = new URL(window.location.href);
+		url.searchParams.set("group", currentGroup);
+		url.searchParams.set("sort", currentSort);
+		url.searchParams.set("dir", currentDir);
+		if (committedSearch) {
+			url.searchParams.set("search", committedSearch);
+		} else {
 			url.searchParams.delete("search");
-			clearPaging(url);
+		}
+		if (selectedPostingId) {
+			url.searchParams.set("selected", selectedPostingId);
+		} else {
 			url.searchParams.delete("selected");
-		});
+		}
+		window.history.replaceState(window.history.state, "", url);
 	}
 
-	function handleSelect(postingId: string) {
-		navigate(
-			(url) => {
-				url.searchParams.set("selected", postingId);
-			},
-			true,
-		);
+	async function loadList(group: GroupId, sort: TransactionsSortColumn, dir: TransactionsSortDirection) {
+		const cacheKey = buildListCacheKey(group, sort, dir);
+		const cached = listCache.get(cacheKey);
+		if (cached) {
+			listState = cached;
+			listLoading = false;
+			listRefreshing = false;
+			listError = null;
+		}
+
+		listAbortController?.abort();
+		const controller = new AbortController();
+		listAbortController = controller;
+
+		if (!cached) {
+			listLoading = true;
+		} else {
+			listRefreshing = true;
+		}
+
+		try {
+			const url = new URL("/api/transactions", window.location.origin);
+			url.searchParams.set("group", group);
+			url.searchParams.set("sort", sort);
+			url.searchParams.set("dir", dir);
+
+			const response = await fetch(url, {
+				headers: { accept: "application/json" },
+				cache: "no-store",
+				signal: controller.signal,
+			});
+			const payload = (await response.json()) as TransactionsApiListResponse;
+			if (!response.ok || !payload.list) {
+				throw new Error(payload.error ?? "Failed to load transactions");
+			}
+
+			listState = payload.list;
+			listCache.set(cacheKey, payload.list);
+			listError = null;
+		} catch (error) {
+			if (error instanceof DOMException && error.name === "AbortError") {
+				return;
+			}
+			listError = error instanceof Error ? error.message : "Failed to load transactions";
+			if (!cached) {
+				listState = EMPTY_LIST;
+			}
+		} finally {
+			if (listAbortController === controller && !controller.signal.aborted) {
+				listLoading = false;
+				listRefreshing = false;
+			}
+		}
 	}
 
-	function handleNextPage() {
-		if (!list.nextCursorToken) {
+	async function loadDetail(postingId: string) {
+		const cached = detailCache.get(postingId);
+		if (cached) {
+			selectedTransaction = cached;
+			detailError = null;
+			detailLoading = false;
 			return;
 		}
-		navigate((url) => {
-			setCursorTrail(url, [...list.cursorTrail, list.nextCursorToken!]);
-			url.searchParams.delete("selected");
-		});
+
+		detailAbortController?.abort();
+		const controller = new AbortController();
+		detailAbortController = controller;
+		detailLoading = true;
+		detailError = null;
+
+		try {
+			const response = await fetch(`/api/transactions/${encodeURIComponent(postingId)}`, {
+				headers: { accept: "application/json" },
+				cache: "no-store",
+				signal: controller.signal,
+			});
+			const payload = (await response.json()) as TransactionsApiDetailResponse;
+			if (!response.ok || !payload.detail) {
+				throw new Error(payload.error ?? "Failed to load transaction detail");
+			}
+			detailCache.set(postingId, payload.detail);
+			if (selectedPostingId === postingId) {
+				selectedTransaction = payload.detail;
+			}
+		} catch (error) {
+			if (error instanceof DOMException && error.name === "AbortError") {
+				return;
+			}
+			detailError = error instanceof Error ? error.message : "Failed to load transaction detail";
+			if (selectedPostingId === postingId) {
+				selectedTransaction = null;
+			}
+		} finally {
+			if (detailAbortController === controller && !controller.signal.aborted) {
+				detailLoading = false;
+			}
+		}
 	}
 
-	function handlePreviousPage() {
-		if (list.cursorTrail.length === 0) {
-			return;
-		}
-		navigate((url) => {
-			setCursorTrail(url, list.cursorTrail.slice(0, -1));
-			url.searchParams.delete("selected");
-		});
+	function buildListCacheKey(group: GroupId, sort: TransactionsSortColumn, dir: TransactionsSortDirection): string {
+		return `${group}:${sort}:${dir}`;
 	}
 
 	function formatMoney(minor: number, currency = "GBP"): string {
@@ -186,10 +370,10 @@
 	}
 
 	function getSortArrow(column: TransactionsSortColumn): string {
-		if (sortColumn !== column) {
+		if (currentSort !== column) {
 			return "";
 		}
-		return sortDirection === "asc" ? "↑" : "↓";
+		return currentDir === "asc" ? "↑" : "↓";
 	}
 
 	function getPairLabel(item: TransactionListItem): string {
@@ -225,7 +409,7 @@
 	<h1 class="sr-only">Transactions</h1>
 	<Header
 		activePage="transactions"
-		activeGroup={group}
+		activeGroup={effectiveGroup}
 		onGroupChange={handleGroupChange}
 		{availableGroups}
 		{groupMetadata}
@@ -234,109 +418,111 @@
 		detail={connection.detail}
 	/>
 
-	<section class="border border-border bg-panel flex-1 min-h-0 grid xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)] fade-in overflow-hidden">
+	<section class="border border-border bg-panel flex-1 min-h-0 grid xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,1fr)] fade-in overflow-hidden">
 		<div class="min-h-0 flex flex-col">
 			<header class="border-b border-border p-2.5 flex flex-col gap-2">
 				<div class="flex flex-col gap-1 lg:flex-row lg:items-end lg:justify-between">
 					<div>
 						<h2 class="font-normal text-sm uppercase tracking-widest">Transactions</h2>
 						<div class="text-sm mt-0.5 leading-snug uppercase tracking-wider text-muted">
-							Showing {list.rangeStart}-{list.rangeEnd} of {list.totalCount} for {groupMetadata[group]?.label ?? group}
+							{listSummary}
 						</div>
 					</div>
-					<div class="text-2xs uppercase tracking-widest text-muted">
-						Page {list.pageNumber} · {list.count} loaded · {list.pageSize} per page
-					</div>
+					<div class="text-2xs uppercase tracking-widest text-muted">{fetchStatusLabel}</div>
 				</div>
 
 				<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-					<form class="flex flex-col gap-2 sm:flex-row sm:items-center" onsubmit={handleSearchSubmit}>
+					<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
 						<label class="sr-only" for="transaction-search">Search transactions</label>
 						<input
 							id="transaction-search"
 							type="search"
 							bind:value={searchInput}
-							placeholder="Search description, counterparty, or account"
-							class="min-h-[44px] w-full sm:w-[24rem] bg-transparent border border-border-subtle px-3 text-sm outline-none focus:border-text placeholder:text-muted"
+							placeholder="Filter description, counterparty, account"
+							class="min-h-[44px] w-full sm:w-[22rem] bg-transparent border border-border-subtle px-2.5 text-[16px] leading-none outline-none focus:border-text placeholder:text-muted"
 						/>
-						<div class="flex items-center gap-2">
+						{#if searchInput.length > 0}
 							<button
-								type="submit"
-								class="min-h-[44px] px-3 border border-border text-2xs uppercase tracking-widest hover:border-text"
+								type="button"
+								class="min-h-[44px] px-2.5 border border-border-subtle text-2xs uppercase tracking-widest text-muted hover:text-text"
+								onclick={handleClearSearch}
 							>
-								Apply
+								Clear
 							</button>
-							{#if searchQuery}
-								<button
-									type="button"
-									class="min-h-[44px] px-3 border border-border-subtle text-2xs uppercase tracking-widest text-muted hover:text-text"
-									onclick={handleClearSearch}
-								>
-									Clear
-								</button>
-							{/if}
-						</div>
-					</form>
+						{/if}
+					</div>
 
 					<div class="flex items-center gap-2 text-2xs uppercase tracking-widest text-muted">
-						<button
-							type="button"
-							class="min-h-[44px] px-3 border border-border-subtle hover:border-text disabled:opacity-40 disabled:cursor-not-allowed"
-							onclick={handlePreviousPage}
-							disabled={list.cursorTrail.length === 0}
-						>
-							Previous
-						</button>
-						<button
-							type="button"
-							class="min-h-[44px] px-3 border border-border-subtle hover:border-text disabled:opacity-40 disabled:cursor-not-allowed"
-							onclick={handleNextPage}
-							disabled={!list.hasMore || !list.nextCursorToken}
-						>
-							Next
-						</button>
+						{#if committedSearch}
+							<span>Live filter</span>
+						{/if}
+						{#if listRefreshing}
+							<span class="text-pending">Updating</span>
+						{/if}
+						{#if listState.truncated}
+							<span>Limit {listState.limit.toLocaleString("en-GB")}</span>
+						{/if}
 					</div>
 				</div>
 			</header>
 
-			<div class="border-b border-border bg-panel flex text-sm">
-				{#each SORT_COLUMNS as column}
-					<button
-						type="button"
-						class="min-h-[44px] flex-1 min-w-0 text-left p-2 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors bg-transparent border-0 appearance-none"
-						onclick={() => handleSort(column.id)}
-					>
-						{column.label}
-						{#if getSortArrow(column.id)}
-							<span class="ml-1">{getSortArrow(column.id)}</span>
-						{/if}
-					</button>
-				{/each}
+			<div class="border-b border-border bg-panel">
+				<div class="hidden md:grid md:grid-cols-[118px_minmax(0,1.75fr)_minmax(0,1.15fr)_132px] md:gap-3 md:px-2.5">
+					{#each SORT_COLUMNS as column}
+						<button
+							type="button"
+							class={`min-h-[38px] min-w-0 text-2xs uppercase tracking-widest text-muted font-normal cursor-pointer hover:text-text transition-colors bg-transparent border-0 appearance-none ${
+								column.id === "amountMinor" ? "text-right" : "text-left"
+							}`}
+							onclick={() => handleSort(column.id)}
+						>
+							{column.label}
+							{#if getSortArrow(column.id)}
+								<span class="ml-1">{getSortArrow(column.id)}</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
 			</div>
 
-			<div class="flex-1 overflow-auto min-h-0">
-				{#if list.items.length === 0}
+			<div class="flex-1 overflow-auto min-h-0" aria-busy={listLoading || listRefreshing}>
+				{#if listLoading && listState.loadedCount === 0}
+					<div class="divide-y divide-border-subtle">
+						{#each Array.from({ length: 10 }) as _, index (`skeleton-${index}`)}
+							<div class="px-2.5 py-2.5 grid md:grid-cols-[118px_minmax(0,1.75fr)_minmax(0,1.15fr)_132px] gap-3 animate-pulse">
+								<div class="h-3 bg-border-subtle/70"></div>
+								<div class="h-3 bg-border-subtle/70"></div>
+								<div class="h-3 bg-border-subtle/50"></div>
+								<div class="h-3 bg-border-subtle/50"></div>
+							</div>
+						{/each}
+					</div>
+				{:else if listError}
+					<div class="h-full flex flex-col items-center justify-center gap-2 p-6 text-center">
+						<div class="text-sm uppercase tracking-widest text-error">Transactions unavailable</div>
+						<div class="text-sm text-muted leading-relaxed max-w-xl">{listError}</div>
+					</div>
+				{:else if filteredItems.length === 0}
 					<div class="h-full flex flex-col items-center justify-center gap-2 p-6 text-center">
 						<div class="text-sm uppercase tracking-widest">No transactions found</div>
 						<div class="text-sm text-muted leading-relaxed max-w-xl">
-							Adjust the group, clear the search filter, or reset the page cursor to return to the latest transactions.
+							Adjust the group or clear the live filter to return to the latest transactions.
 						</div>
-						<div class="text-2xs uppercase tracking-widest text-muted">{connection.detail}</div>
 					</div>
 				{:else}
 					<div class="divide-y divide-border-subtle">
-						{#each list.items as item (item.postingId)}
+						{#each filteredItems as item (item.postingId)}
 							<button
 								type="button"
-								class="w-full text-left px-2.5 py-2 grid gap-2 transition-colors hover:bg-panel-subtle"
+								class="w-full text-left px-2.5 py-2 transition-colors hover:bg-panel-subtle"
 								class:bg-panel-subtle={selectedPostingId === item.postingId}
 								aria-pressed={selectedPostingId === item.postingId}
 								onclick={() => handleSelect(item.postingId)}
 							>
-								<div class="flex items-start justify-between gap-3 md:hidden">
-									<div class="min-w-0">
+								<div class="flex items-center justify-between gap-3 md:hidden">
+									<div class="min-w-0 flex-1">
 										<div class="text-sm leading-snug truncate">{item.cleanDescription}</div>
-										<div class="text-2xs uppercase tracking-widest text-muted mt-1">
+										<div class="text-2xs uppercase tracking-widest text-muted truncate mt-1">
 											{formatDate(item.postedDate)} · {getPairLabel(item)}
 										</div>
 									</div>
@@ -349,15 +535,10 @@
 									</div>
 								</div>
 
-								<div class="hidden md:grid md:grid-cols-[120px_minmax(0,1.6fr)_minmax(0,1fr)_140px] md:items-center md:gap-3">
-									<div class="text-sm text-muted tabular-nums whitespace-nowrap">{formatDate(item.postedDate)}</div>
-									<div class="min-w-0">
-										<div class="text-sm leading-snug truncate">{item.cleanDescription}</div>
-										<div class="text-2xs uppercase tracking-widest text-muted truncate mt-1">
-											{item.counterparty ?? item.rawDescription}
-										</div>
-									</div>
-									<div class="text-sm text-muted truncate">{getPairLabel(item)}</div>
+								<div class="hidden md:grid md:grid-cols-[118px_minmax(0,1.75fr)_minmax(0,1.15fr)_132px] md:items-center md:gap-3">
+									<div class="text-2xs text-muted tabular-nums whitespace-nowrap">{formatDate(item.postedDate)}</div>
+									<div class="min-w-0 text-sm truncate">{item.cleanDescription}</div>
+									<div class="min-w-0 text-sm text-muted truncate">{getPairLabel(item)}</div>
 									<div
 										class="text-sm text-right tabular-nums whitespace-nowrap"
 										class:text-success={item.amountMinor > 0}
@@ -377,18 +558,28 @@
 			<header class="border-b border-border p-2.5 flex flex-col gap-1.5">
 				<h2 class="font-normal text-sm uppercase tracking-widest">Transaction detail</h2>
 				<div class="text-sm leading-snug uppercase tracking-wider text-muted">
-					Server-backed detail for the selected posting
+					Server-backed ledger detail for the selected posting
 				</div>
 			</header>
 
 			<div class="flex-1 overflow-auto min-h-0 p-2.5">
-				{#if selectedTransaction}
+				{#if detailLoading && !selectedTransaction}
+					<div class="h-full flex items-center justify-center text-sm text-muted leading-relaxed">
+						Loading transaction detail…
+					</div>
+				{:else if detailError}
+					<div class="h-full flex items-center justify-center text-center text-sm text-muted leading-relaxed">
+						{detailError}
+					</div>
+				{:else if selectedTransaction}
 					<div class="flex flex-col gap-3">
 						<div class="border border-border-subtle p-2.5 flex flex-col gap-1.5">
 							<div class="flex items-start justify-between gap-3">
-								<div>
-									<div class="text-lg leading-tight">{selectedTransaction.cleanDescription ?? selectedTransaction.description}</div>
-									<div class="text-2xs uppercase tracking-widest text-muted mt-1">
+								<div class="min-w-0">
+									<div class="text-lg leading-tight truncate">
+										{selectedTransaction.cleanDescription ?? selectedTransaction.description}
+									</div>
+									<div class="text-2xs uppercase tracking-widest text-muted mt-1 truncate">
 										{selectedTransaction.counterparty ?? selectedTransaction.description}
 									</div>
 								</div>
@@ -467,8 +658,4 @@
 			</div>
 		</aside>
 	</section>
-
-	<footer class="px-0.5 text-2xs uppercase tracking-widest text-muted">
-		{connection.detail}
-	</footer>
 </main>
