@@ -8,6 +8,7 @@
 		"build": "bunx --bun vite build",
 		"preview": "bunx --bun vite preview",
 		"prepare": "svelte-kit sync || echo ''",
+		"test": "bun test src/lib/server/api.test.ts src/lib/server/dashboard.test.ts src/lib/server/overview.test.ts src/lib/server/transactions.test.ts",
 		"check": "bunx --bun svelte-kit sync && bunx --bun tsgo --noEmit && bunx svelte-check-rs --tsconfig ./tsconfig.svelte.json",
 		"check:watch": "svelte-kit sync && svelte-check-rs --tsconfig ./tsconfig.svelte.json --watch"
 	},
