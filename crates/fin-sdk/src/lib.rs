@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod allocation;
 pub mod categories;
 pub mod compat;
 pub mod config;
@@ -19,6 +20,10 @@ mod stats;
 pub mod testing;
 pub mod units;
 
+pub use allocation::{
+    AllocationBucket, AllocationSegment, DashboardAllocationBasis, DashboardAllocationSummary,
+    GroupAllocationSnapshot, report_group_allocation, report_group_allocation_for_month,
+};
 pub use compat::{
     AccountSummary, ConfigShowData, ConfigValidationResult, FinSdkError, GroupMetadata,
     ValidationError, build_config_show, resolve_config_path, run_health, validate_config,
