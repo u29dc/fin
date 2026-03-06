@@ -10,9 +10,12 @@ pub mod tools;
 pub mod version;
 pub mod view;
 
+use std::path::PathBuf;
+
 use serde_json::Value as JsonValue;
 
 use fin_sdk::error::FinError;
+use fin_sdk::runtime::{RuntimeContext, RuntimeContextOptions};
 
 use crate::envelope::MetaExtras;
 use crate::error::{CliError, ErrorCode, ExitCode};
@@ -86,4 +89,18 @@ pub fn map_fin_error(tool: &'static str, error: FinError) -> CommandFailure {
         tool,
         error: cli_error,
     }
+}
+
+pub fn open_runtime(
+    tool: &'static str,
+    explicit_db: Option<&str>,
+    readonly: bool,
+) -> Result<RuntimeContext, CommandFailure> {
+    let mut options = if readonly {
+        RuntimeContextOptions::read_only()
+    } else {
+        RuntimeContextOptions::writable()
+    };
+    options.db_path = explicit_db.map(PathBuf::from);
+    RuntimeContext::open(options).map_err(|error| map_fin_error(tool, error))
 }

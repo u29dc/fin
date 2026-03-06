@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 
-use fin_sdk::config::{LoadedConfig, load_config};
-use fin_sdk::db::{OpenDatabaseOptions, open_database, resolve_db_path};
+use fin_sdk::config::LoadedConfig;
+use fin_sdk::runtime::{RuntimeContext, RuntimeContextOptions};
 use fin_sdk::{
     MonthlyCashflowPoint, TransactionQueryOptions, group_category_breakdown, report_cashflow,
     report_reserves, report_runway, report_summary, view_accounts, view_transactions,
@@ -195,28 +195,6 @@ pub enum RoutePayload {
     CategoriesDashboard(CategoriesDashboardPayload),
 }
 
-#[derive(Debug)]
-struct RuntimeContext {
-    connection: Connection,
-    loaded: LoadedConfig,
-}
-
-impl RuntimeContext {
-    fn open() -> Result<Self, String> {
-        let loaded = load_config(None).map_err(|error| error.to_string())?;
-        let db_path = resolve_db_path(None, Some(&loaded.config_dir()));
-        let connection = open_database(OpenDatabaseOptions {
-            path: Some(db_path),
-            config_dir: Some(loaded.config_dir()),
-            readonly: true,
-            create: false,
-            migrate: true,
-        })
-        .map_err(|error| error.to_string())?;
-        Ok(Self { connection, loaded })
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct FetchClient {
     runtime: Option<RuntimeContext>,
@@ -232,7 +210,7 @@ impl FetchClient {
         let Some(runtime) = self.runtime.as_ref() else {
             return Ok(vec![]);
         };
-        Ok(runtime.loaded.config.group_ids())
+        Ok(runtime.config().group_ids())
     }
 
     pub fn fetch_route(
@@ -257,25 +235,31 @@ impl FetchClient {
 
     fn ensure_runtime(&mut self) -> Result<(), String> {
         if self.runtime.is_none() {
-            self.runtime = Some(RuntimeContext::open()?);
+            self.runtime = Some(
+                RuntimeContext::open(RuntimeContextOptions {
+                    create: false,
+                    ..RuntimeContextOptions::read_only()
+                })
+                .map_err(|error| error.to_string())?,
+            );
         }
         Ok(())
     }
 }
 
 fn fetch_summary_dashboard(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
-    let summary = report_summary(&runtime.connection, &runtime.loaded.config, 12)
+    let summary = report_summary(runtime.connection(), runtime.config(), 12)
         .map_err(|error| error.to_string())?;
-    let current_month = current_month(&runtime.connection)?;
+    let current_month = current_month(runtime.connection())?;
 
     let mut group_rows = Vec::new();
     let mut reserve_rows = Vec::new();
 
-    for group_id in runtime.loaded.config.group_ids() {
+    for group_id in runtime.config().group_ids() {
         let group = summary.groups.get(&group_id);
         let (series, _) = report_cashflow(
-            &runtime.connection,
-            &runtime.loaded.config,
+            runtime.connection(),
+            runtime.config(),
             &group_id,
             CASHFLOW_LOOKBACK_MONTHS,
             None,
@@ -296,8 +280,8 @@ fn fetch_summary_dashboard(runtime: &RuntimeContext) -> Result<RoutePayload, Str
         });
 
         let reserves = report_reserves(
-            &runtime.connection,
-            &runtime.loaded.config,
+            runtime.connection(),
+            runtime.config(),
             &group_id,
             None,
             None,
@@ -328,7 +312,7 @@ fn fetch_summary_dashboard(runtime: &RuntimeContext) -> Result<RoutePayload, Str
 
 fn fetch_transactions(runtime: &RuntimeContext) -> Result<RoutePayload, String> {
     let rows = view_transactions(
-        &runtime.connection,
+        runtime.connection(),
         &TransactionQueryOptions {
             limit: TUI_TRANSACTIONS_PREVIEW_LIMIT,
             ..TransactionQueryOptions::default()
@@ -375,11 +359,11 @@ fn fetch_cashflow_dashboard(
     requested_group: &str,
 ) -> Result<RoutePayload, String> {
     let group_id = resolve_group(runtime, requested_group);
-    let current = current_month(&runtime.connection)?;
+    let current = current_month(runtime.connection())?;
 
     let (series, _) = report_cashflow(
-        &runtime.connection,
-        &runtime.loaded.config,
+        runtime.connection(),
+        runtime.config(),
         &group_id,
         CASHFLOW_LOOKBACK_MONTHS,
         None,
@@ -416,8 +400,8 @@ fn fetch_cashflow_dashboard(
     let avg_six_month_net_minor = average_last_n(full_months, 6, |point| point.net_minor);
 
     let runway = report_runway(
-        &runtime.connection,
-        &runtime.loaded.config,
+        runtime.connection(),
+        runtime.config(),
         &group_id,
         None,
         None,
@@ -426,8 +410,8 @@ fn fetch_cashflow_dashboard(
     let runway_months = runway.last().map(|point| point.runway_months);
 
     let reserves = report_reserves(
-        &runtime.connection,
-        &runtime.loaded.config,
+        runtime.connection(),
+        runtime.config(),
         &group_id,
         None,
         None,
@@ -458,7 +442,7 @@ fn fetch_overview_dashboard(
         OverviewScope::Group(group) => Some(group.as_str()),
     };
 
-    let mut accounts = view_accounts(&runtime.connection, &runtime.loaded.config, group_filter)
+    let mut accounts = view_accounts(runtime.connection(), runtime.config(), group_filter)
         .map_err(|error| error.to_string())?;
     if accounts.is_empty() {
         return Ok(RoutePayload::Text(format!(
@@ -486,7 +470,7 @@ fn fetch_overview_dashboard(
             let stale_days = account
                 .updated_at
                 .as_deref()
-                .and_then(|value| days_since(&runtime.connection, value).ok());
+                .and_then(|value| days_since(runtime.connection(), value).ok());
             AccountFreshnessRow {
                 label: account.name,
                 balance_minor: account.balance_minor.unwrap_or(0),
@@ -510,11 +494,11 @@ fn fetch_categories_dashboard(
     requested_group: &str,
 ) -> Result<RoutePayload, String> {
     let group_id = resolve_group(runtime, requested_group);
-    let current = current_month(&runtime.connection)?;
+    let current = current_month(runtime.connection())?;
 
     let breakdown = group_category_breakdown(
-        &runtime.connection,
-        &runtime.loaded.config,
+        runtime.connection(),
+        runtime.config(),
         &group_id,
         CATEGORY_MONTHS,
         CATEGORY_LIMIT,
@@ -527,8 +511,8 @@ fn fetch_categories_dashboard(
     }
 
     let leakage = load_uncategorized_leakage(
-        &runtime.connection,
-        &runtime.loaded,
+        runtime.connection(),
+        runtime.loaded_config(),
         &group_id,
         CATEGORY_MONTHS,
         &current,
@@ -558,8 +542,8 @@ fn fetch_categories_dashboard(
         .collect::<Vec<_>>();
 
     let (months, stability) = load_category_stability(
-        &runtime.connection,
-        &runtime.loaded,
+        runtime.connection(),
+        runtime.loaded_config(),
         &group_id,
         CATEGORY_MONTHS,
         CATEGORY_STABILITY_LIMIT,
@@ -579,11 +563,11 @@ fn fetch_categories_dashboard(
 
 fn fetch_reports(runtime: &RuntimeContext, requested_group: &str) -> Result<RoutePayload, String> {
     let group_id = resolve_group(runtime, requested_group);
-    let current = current_month(&runtime.connection)?;
+    let current = current_month(runtime.connection())?;
 
     let (series, totals) = report_cashflow(
-        &runtime.connection,
-        &runtime.loaded.config,
+        runtime.connection(),
+        runtime.config(),
         &group_id,
         CASHFLOW_LOOKBACK_MONTHS,
         None,
@@ -593,16 +577,16 @@ fn fetch_reports(runtime: &RuntimeContext, requested_group: &str) -> Result<Rout
     let full_months = full_month_series(&series, &current);
 
     let runway = report_runway(
-        &runtime.connection,
-        &runtime.loaded.config,
+        runtime.connection(),
+        runtime.config(),
         &group_id,
         None,
         None,
     )
     .map_err(|error| error.to_string())?;
     let reserves = report_reserves(
-        &runtime.connection,
-        &runtime.loaded.config,
+        runtime.connection(),
+        runtime.config(),
         &group_id,
         None,
         None,
@@ -657,7 +641,7 @@ fn fetch_reports(runtime: &RuntimeContext, requested_group: &str) -> Result<Rout
 }
 
 fn resolve_group(runtime: &RuntimeContext, requested_group: &str) -> String {
-    let groups = runtime.loaded.config.group_ids();
+    let groups = runtime.config().group_ids();
     if groups.iter().any(|group| group == requested_group) {
         return requested_group.to_owned();
     }
@@ -880,4 +864,53 @@ fn summarize_accounts(accounts: &str) -> String {
         return parts[0].to_owned();
     }
     format!("{} (+{})", parts[0], parts.len() - 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use fin_sdk::runtime::{RuntimeContext, RuntimeContextOptions};
+    use fin_sdk::testing::fixture::{FixtureBuildOptions, materialize_fixture_home};
+
+    use super::{FetchClient, FetchContext, RoutePayload};
+    use crate::routes::Route;
+
+    #[test]
+    fn fetch_client_uses_shared_runtime_context() {
+        let temp = tempdir().expect("tempdir");
+        let fixture = materialize_fixture_home(temp.path(), &FixtureBuildOptions::default())
+            .expect("materialize fixture");
+        let runtime = RuntimeContext::open(RuntimeContextOptions {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            create: false,
+            ..RuntimeContextOptions::read_only()
+        })
+        .expect("open runtime");
+
+        let mut client = FetchClient {
+            runtime: Some(runtime),
+        };
+
+        assert_eq!(
+            client.available_groups().expect("available groups"),
+            vec![
+                "business".to_owned(),
+                "joint".to_owned(),
+                "personal".to_owned()
+            ]
+        );
+
+        let payload = client
+            .fetch_route(Route::Summary, &FetchContext::default())
+            .expect("summary payload");
+        match payload {
+            RoutePayload::SummaryDashboard(payload) => {
+                assert_eq!(payload.group_rows.len(), 3);
+                assert_eq!(payload.reserve_rows.len(), 3);
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+    }
 }

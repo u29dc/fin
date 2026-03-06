@@ -1,43 +1,20 @@
 use serde_json::json;
 
-use fin_sdk::config::load_config;
-use fin_sdk::db::{OpenDatabaseOptions, open_database, resolve_db_path};
 use fin_sdk::{
     LedgerQueryOptions, TransactionQueryOptions, edit_transaction, get_balance_sheet,
     ledger_entry_count, view_accounts, view_ledger, view_transactions, void_entry,
 };
 
-use crate::commands::{CommandFailure, CommandResult, map_fin_error};
+use crate::commands::{CommandFailure, CommandResult, map_fin_error, open_runtime};
 use crate::envelope::MetaExtras;
 use crate::error::ExitCode;
-
-fn resolve_db(
-    tool: &'static str,
-    explicit_db: Option<&str>,
-    readonly: bool,
-) -> Result<(rusqlite::Connection, fin_sdk::config::LoadedConfig), CommandFailure> {
-    let loaded = load_config(None).map_err(|error| map_fin_error(tool, error))?;
-    let db_path = resolve_db_path(
-        explicit_db.map(std::path::Path::new),
-        Some(&loaded.config_dir()),
-    );
-    let connection = open_database(OpenDatabaseOptions {
-        path: Some(db_path),
-        config_dir: Some(loaded.config_dir()),
-        readonly,
-        create: true,
-        migrate: true,
-    })
-    .map_err(|error| map_fin_error(tool, error))?;
-    Ok((connection, loaded))
-}
 
 pub fn run_accounts(
     db: Option<&str>,
     group: Option<&str>,
 ) -> Result<CommandResult, CommandFailure> {
-    let (connection, loaded) = resolve_db("view.accounts", db, true)?;
-    let accounts = view_accounts(&connection, &loaded.config, group)
+    let runtime = open_runtime("view.accounts", db, true)?;
+    let accounts = view_accounts(runtime.connection(), runtime.config(), group)
         .map_err(|error| map_fin_error("view.accounts", error))?;
     let total = accounts
         .iter()
@@ -80,9 +57,9 @@ pub fn run_transactions(
     search: Option<&str>,
     limit: usize,
 ) -> Result<CommandResult, CommandFailure> {
-    let (connection, loaded) = resolve_db("view.transactions", db, true)?;
+    let runtime = open_runtime("view.transactions", db, true)?;
     let chart_account_ids = if let Some(group) = group {
-        Some(fin_sdk::group_asset_account_ids(&loaded.config, group))
+        Some(fin_sdk::group_asset_account_ids(runtime.config(), group))
     } else if let Some(account) = account {
         Some(vec![account.to_owned()])
     } else {
@@ -95,7 +72,7 @@ pub fn run_transactions(
         search: search.map(std::string::ToString::to_string),
         limit,
     };
-    let transactions = view_transactions(&connection, &options)
+    let transactions = view_transactions(runtime.connection(), &options)
         .map_err(|error| map_fin_error("view.transactions", error))?;
     let rows = transactions
         .iter()
@@ -132,16 +109,16 @@ pub fn run_ledger(
     to: Option<&str>,
     limit: usize,
 ) -> Result<CommandResult, CommandFailure> {
-    let (connection, _) = resolve_db("view.ledger", db, true)?;
+    let runtime = open_runtime("view.ledger", db, true)?;
     let options = LedgerQueryOptions {
         account_id: account.map(std::string::ToString::to_string),
         from: from.map(std::string::ToString::to_string),
         to: to.map(std::string::ToString::to_string),
         limit,
     };
-    let entries =
-        view_ledger(&connection, &options).map_err(|error| map_fin_error("view.ledger", error))?;
-    let total = ledger_entry_count(&connection, account)
+    let entries = view_ledger(runtime.connection(), &options)
+        .map_err(|error| map_fin_error("view.ledger", error))?;
+    let total = ledger_entry_count(runtime.connection(), account)
         .map_err(|error| map_fin_error("view.ledger", error))?;
     Ok(CommandResult {
         tool: "view.ledger",
@@ -161,8 +138,8 @@ pub fn run_ledger(
 }
 
 pub fn run_balance(db: Option<&str>, as_of: Option<&str>) -> Result<CommandResult, CommandFailure> {
-    let (connection, _) = resolve_db("view.balance", db, true)?;
-    let sheet = get_balance_sheet(&connection, as_of)
+    let runtime = open_runtime("view.balance", db, true)?;
+    let sheet = get_balance_sheet(runtime.connection(), as_of)
         .map_err(|error| map_fin_error("view.balance", error))?;
     Ok(CommandResult {
         tool: "view.balance",
@@ -189,8 +166,8 @@ pub fn run_void(
     id: &str,
     dry_run: bool,
 ) -> Result<CommandResult, CommandFailure> {
-    let (mut connection, _) = resolve_db("view.void", db, dry_run)?;
-    let preview = void_entry(&mut connection, id, dry_run)
+    let mut runtime = open_runtime("view.void", db, dry_run)?;
+    let preview = void_entry(runtime.connection_mut(), id, dry_run)
         .map_err(|error| map_fin_error("view.void", error))?;
     Ok(CommandResult {
         tool: "view.void",
@@ -216,8 +193,8 @@ pub fn run_edit_transaction(
     account: Option<&str>,
     dry_run: bool,
 ) -> Result<CommandResult, CommandFailure> {
-    let (mut connection, _) = resolve_db("edit.transaction", db, dry_run)?;
-    let result = edit_transaction(&mut connection, id, description, account, dry_run)
+    let mut runtime = open_runtime("edit.transaction", db, dry_run)?;
+    let result = edit_transaction(runtime.connection_mut(), id, description, account, dry_run)
         .map_err(|error| map_fin_error("edit.transaction", error))?;
     Ok(CommandResult {
         tool: "edit.transaction",

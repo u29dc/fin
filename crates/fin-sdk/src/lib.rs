@@ -12,6 +12,7 @@ pub mod mutations;
 pub mod queries;
 pub mod reports;
 pub mod rules;
+pub mod runtime;
 pub mod sanitize;
 pub mod testing;
 pub mod units;
@@ -40,6 +41,7 @@ pub use reports::{
     RunwayPoint, SummaryReport, report_cashflow, report_health, report_reserves, report_runway,
     report_summary,
 };
+pub use runtime::{RuntimeContext, RuntimeContextOptions};
 pub use sanitize::{
     DescriptionSummary, MigrationCandidate, MigrationError, MigrationPlan, MigrationResult,
     RecategorizeCandidate, RecategorizePlan, RecategorizeResult, discover_descriptions,

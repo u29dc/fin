@@ -372,6 +372,7 @@ dependencies = [
  "fin-sdk",
  "ratatui",
  "rusqlite",
+ "tempfile",
 ]
 
 [[package]]

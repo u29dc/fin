@@ -2,36 +2,14 @@ use std::collections::BTreeMap;
 
 use serde_json::json;
 
-use fin_sdk::config::load_config;
-use fin_sdk::db::{OpenDatabaseOptions, open_database, resolve_db_path};
 use fin_sdk::{
     audit_payees, group_category_breakdown, group_category_monthly_median, report_cashflow,
     report_health, report_reserves, report_runway, report_summary, view_accounts,
 };
 
-use crate::commands::{CommandFailure, CommandResult, map_fin_error};
+use crate::commands::{CommandFailure, CommandResult, map_fin_error, open_runtime};
 use crate::envelope::MetaExtras;
 use crate::error::ExitCode;
-
-fn resolve_db(
-    tool: &'static str,
-    explicit_db: Option<&str>,
-) -> Result<(rusqlite::Connection, fin_sdk::config::LoadedConfig), CommandFailure> {
-    let loaded = load_config(None).map_err(|error| map_fin_error(tool, error))?;
-    let db_path = resolve_db_path(
-        explicit_db.map(std::path::Path::new),
-        Some(&loaded.config_dir()),
-    );
-    let connection = open_database(OpenDatabaseOptions {
-        path: Some(db_path),
-        config_dir: Some(loaded.config_dir()),
-        readonly: true,
-        create: true,
-        migrate: true,
-    })
-    .map_err(|error| map_fin_error(tool, error))?;
-    Ok((connection, loaded))
-}
 
 pub fn run_cashflow(
     db: Option<&str>,
@@ -40,9 +18,16 @@ pub fn run_cashflow(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<CommandResult, CommandFailure> {
-    let (connection, loaded) = resolve_db("report.cashflow", db)?;
-    let (series, totals) = report_cashflow(&connection, &loaded.config, group, months, from, to)
-        .map_err(|error| map_fin_error("report.cashflow", error))?;
+    let runtime = open_runtime("report.cashflow", db, true)?;
+    let (series, totals) = report_cashflow(
+        runtime.connection(),
+        runtime.config(),
+        group,
+        months,
+        from,
+        to,
+    )
+    .map_err(|error| map_fin_error("report.cashflow", error))?;
     let rows = series
         .iter()
         .map(|point| {
@@ -81,8 +66,8 @@ pub fn run_health(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<CommandResult, CommandFailure> {
-    let (connection, loaded) = resolve_db("report.health", db)?;
-    let series = report_health(&connection, &loaded.config, group, from, to)
+    let runtime = open_runtime("report.health", db, true)?;
+    let series = report_health(runtime.connection(), runtime.config(), group, from, to)
         .map_err(|error| map_fin_error("report.health", error))?;
     let latest = series.last().cloned();
     Ok(CommandResult {
@@ -109,7 +94,7 @@ pub fn run_runway(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<CommandResult, CommandFailure> {
-    let (connection, loaded) = resolve_db("report.runway", db)?;
+    let runtime = open_runtime("report.runway", db, true)?;
     if consolidated {
         if include.map(str::trim).is_none_or(str::is_empty) {
             return Err(map_fin_error(
@@ -128,14 +113,14 @@ pub fn run_runway(
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>();
         let groups = if include_groups.is_empty() {
-            loaded.config.group_ids()
+            runtime.config().group_ids()
         } else {
             include_groups
         };
 
         let mut merged = BTreeMap::<String, (i64, i64, f64)>::new();
         for group_id in &groups {
-            let points = report_runway(&connection, &loaded.config, group_id, from, to)
+            let points = report_runway(runtime.connection(), runtime.config(), group_id, from, to)
                 .map_err(|error| map_fin_error("report.runway", error))?;
             for point in points {
                 let slot = merged.entry(point.date.clone()).or_insert((0, 0, 0.0));
@@ -186,7 +171,7 @@ pub fn run_runway(
             },
         )
     })?;
-    let raw_series = report_runway(&connection, &loaded.config, group, from, to)
+    let raw_series = report_runway(runtime.connection(), runtime.config(), group, from, to)
         .map_err(|error| map_fin_error("report.runway", error))?;
 
     // Preserve legacy semantics: no historic burn/cashflow data means no series points.
@@ -232,8 +217,8 @@ pub fn run_reserves(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<CommandResult, CommandFailure> {
-    let (connection, loaded) = resolve_db("report.reserves", db)?;
-    let series = report_reserves(&connection, &loaded.config, group, from, to)
+    let runtime = open_runtime("report.reserves", db, true)?;
+    let series = report_reserves(runtime.connection(), runtime.config(), group, from, to)
         .map_err(|error| map_fin_error("report.reserves", error))?;
     let latest = series.last().cloned();
     Ok(CommandResult {
@@ -259,11 +244,16 @@ pub fn run_categories(
     months: usize,
     limit: usize,
 ) -> Result<CommandResult, CommandFailure> {
-    let (connection, loaded) = resolve_db("report.categories", db)?;
+    let runtime = open_runtime("report.categories", db, true)?;
     if mode == "median" {
-        let points =
-            group_category_monthly_median(&connection, &loaded.config, group, months, limit)
-                .map_err(|error| map_fin_error("report.categories", error))?;
+        let points = group_category_monthly_median(
+            runtime.connection(),
+            runtime.config(),
+            group,
+            months,
+            limit,
+        )
+        .map_err(|error| map_fin_error("report.categories", error))?;
         let categories = points
             .iter()
             .map(|point| {
@@ -294,8 +284,9 @@ pub fn run_categories(
         });
     }
 
-    let points = group_category_breakdown(&connection, &loaded.config, group, months, limit)
-        .map_err(|error| map_fin_error("report.categories", error))?;
+    let points =
+        group_category_breakdown(runtime.connection(), runtime.config(), group, months, limit)
+            .map_err(|error| map_fin_error("report.categories", error))?;
     let categories = points
         .iter()
         .map(|point| {
@@ -329,8 +320,8 @@ pub fn run_audit(
     months: usize,
     limit: usize,
 ) -> Result<CommandResult, CommandFailure> {
-    let (connection, _) = resolve_db("report.audit", db)?;
-    let points = audit_payees(&connection, account, months, limit)
+    let runtime = open_runtime("report.audit", db, true)?;
+    let points = audit_payees(runtime.connection(), account, months, limit)
         .map_err(|error| map_fin_error("report.audit", error))?;
     let total_minor = points.iter().map(|point| point.total_minor).sum::<i64>();
     Ok(CommandResult {
@@ -350,14 +341,14 @@ pub fn run_audit(
 }
 
 pub fn run_summary(db: Option<&str>, months: usize) -> Result<CommandResult, CommandFailure> {
-    let (connection, loaded) = resolve_db("report.summary", db)?;
-    let report = report_summary(&connection, &loaded.config, months)
+    let runtime = open_runtime("report.summary", db, true)?;
+    let report = report_summary(runtime.connection(), runtime.config(), months)
         .map_err(|error| map_fin_error("report.summary", error))?;
 
     let mut groups = Vec::new();
-    for group_id in loaded.config.group_ids() {
+    for group_id in runtime.config().group_ids() {
         let summary = report.groups.get(&group_id);
-        let accounts = view_accounts(&connection, &loaded.config, Some(&group_id))
+        let accounts = view_accounts(runtime.connection(), runtime.config(), Some(&group_id))
             .map_err(|error| map_fin_error("report.summary", error))?;
         let balances = accounts
             .into_iter()
@@ -370,7 +361,7 @@ pub fn run_summary(db: Option<&str>, months: usize) -> Result<CommandResult, Com
             .collect::<Vec<_>>();
         groups.push(json!({
             "id": group_id,
-            "label": summary.map(|value| value.label.clone()).unwrap_or_else(|| loaded.config.resolve_group_metadata(&group_id).label),
+            "label": summary.map(|value| value.label.clone()).unwrap_or_else(|| runtime.config().resolve_group_metadata(&group_id).label),
             "balances": balances,
             "snapshot": {
                 "runway": summary.and_then(|value| value.latest_runway_months),
