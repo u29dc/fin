@@ -408,7 +408,7 @@ export type ProjectionQuery = {
 	include?: string;
 	months?: number;
 	minimumBurnRatio?: number;
-	as_of?: string;
+	asOf?: string;
 	trailingOutflowWindowMonths?: number;
 };
 

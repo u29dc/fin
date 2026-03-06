@@ -1,5 +1,5 @@
-import { loadShellState } from "$lib/server/api";
+import { loadOverviewPageData } from "$lib/server/overview";
 
-export async function load() {
-	return loadShellState();
+export function load() {
+	return loadOverviewPageData();
 }

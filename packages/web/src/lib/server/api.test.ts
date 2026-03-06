@@ -115,6 +115,58 @@ describe("createFinApiClient", () => {
 		expect(calls[0]).toContain("downsampleMinStepDays=14");
 		expect(calls[0]).not.toContain("downsample_min_step_days");
 	});
+
+	test("uses camelCase projection query keys", async () => {
+		const calls: string[] = [];
+		const client = createFinApiClient({
+			env: { FIN_API_BASE_URL: "http://127.0.0.1:7414" },
+			fetch: async (url) => {
+				calls.push(String(url));
+				return jsonResponse({
+					ok: true,
+					data: {
+						groups: ["personal", "business"],
+						report: {
+							scope_kind: "consolidated",
+							scope_id: "consolidated",
+							liquid_balance_minor: 0,
+							current_burn_minor: 0,
+							minimum_burn_minor: 0,
+							median_monthly_expense_minor: 0,
+							thresholds: { warning_minor: null, threshold_minor: null },
+							assumptions: {
+								as_of_date: "2026-03-01",
+								projection_months: 24,
+								trailing_outflow_window_months: 12,
+								burn_rate_method: "median_outflow",
+								minimum_burn_ratio: 0.6,
+								full_months_only: true,
+								include_as_of_month_in_history: false,
+							},
+							scenarios: [],
+						},
+					},
+					meta: { tool: "dashboard.projection", elapsed: 1 },
+				});
+			},
+		});
+
+		await client.dashboardProjection({
+			consolidated: true,
+			include: "personal,business",
+			minimumBurnRatio: 0.75,
+			asOf: "2026-03-01",
+			trailingOutflowWindowMonths: 18,
+			months: 36,
+		});
+
+		expect(calls[0]).toContain("minimumBurnRatio=0.75");
+		expect(calls[0]).toContain("asOf=2026-03-01");
+		expect(calls[0]).toContain("trailingOutflowWindowMonths=18");
+		expect(calls[0]).not.toContain("minimum_burn_ratio");
+		expect(calls[0]).not.toContain("as_of");
+		expect(calls[0]).not.toContain("trailing_outflow_window_months");
+	});
 });
 
 describe("loadShellState", () => {

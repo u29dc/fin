@@ -8,8 +8,8 @@
 	type Props = {
 		currentBurn: ProjectionPoint[];
 		minimumBurn: ProjectionPoint[];
-		threshold?: number;
-		warningLine?: number;
+		threshold?: number | null;
+		warningLine?: number | null;
 		height?: number;
 		formatHover?: (current: ProjectionPoint, minimum: ProjectionPoint) => string;
 		compact?: boolean;
@@ -18,8 +18,8 @@
 	let {
 		currentBurn,
 		minimumBurn,
-		threshold = 40_000,
-		warningLine = 50_000,
+		threshold = null,
+		warningLine = null,
 		height = 320,
 		formatHover,
 		compact = false,
@@ -33,13 +33,57 @@
 	const colors = $derived(ECHARTS_COLORS[colorScheme]);
 	const semantic = $derived(LINE_SEMANTIC_COLORS[colorScheme]);
 
+	function formatThresholdLabel(value: number): string {
+		if (Math.abs(value) >= 1000) {
+			return `${Math.round(value / 1000)}K`;
+		}
+		return value.toString();
+	}
+
 	function buildChartOption() {
 		// Convert data to [date, value] format (value in pounds, not pence)
 		const currentData = currentBurn.map((p) => [p.date, p.balanceMinor / 100] as [string, number]);
 		const minimumData = minimumBurn.map((p) => [p.date, p.balanceMinor / 100] as [string, number]);
-
-		// Threshold in pounds for y-axis comparison
-		const thresholdPounds = threshold;
+		const markLineData = [
+			warningLine !== null && warningLine !== undefined
+				? {
+						yAxis: warningLine,
+						name: formatThresholdLabel(warningLine),
+						label: {
+							show: !compact,
+							formatter: formatThresholdLabel(warningLine),
+							position: "end",
+							color: colors.textMuted,
+							fontFamily: DEFAULT_FONT_FAMILY,
+							fontSize: 11,
+						},
+						lineStyle: {
+							color: semantic.warning,
+							type: "dashed",
+							width: 1,
+						},
+					}
+				: null,
+			threshold !== null && threshold !== undefined
+				? {
+						yAxis: threshold,
+						name: formatThresholdLabel(threshold),
+						label: {
+							show: !compact,
+							formatter: formatThresholdLabel(threshold),
+							position: "end",
+							color: colors.textMuted,
+							fontFamily: DEFAULT_FONT_FAMILY,
+							fontSize: 11,
+						},
+						lineStyle: {
+							color: semantic.expense,
+							type: "dashed",
+							width: 1,
+						},
+					}
+				: null,
+		].filter((line): line is NonNullable<typeof line> => line !== null);
 
 		return {
 			animation: false,
@@ -147,46 +191,15 @@
 					areaStyle: {
 						color: semantic.incomeFill,
 					},
-					markLine: {
-						silent: true,
-						symbol: 'none',
-						data: [
-							{
-								yAxis: warningLine,
-								name: `${warningLine / 1000}K`,
-								label: {
-									show: !compact,
-									formatter: `${warningLine / 1000}K`,
-									position: 'end',
-									color: colors.textMuted,
-									fontFamily: DEFAULT_FONT_FAMILY,
-									fontSize: 11,
+					...(markLineData.length > 0
+						? {
+								markLine: {
+									silent: true,
+									symbol: "none",
+									data: markLineData,
 								},
-								lineStyle: {
-									color: semantic.warning,
-									type: 'dashed',
-									width: 1,
-								},
-							},
-							{
-								yAxis: thresholdPounds,
-								name: `${thresholdPounds / 1000}K`,
-								label: {
-									show: !compact,
-									formatter: `${thresholdPounds / 1000}K`,
-									position: 'end',
-									color: colors.textMuted,
-									fontFamily: DEFAULT_FONT_FAMILY,
-									fontSize: 11,
-								},
-								lineStyle: {
-									color: semantic.expense,
-									type: 'dashed',
-									width: 1,
-								},
-							},
-						],
-					},
+							}
+						: {}),
 				},
 				// Minimum burn series (dashed, muted)
 				{
@@ -247,6 +260,8 @@
 	$effect(() => {
 		if (currentBurn && minimumBurn && colorScheme !== undefined) {
 			compact;
+			threshold;
+			warningLine;
 			render();
 		}
 	});
