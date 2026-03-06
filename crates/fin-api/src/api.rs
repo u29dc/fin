@@ -10,18 +10,25 @@ use axum::{Json, Router, routing::get};
 use fin_sdk::config::{LoadedConfig, load_config};
 use fin_sdk::rules::{NameMappingConfig, load_rules, resolve_rules_path};
 use fin_sdk::{
-    AccountBalanceRow, AuditPayeePoint, BalanceSheet, CashflowTotals, CategoryBreakdownPoint,
-    CategoryMedianPoint, ConfigShowData, ConfigValidationResult, DescriptionSummary, EnvelopeMeta,
-    ErrorEnvelope, ErrorPayload, FinError, FinSdkError, GlobalFlag, HealthCheckOptions,
-    HealthPoint, HealthReport, JournalEntryRow, LedgerQueryOptions, ReserveBreakdownPoint,
-    RuntimeContext, RuntimeContextOptions, RunwayPoint, SDK_VERSION, SortDirection,
-    SuccessEnvelope, SummaryReport, ToolMeta, TransactionCursor, TransactionDetail,
-    TransactionListRow, TransactionPageQuery, TransactionSortField, ValidationError, audit_payees,
-    build_config_show, discover_descriptions, discover_unmapped_descriptions, get_balance_sheet,
-    global_flags, group_category_breakdown, group_category_monthly_median, ledger_entry_count,
-    load_transaction_detail, query_transactions_page, report_cashflow, report_health,
-    report_reserves, report_runway, report_summary, run_health_checks, sdk_banner, tool_registry,
-    validate_config, view_accounts, view_ledger,
+    AccountBalanceRow, AuditPayeePoint, BalanceSeriesQueryOptions, BalanceSheet, CashflowKpis,
+    CashflowTotals, CategoryBreakdownPoint, CategoryMedianPoint, ConfigShowData,
+    ConfigValidationResult, ContributionPoint, DailyBalancePoint, DescriptionSummary, EnvelopeMeta,
+    ErrorEnvelope, ErrorPayload, ExpenseHierarchyNode, FinError, FinSdkError, FlowGraph,
+    FlowQueryOptions, GlobalFlag, GroupAllocationSnapshot, HealthCheckOptions, HealthPoint,
+    HealthReport, HierarchyQueryOptions, JournalEntryRow, LedgerQueryOptions,
+    ReserveBreakdownPoint, RollupMode, RuntimeContext, RuntimeContextOptions, RunwayPoint,
+    RunwayProjectionOptions, RunwayProjectionReport, SDK_VERSION, SortDirection, SuccessEnvelope,
+    SummaryReport, ToolMeta, TransactionCursor, TransactionDetail, TransactionListRow,
+    TransactionPageQuery, TransactionSortField, ValidationError, account_daily_balance_series,
+    audit_payees, build_config_show, cumulative_contribution_series, discover_descriptions,
+    discover_unmapped_descriptions, get_balance_sheet, global_flags, group_category_breakdown,
+    group_category_monthly_median, group_daily_balance_series, group_expense_hierarchy,
+    group_flow_graph, ledger_entry_count, load_transaction_detail,
+    merged_accounts_daily_balance_series, project_consolidated_runway, project_group_runway,
+    query_transactions_page, report_cashflow, report_cashflow_kpis,
+    report_group_allocation_for_month, report_health, report_reserves, report_runway,
+    report_summary, run_health_checks, sdk_banner, tool_registry, validate_config, view_accounts,
+    view_ledger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -457,6 +464,122 @@ struct ReportSummaryQuery {
     months: usize,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardKpisQuery {
+    group: String,
+    #[serde(default = "default_dashboard_kpi_months")]
+    months: usize,
+    from: Option<String>,
+    to: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct DashboardAllocationQuery {
+    group: String,
+    month: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardHierarchyQuery {
+    group: String,
+    #[serde(default = "default_dashboard_insight_months")]
+    months: usize,
+    #[serde(default = "default_rollup_mode")]
+    mode: RollupMode,
+    to: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardFlowQuery {
+    group: String,
+    #[serde(default = "default_dashboard_insight_months")]
+    months: usize,
+    #[serde(default = "default_rollup_mode")]
+    mode: RollupMode,
+    to: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardBalanceQuery {
+    group: Option<String>,
+    account: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    #[serde(default = "default_series_limit")]
+    limit: usize,
+    downsample_min_step_days: Option<u32>,
+}
+
+impl Default for DashboardBalanceQuery {
+    fn default() -> Self {
+        Self {
+            group: None,
+            account: None,
+            from: None,
+            to: None,
+            limit: default_series_limit(),
+            downsample_min_step_days: None,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardContributionQuery {
+    account: String,
+    from: Option<String>,
+    to: Option<String>,
+    #[serde(default = "default_series_limit")]
+    limit: usize,
+    downsample_min_step_days: Option<u32>,
+}
+
+impl Default for DashboardContributionQuery {
+    fn default() -> Self {
+        Self {
+            account: String::new(),
+            from: None,
+            to: None,
+            limit: default_series_limit(),
+            downsample_min_step_days: None,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardProjectionQuery {
+    group: Option<String>,
+    #[serde(default)]
+    consolidated: bool,
+    include: Option<String>,
+    #[serde(default = "default_projection_months")]
+    months: usize,
+    #[serde(default = "default_projection_minimum_burn_ratio")]
+    minimum_burn_ratio: f64,
+    as_of: Option<String>,
+    trailing_outflow_window_months: Option<usize>,
+}
+
+impl Default for DashboardProjectionQuery {
+    fn default() -> Self {
+        Self {
+            group: None,
+            consolidated: false,
+            include: None,
+            months: default_projection_months(),
+            minimum_burn_ratio: default_projection_minimum_burn_ratio(),
+            as_of: None,
+            trailing_outflow_window_months: None,
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RulesShowPayload {
@@ -587,6 +710,73 @@ struct AuditPayload {
     total: i64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardKpisPayload {
+    group_id: String,
+    group_label: String,
+    months: usize,
+    kpis: CashflowKpis,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardAllocationPayload {
+    reporting_month: String,
+    snapshot: GroupAllocationSnapshot,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardHierarchyPayload {
+    group_id: String,
+    months: usize,
+    mode: RollupMode,
+    total_minor: i64,
+    nodes: Vec<ExpenseHierarchyNode>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardFlowPayload {
+    group_id: String,
+    months: usize,
+    mode: RollupMode,
+    graph: FlowGraph,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum DashboardBalanceScopeKind {
+    AllAssets,
+    Group,
+    Account,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardBalancePayload {
+    scope_kind: DashboardBalanceScopeKind,
+    scope_id: String,
+    scope_label: String,
+    series: Vec<DailyBalancePoint>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardContributionPayload {
+    account_id: String,
+    account_label: String,
+    series: Vec<ContributionPoint>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardProjectionPayload {
+    groups: Vec<String>,
+    report: RunwayProjectionReport,
+}
+
 pub fn build_router(state: ApiState) -> Router {
     Router::new()
         .route("/__probe", get(probe_handler))
@@ -614,6 +804,22 @@ pub fn build_router(state: ApiState) -> Router {
         .route("/v1/report/categories", get(report_categories_handler))
         .route("/v1/report/audit", get(report_audit_handler))
         .route("/v1/report/summary", get(report_summary_handler))
+        .route("/v1/dashboard/kpis", get(dashboard_kpis_handler))
+        .route(
+            "/v1/dashboard/allocation",
+            get(dashboard_allocation_handler),
+        )
+        .route("/v1/dashboard/hierarchy", get(dashboard_hierarchy_handler))
+        .route("/v1/dashboard/flow", get(dashboard_flow_handler))
+        .route("/v1/dashboard/balances", get(dashboard_balances_handler))
+        .route(
+            "/v1/dashboard/contributions",
+            get(dashboard_contributions_handler),
+        )
+        .route(
+            "/v1/dashboard/projection",
+            get(dashboard_projection_handler),
+        )
         .fallback(fallback_handler)
         .with_state(state)
 }
@@ -1290,6 +1496,362 @@ async fn report_summary_handler(
     ))
 }
 
+async fn dashboard_kpis_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<DashboardKpisQuery>, QueryRejection>,
+) -> ApiResult<DashboardKpisPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "dashboard.kpis", started)?;
+    let runtime = open_read_runtime(&state, "dashboard.kpis", started)?;
+    ensure_group_exists(runtime.config(), &query.group, "dashboard.kpis", started)?;
+
+    let kpis = report_cashflow_kpis(
+        runtime.connection(),
+        runtime.config(),
+        &query.group,
+        query.months,
+        query.from.as_deref(),
+        query.to.as_deref(),
+    )
+    .map_err(|error| ApiError::from_fin_error("dashboard.kpis", error, started))?;
+    let group_label = runtime.config().resolve_group_metadata(&query.group).label;
+
+    Ok(success(
+        "dashboard.kpis",
+        DashboardKpisPayload {
+            group_id: query.group,
+            group_label,
+            months: query.months,
+            kpis,
+        },
+        started,
+        MetaExtras::default(),
+    ))
+}
+
+async fn dashboard_allocation_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<DashboardAllocationQuery>, QueryRejection>,
+) -> ApiResult<DashboardAllocationPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "dashboard.allocation", started)?;
+    let runtime = open_read_runtime(&state, "dashboard.allocation", started)?;
+    ensure_group_exists(
+        runtime.config(),
+        &query.group,
+        "dashboard.allocation",
+        started,
+    )?;
+
+    let requested_month = query.month.clone();
+    let reporting_month = match requested_month {
+        Some(month) => {
+            validate_year_month(&month, "dashboard.allocation", started)?;
+            month
+        }
+        None => fin_sdk::current_reporting_month(runtime.connection())
+            .map_err(|error| ApiError::from_fin_error("dashboard.allocation", error, started))?,
+    };
+    let snapshot = report_group_allocation_for_month(
+        runtime.connection(),
+        runtime.config(),
+        &query.group,
+        &reporting_month,
+    )
+    .map_err(|error| ApiError::from_fin_error("dashboard.allocation", error, started))?;
+
+    Ok(success(
+        "dashboard.allocation",
+        DashboardAllocationPayload {
+            reporting_month,
+            snapshot,
+        },
+        started,
+        MetaExtras {
+            count: Some(1),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn dashboard_hierarchy_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<DashboardHierarchyQuery>, QueryRejection>,
+) -> ApiResult<DashboardHierarchyPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "dashboard.hierarchy", started)?;
+    let runtime = open_read_runtime(&state, "dashboard.hierarchy", started)?;
+    ensure_group_exists(
+        runtime.config(),
+        &query.group,
+        "dashboard.hierarchy",
+        started,
+    )?;
+
+    let nodes = group_expense_hierarchy(
+        runtime.connection(),
+        runtime.config(),
+        &query.group,
+        &HierarchyQueryOptions {
+            months: query.months,
+            mode: query.mode,
+            to: query.to.clone(),
+        },
+    )
+    .map_err(|error| ApiError::from_fin_error("dashboard.hierarchy", error, started))?;
+    let count = hierarchy_node_count(&nodes);
+    let total_minor = nodes.iter().map(|node| node.total_minor).sum::<i64>();
+
+    Ok(success(
+        "dashboard.hierarchy",
+        DashboardHierarchyPayload {
+            group_id: query.group,
+            months: query.months,
+            mode: query.mode,
+            total_minor,
+            nodes,
+        },
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn dashboard_flow_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<DashboardFlowQuery>, QueryRejection>,
+) -> ApiResult<DashboardFlowPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "dashboard.flow", started)?;
+    let runtime = open_read_runtime(&state, "dashboard.flow", started)?;
+    ensure_group_exists(runtime.config(), &query.group, "dashboard.flow", started)?;
+
+    let graph = group_flow_graph(
+        runtime.connection(),
+        runtime.config(),
+        &query.group,
+        &FlowQueryOptions {
+            months: query.months,
+            mode: query.mode,
+            to: query.to.clone(),
+        },
+    )
+    .map_err(|error| ApiError::from_fin_error("dashboard.flow", error, started))?;
+    let count = graph.edges.len();
+
+    Ok(success(
+        "dashboard.flow",
+        DashboardFlowPayload {
+            group_id: query.group,
+            months: query.months,
+            mode: query.mode,
+            graph,
+        },
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn dashboard_balances_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<DashboardBalanceQuery>, QueryRejection>,
+) -> ApiResult<DashboardBalancePayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "dashboard.balances", started)?;
+    if query.group.is_some() && query.account.is_some() {
+        return Err(ApiError::bad_request(
+            "dashboard.balances",
+            "INVALID_INPUT",
+            "group and account filters cannot be combined",
+            "Pass either group or account for dashboard balances, not both.",
+            started,
+        ));
+    }
+
+    let runtime = open_read_runtime(&state, "dashboard.balances", started)?;
+    let options = build_balance_series_options(
+        query.from.clone(),
+        query.to.clone(),
+        query.limit,
+        query.downsample_min_step_days,
+    );
+
+    let payload = if let Some(account_id) = query.account {
+        let account =
+            ensure_account_exists(runtime.config(), &account_id, "dashboard.balances", started)?;
+        let series = account_daily_balance_series(runtime.connection(), &account_id, &options)
+            .map_err(|error| ApiError::from_fin_error("dashboard.balances", error, started))?;
+        DashboardBalancePayload {
+            scope_kind: DashboardBalanceScopeKind::Account,
+            scope_id: account_id,
+            scope_label: account.label.clone().unwrap_or_else(|| account.id.clone()),
+            series,
+        }
+    } else if let Some(group_id) = query.group {
+        ensure_group_exists(runtime.config(), &group_id, "dashboard.balances", started)?;
+        let group = runtime.config().resolve_group_metadata(&group_id);
+        let series =
+            group_daily_balance_series(runtime.connection(), runtime.config(), &group_id, &options)
+                .map_err(|error| ApiError::from_fin_error("dashboard.balances", error, started))?;
+        DashboardBalancePayload {
+            scope_kind: DashboardBalanceScopeKind::Group,
+            scope_id: group_id,
+            scope_label: group.label,
+            series,
+        }
+    } else {
+        let account_ids = runtime
+            .config()
+            .accounts
+            .iter()
+            .filter(|account| account.account_type == "asset")
+            .map(|account| account.id.clone())
+            .collect::<Vec<_>>();
+        let series =
+            merged_accounts_daily_balance_series(runtime.connection(), &account_ids, &options)
+                .map_err(|error| ApiError::from_fin_error("dashboard.balances", error, started))?;
+        DashboardBalancePayload {
+            scope_kind: DashboardBalanceScopeKind::AllAssets,
+            scope_id: "all-assets".to_owned(),
+            scope_label: "All assets".to_owned(),
+            series,
+        }
+    };
+    let count = payload.series.len();
+
+    Ok(success(
+        "dashboard.balances",
+        payload,
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn dashboard_contributions_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<DashboardContributionQuery>, QueryRejection>,
+) -> ApiResult<DashboardContributionPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "dashboard.contributions", started)?;
+    let runtime = open_read_runtime(&state, "dashboard.contributions", started)?;
+    let account = ensure_account_exists(
+        runtime.config(),
+        &query.account,
+        "dashboard.contributions",
+        started,
+    )?;
+    let series = cumulative_contribution_series(
+        runtime.connection(),
+        &query.account,
+        &build_balance_series_options(
+            query.from,
+            query.to,
+            query.limit,
+            query.downsample_min_step_days,
+        ),
+    )
+    .map_err(|error| ApiError::from_fin_error("dashboard.contributions", error, started))?;
+    let count = series.len();
+
+    Ok(success(
+        "dashboard.contributions",
+        DashboardContributionPayload {
+            account_id: query.account,
+            account_label: account.label.clone().unwrap_or_else(|| account.id.clone()),
+            series,
+        },
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn dashboard_projection_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<DashboardProjectionQuery>, QueryRejection>,
+) -> ApiResult<DashboardProjectionPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "dashboard.projection", started)?;
+    let runtime = open_read_runtime(&state, "dashboard.projection", started)?;
+    let options = RunwayProjectionOptions {
+        months: query.months,
+        minimum_burn_ratio: query.minimum_burn_ratio,
+        as_of: query.as_of.clone(),
+        trailing_outflow_window_months: query.trailing_outflow_window_months,
+    };
+
+    let (groups, report) = if query.consolidated {
+        if query.group.is_some() {
+            return Err(ApiError::bad_request(
+                "dashboard.projection",
+                "INVALID_INPUT",
+                "group cannot be combined with consolidated=true",
+                "Pass either group for one scope or consolidated=true with optional include.",
+                started,
+            ));
+        }
+        let groups = validated_selected_groups(
+            runtime.config(),
+            query.include.as_deref(),
+            "dashboard.projection",
+            started,
+        )?;
+        let report =
+            project_consolidated_runway(runtime.connection(), runtime.config(), &groups, &options)
+                .map_err(|error| {
+                    ApiError::from_fin_error("dashboard.projection", error, started)
+                })?;
+        (groups, report)
+    } else {
+        if query.include.is_some() {
+            return Err(ApiError::bad_request(
+                "dashboard.projection",
+                "INVALID_INPUT",
+                "include requires consolidated=true",
+                "Set consolidated=true when passing include.",
+                started,
+            ));
+        }
+        let group_id = query.group.ok_or_else(|| {
+            ApiError::bad_request(
+                "dashboard.projection",
+                "INVALID_INPUT",
+                "Missing group for dashboard projection",
+                "Pass group or set consolidated=true for a combined projection.",
+                started,
+            )
+        })?;
+        ensure_group_exists(runtime.config(), &group_id, "dashboard.projection", started)?;
+        let report =
+            project_group_runway(runtime.connection(), runtime.config(), &group_id, &options)
+                .map_err(|error| {
+                    ApiError::from_fin_error("dashboard.projection", error, started)
+                })?;
+        (vec![group_id], report)
+    };
+    let count = report.scenarios.len();
+
+    Ok(success(
+        "dashboard.projection",
+        DashboardProjectionPayload { groups, report },
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
 async fn fallback_handler(uri: Uri) -> ApiError {
     ApiError::not_found(
         "api",
@@ -1363,6 +1925,84 @@ fn serialize_cursor_token(cursor: &TransactionCursor) -> Result<String, String> 
         .map_err(|error| format!("failed to serialize transaction cursor: {error}"))
 }
 
+fn ensure_group_exists(
+    config: &fin_sdk::config::FinConfig,
+    group_id: &str,
+    tool: &'static str,
+    started: Instant,
+) -> Result<(), ApiError> {
+    if config
+        .group_ids()
+        .iter()
+        .any(|candidate| candidate == group_id)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::not_found(
+            tool,
+            format!("group \"{group_id}\" not found"),
+            "Call GET /v1/config/show to inspect configured groups.",
+            started,
+        ))
+    }
+}
+
+fn ensure_account_exists<'a>(
+    config: &'a fin_sdk::config::FinConfig,
+    account_id: &str,
+    tool: &'static str,
+    started: Instant,
+) -> Result<&'a fin_sdk::config::AccountConfig, ApiError> {
+    config.account_by_id(account_id).ok_or_else(|| {
+        ApiError::not_found(
+            tool,
+            format!("account \"{account_id}\" not found"),
+            "Call GET /v1/config/show or GET /v1/view/accounts to inspect available accounts.",
+            started,
+        )
+    })
+}
+
+fn validate_year_month(value: &str, tool: &'static str, started: Instant) -> Result<(), ApiError> {
+    let bytes = value.as_bytes();
+    let valid = bytes.len() == 7
+        && bytes[4] == b'-'
+        && bytes[..4].iter().all(u8::is_ascii_digit)
+        && bytes[5..].iter().all(u8::is_ascii_digit);
+    if valid {
+        Ok(())
+    } else {
+        Err(ApiError::bad_request(
+            tool,
+            "INVALID_INPUT",
+            format!("invalid year-month value: {value}"),
+            "Use YYYY-MM, for example 2026-03.",
+            started,
+        ))
+    }
+}
+
+fn build_balance_series_options(
+    from: Option<String>,
+    to: Option<String>,
+    limit: usize,
+    downsample_min_step_days: Option<u32>,
+) -> BalanceSeriesQueryOptions {
+    BalanceSeriesQueryOptions {
+        from,
+        to,
+        limit,
+        downsample_min_step_days,
+    }
+}
+
+fn hierarchy_node_count(nodes: &[ExpenseHierarchyNode]) -> usize {
+    nodes
+        .iter()
+        .map(|node| 1 + hierarchy_node_count(&node.children))
+        .sum()
+}
+
 fn selected_runway_groups(
     config: &fin_sdk::config::FinConfig,
     include: Option<&str>,
@@ -1379,6 +2019,19 @@ fn selected_runway_groups(
     } else {
         include_groups
     }
+}
+
+fn validated_selected_groups(
+    config: &fin_sdk::config::FinConfig,
+    include: Option<&str>,
+    tool: &'static str,
+    started: Instant,
+) -> Result<Vec<String>, ApiError> {
+    let groups = selected_runway_groups(config, include);
+    for group_id in &groups {
+        ensure_group_exists(config, group_id, tool, started)?;
+    }
+    Ok(groups)
 }
 
 fn consolidate_runway_series(
@@ -1447,12 +2100,32 @@ const fn default_discover_limit() -> usize {
     500
 }
 
+const fn default_dashboard_kpi_months() -> usize {
+    24
+}
+
+const fn default_dashboard_insight_months() -> usize {
+    6
+}
+
 const fn default_report_months() -> usize {
     12
 }
 
 const fn default_page_limit() -> usize {
     50
+}
+
+const fn default_series_limit() -> usize {
+    0
+}
+
+const fn default_projection_months() -> usize {
+    24
+}
+
+const fn default_projection_minimum_burn_ratio() -> f64 {
+    0.6
 }
 
 fn default_categories_mode() -> String {
@@ -1481,4 +2154,8 @@ const fn default_sort_field() -> TransactionSortField {
 
 const fn default_sort_direction() -> SortDirection {
     SortDirection::Desc
+}
+
+const fn default_rollup_mode() -> RollupMode {
+    RollupMode::MonthlyAverage
 }

@@ -880,6 +880,246 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn dashboard_kpis_allocation_hierarchy_and_flow_endpoints_return_payloads() -> Result<()>
+    {
+        let temp = tempdir().expect("tempdir");
+        let fixture = fin_sdk::testing::fixture::materialize_fixture_home(
+            temp.path(),
+            &fin_sdk::testing::fixture::FixtureBuildOptions::default(),
+        )?;
+        let (address, shutdown_tx, server) = spawn_tcp_server(StartArgs {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })
+        .await?;
+
+        let (kpis_status, kpis_body) =
+            request_json(address, "/v1/dashboard/kpis?group=business&months=18").await?;
+        assert_eq!(kpis_status, 200);
+        assert_eq!(kpis_body["ok"], true);
+        assert_eq!(kpis_body["meta"]["tool"], "dashboard.kpis");
+        assert_eq!(kpis_body["data"]["groupId"], "business");
+        assert_eq!(kpis_body["data"]["months"], 18);
+        assert!(
+            kpis_body["data"]["kpis"]["median_spend_minor"]
+                .as_i64()
+                .is_some()
+        );
+
+        let (allocation_status, allocation_body) = request_json(
+            address,
+            "/v1/dashboard/allocation?group=personal&month=2026-03",
+        )
+        .await?;
+        assert_eq!(allocation_status, 200);
+        assert_eq!(allocation_body["ok"], true);
+        assert_eq!(allocation_body["meta"]["tool"], "dashboard.allocation");
+        assert_eq!(allocation_body["data"]["reportingMonth"], "2026-03");
+        assert_eq!(
+            allocation_body["data"]["snapshot"]["dashboard"]["basis"],
+            "personal_buffer"
+        );
+        assert!(
+            allocation_body["data"]["snapshot"]["dashboard"]["segments"]
+                .as_array()
+                .is_some_and(|segments| !segments.is_empty())
+        );
+
+        let (hierarchy_status, hierarchy_body) = request_json(
+            address,
+            "/v1/dashboard/hierarchy?group=business&months=6&mode=monthly_average",
+        )
+        .await?;
+        assert_eq!(hierarchy_status, 200);
+        assert_eq!(hierarchy_body["ok"], true);
+        assert_eq!(hierarchy_body["meta"]["tool"], "dashboard.hierarchy");
+        assert_eq!(hierarchy_body["data"]["mode"], "monthly_average");
+        assert!(
+            hierarchy_body["data"]["nodes"]
+                .as_array()
+                .is_some_and(|nodes| !nodes.is_empty())
+        );
+        assert!(hierarchy_body["data"]["totalMinor"].as_i64().is_some());
+
+        let (flow_status, flow_body) = request_json(
+            address,
+            "/v1/dashboard/flow?group=business&months=6&mode=monthly_average",
+        )
+        .await?;
+        assert_eq!(flow_status, 200);
+        assert_eq!(flow_body["ok"], true);
+        assert_eq!(flow_body["meta"]["tool"], "dashboard.flow");
+        assert_eq!(flow_body["data"]["mode"], "monthly_average");
+        assert!(
+            flow_body["data"]["graph"]["edges"]
+                .as_array()
+                .is_some_and(|edges| !edges.is_empty())
+        );
+        assert!(flow_body["data"]["graph"]["total_minor"].as_i64().is_some());
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dashboard_balances_contributions_and_projection_endpoints_return_payloads()
+    -> Result<()> {
+        let temp = tempdir().expect("tempdir");
+        let fixture = fin_sdk::testing::fixture::materialize_fixture_home(
+            temp.path(),
+            &fin_sdk::testing::fixture::FixtureBuildOptions::default(),
+        )?;
+        let (address, shutdown_tx, server) = spawn_tcp_server(StartArgs {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })
+        .await?;
+
+        let (balances_status, balances_body) =
+            request_json(address, "/v1/dashboard/balances").await?;
+        assert_eq!(balances_status, 200);
+        assert_eq!(balances_body["ok"], true);
+        assert_eq!(balances_body["meta"]["tool"], "dashboard.balances");
+        assert_eq!(balances_body["data"]["scopeKind"], "all_assets");
+        assert!(
+            balances_body["data"]["series"]
+                .as_array()
+                .is_some_and(|series| !series.is_empty())
+        );
+
+        let (account_balances_status, account_balances_body) = request_json(
+            address,
+            "/v1/dashboard/balances?account=Assets%3APersonal%3AChecking&downsampleMinStepDays=14",
+        )
+        .await?;
+        assert_eq!(account_balances_status, 200);
+        assert_eq!(account_balances_body["ok"], true);
+        assert_eq!(account_balances_body["data"]["scopeKind"], "account");
+        assert_eq!(
+            account_balances_body["data"]["scopeId"],
+            "Assets:Personal:Checking"
+        );
+
+        let (contrib_status, contrib_body) = request_json(
+            address,
+            "/v1/dashboard/contributions?account=Assets%3APersonal%3AInvestments&downsampleMinStepDays=30",
+        )
+        .await?;
+        assert_eq!(contrib_status, 200);
+        assert_eq!(contrib_body["ok"], true);
+        assert_eq!(contrib_body["meta"]["tool"], "dashboard.contributions");
+        assert_eq!(
+            contrib_body["data"]["accountId"],
+            "Assets:Personal:Investments"
+        );
+        assert!(
+            contrib_body["data"]["series"]
+                .as_array()
+                .is_some_and(|series| !series.is_empty())
+        );
+
+        let (projection_status, projection_body) =
+            request_json(address, "/v1/dashboard/projection?group=business&months=12").await?;
+        assert_eq!(projection_status, 200);
+        assert_eq!(projection_body["ok"], true);
+        assert_eq!(projection_body["meta"]["tool"], "dashboard.projection");
+        assert_eq!(projection_body["data"]["groups"][0], "business");
+        assert_eq!(projection_body["data"]["report"]["scope_kind"], "group");
+        assert_eq!(
+            projection_body["data"]["report"]["scenarios"]
+                .as_array()
+                .map(Vec::len),
+            Some(2)
+        );
+
+        let (consolidated_status, consolidated_body) = request_json(
+            address,
+            "/v1/dashboard/projection?consolidated=true&include=personal%2Cbusiness&months=12",
+        )
+        .await?;
+        assert_eq!(consolidated_status, 200);
+        assert_eq!(consolidated_body["ok"], true);
+        assert_eq!(
+            consolidated_body["data"]["report"]["scope_kind"],
+            "consolidated"
+        );
+        assert_eq!(consolidated_body["data"]["groups"][0], "personal");
+        assert_eq!(consolidated_body["data"]["groups"][1], "business");
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dashboard_endpoints_reject_invalid_scope_requests() -> Result<()> {
+        let temp = tempdir().expect("tempdir");
+        let fixture = fin_sdk::testing::fixture::materialize_fixture_home(
+            temp.path(),
+            &fin_sdk::testing::fixture::FixtureBuildOptions::default(),
+        )?;
+        let (address, shutdown_tx, server) = spawn_tcp_server(StartArgs {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })
+        .await?;
+
+        let (balances_status, balances_body) = request_json(
+            address,
+            "/v1/dashboard/balances?group=personal&account=Assets%3APersonal%3AChecking",
+        )
+        .await?;
+        assert_eq!(balances_status, 400);
+        assert_eq!(balances_body["ok"], false);
+        assert_eq!(balances_body["error"]["code"], "INVALID_INPUT");
+        assert_eq!(balances_body["meta"]["tool"], "dashboard.balances");
+
+        let (allocation_status, allocation_body) = request_json(
+            address,
+            "/v1/dashboard/allocation?group=personal&month=202603",
+        )
+        .await?;
+        assert_eq!(allocation_status, 400);
+        assert_eq!(allocation_body["ok"], false);
+        assert_eq!(allocation_body["error"]["code"], "INVALID_INPUT");
+        assert_eq!(allocation_body["meta"]["tool"], "dashboard.allocation");
+
+        let (projection_status, projection_body) = request_json(
+            address,
+            "/v1/dashboard/projection?include=personal%2Cbusiness",
+        )
+        .await?;
+        assert_eq!(projection_status, 400);
+        assert_eq!(projection_body["ok"], false);
+        assert_eq!(projection_body["error"]["code"], "INVALID_INPUT");
+        assert_eq!(projection_body["meta"]["tool"], "dashboard.projection");
+
+        let (missing_group_status, missing_group_body) =
+            request_json(address, "/v1/dashboard/kpis?group=missing").await?;
+        assert_eq!(missing_group_status, 404);
+        assert_eq!(missing_group_body["ok"], false);
+        assert_eq!(missing_group_body["error"]["code"], "NOT_FOUND");
+        assert_eq!(missing_group_body["meta"]["tool"], "dashboard.kpis");
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
     async fn spawn_tcp_server(
         args: StartArgs,
     ) -> Result<(
