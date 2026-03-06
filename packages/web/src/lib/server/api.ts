@@ -96,6 +96,82 @@ export type ViewAccountsData = {
 	total: number;
 };
 
+export type TransactionSortField =
+	| "posted_at"
+	| "amount_minor"
+	| "description"
+	| "counterparty"
+	| "account_id";
+
+export type TransactionSortDirection = "asc" | "desc";
+
+export type TransactionCursorValue =
+	| {
+			type: "text";
+			value: string;
+	  }
+	| {
+			type: "integer";
+			value: number;
+	  };
+
+export type TransactionCursor = {
+	sort_field: TransactionSortField;
+	sort_direction: TransactionSortDirection;
+	sort_value: TransactionCursorValue;
+	posted_at: string;
+	journal_entry_id: string;
+	posting_id: string;
+};
+
+export type TransactionListRow = {
+	posting_id: string;
+	journal_entry_id: string;
+	chart_account_id: string;
+	pair_account_ids: string[];
+	posted_at: string;
+	posted_date: string;
+	amount_minor: number;
+	currency: string;
+	raw_description: string;
+	clean_description: string;
+	counterparty: string | null;
+};
+
+export type ViewTransactionsData = {
+	items: TransactionListRow[];
+	count: number;
+	totalCount: number;
+	hasMore: boolean;
+	nextCursor: TransactionCursor | null;
+	nextCursorToken: string | null;
+};
+
+export type TransactionCounterpartyPosting = {
+	posting_id: string;
+	account_id: string;
+	amount_minor: number;
+	currency: string;
+	memo: string | null;
+};
+
+export type TransactionDetailData = {
+	posting_id: string;
+	journal_entry_id: string;
+	chart_account_id: string;
+	posted_at: string;
+	posted_date: string;
+	amount_minor: number;
+	currency: string;
+	description: string;
+	raw_description: string | null;
+	clean_description: string | null;
+	counterparty: string | null;
+	source_file: string | null;
+	is_transfer: boolean;
+	pair_postings: TransactionCounterpartyPosting[];
+};
+
 export type MonthlyCashflowPoint = {
 	month: string;
 	income_minor: number;
@@ -412,12 +488,26 @@ export type ProjectionQuery = {
 	trailingOutflowWindowMonths?: number;
 };
 
+export type ViewTransactionsQuery = {
+	account?: string;
+	group?: string;
+	from?: string;
+	to?: string;
+	search?: string;
+	limit?: number;
+	sortField?: TransactionSortField;
+	sortDirection?: TransactionSortDirection;
+	after?: string;
+};
+
 export type FinApiClient = {
 	readonly transport: ApiTransport;
 	get<T>(pathname: string, query?: Record<string, QueryValue>): Promise<T>;
 	configShow(): Promise<ConfigShowData>;
 	health(): Promise<HealthReport>;
 	viewAccounts(group?: string): Promise<ViewAccountsData>;
+	viewTransactions(query: ViewTransactionsQuery): Promise<ViewTransactionsData>;
+	viewTransactionDetail(postingId: string): Promise<TransactionDetailData>;
 	reportSummary(months?: number): Promise<SummaryReport>;
 	reportCashflow(group: string, months?: number): Promise<CashflowReport>;
 	reportRunway(group: string, months?: number): Promise<RunwayReport>;
@@ -504,6 +594,12 @@ export function createFinApiClient(options?: { env?: EnvLike; fetch?: FetchLike 
 		},
 		viewAccounts(group?: string) {
 			return get<ViewAccountsData>("/v1/view/accounts", { group });
+		},
+		viewTransactions(query: ViewTransactionsQuery) {
+			return get<ViewTransactionsData>("/v1/view/transactions", query);
+		},
+		viewTransactionDetail(postingId: string) {
+			return get<TransactionDetailData>(`/v1/view/transactions/${encodeURIComponent(postingId)}`);
 		},
 		reportSummary(months?: number) {
 			return get<SummaryReport>("/v1/report/summary", { months });

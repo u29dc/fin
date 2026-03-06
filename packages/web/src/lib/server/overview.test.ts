@@ -25,6 +25,17 @@ function createMockClient(overrides: Partial<FinApiClient>): FinApiClient {
 			summary: { ok: 1, blocking: 0, degraded: 0 },
 		}),
 		viewAccounts: async () => ({ accounts: [], total: 0 }),
+		viewTransactions: async () => ({
+			items: [],
+			count: 0,
+			totalCount: 0,
+			hasMore: false,
+			nextCursor: null,
+			nextCursorToken: null,
+		}),
+		viewTransactionDetail: async () => {
+			throw new Error("viewTransactionDetail not implemented");
+		},
 		reportSummary: async () => ({
 			generated_at: "now",
 			period_months: 12,

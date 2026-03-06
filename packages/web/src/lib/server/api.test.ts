@@ -167,6 +167,69 @@ describe("createFinApiClient", () => {
 		expect(calls[0]).not.toContain("as_of");
 		expect(calls[0]).not.toContain("trailing_outflow_window_months");
 	});
+
+	test("sends transaction paging queries and detail paths", async () => {
+		const calls: string[] = [];
+		const client = createFinApiClient({
+			env: { FIN_API_BASE_URL: "http://127.0.0.1:7414" },
+			fetch: async (url) => {
+				calls.push(String(url));
+				if (String(url).includes("/v1/view/transactions/")) {
+					return jsonResponse({
+						ok: true,
+						data: {
+							posting_id: "posting-1",
+							journal_entry_id: "entry-1",
+							chart_account_id: "Assets:Personal:Monzo",
+							posted_at: "2026-03-01T12:00:00Z",
+							posted_date: "2026-03-01",
+							amount_minor: -12345,
+							currency: "GBP",
+							description: "Coffee",
+							raw_description: "STARBUCKS",
+							clean_description: "Coffee",
+							counterparty: "Starbucks",
+							source_file: "monzo.csv",
+							is_transfer: false,
+							pair_postings: [],
+						},
+						meta: { tool: "view.transactions", elapsed: 1 },
+					});
+				}
+				return jsonResponse({
+					ok: true,
+					data: {
+						items: [],
+						count: 0,
+						totalCount: 0,
+						hasMore: false,
+						nextCursor: null,
+						nextCursorToken: null,
+					},
+					meta: { tool: "view.transactions", elapsed: 1, count: 0, total: 0, hasMore: false },
+				});
+			},
+		});
+
+		await client.viewTransactions({
+			group: "personal",
+			search: "coffee",
+			limit: 100,
+			sortField: "description",
+			sortDirection: "asc",
+			after: "opaque-token",
+		});
+		await client.viewTransactionDetail("posting:1");
+
+		expect(calls[0]).toContain("/v1/view/transactions?");
+		expect(calls[0]).toContain("group=personal");
+		expect(calls[0]).toContain("search=coffee");
+		expect(calls[0]).toContain("limit=100");
+		expect(calls[0]).toContain("sortField=description");
+		expect(calls[0]).toContain("sortDirection=asc");
+		expect(calls[0]).toContain("after=opaque-token");
+		expect(calls[1]).toContain("/v1/view/transactions/posting%3A1");
+	});
 });
 
 describe("loadShellState", () => {
