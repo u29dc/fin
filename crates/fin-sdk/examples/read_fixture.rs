@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use fin_sdk::config::load_config;
 use fin_sdk::db::{OpenDatabaseOptions, open_database};
 use fin_sdk::queries::{
-    TransactionQueryOptions, group_asset_account_ids, view_accounts, view_transactions,
+    LedgerQueryOptions, TransactionQueryOptions, group_asset_account_ids, view_accounts,
+    view_ledger, view_transactions,
 };
 use fin_sdk::reports::{report_cashflow, report_reserves, report_runway, report_summary};
 use serde::Serialize;
@@ -25,6 +26,18 @@ struct SummaryDashboardRow {
     latest_account_count: usize,
 }
 
+fn run_iterations<T, F>(iterations: usize, mut operation: F) -> T
+where
+    F: FnMut() -> T,
+{
+    let iterations = iterations.max(1);
+    let mut result = operation();
+    for _ in 1..iterations {
+        result = operation();
+    }
+    result
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let command = args
@@ -42,6 +55,10 @@ fn main() {
                 .join("bench-fixtures")
                 .join("benchmark-runtime")
         });
+    let iterations = std::env::var("READ_FIXTURE_ITERATIONS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(1);
 
     let config_path = home_dir.join("data/fin.config.toml");
     let data_dir = home_dir.join("data");
@@ -59,50 +76,58 @@ fn main() {
 
     match command.as_str() {
         "summary-dashboard" => {
-            let summary = report_summary(&connection, &loaded.config, 12).expect("summary report");
-            let mut groups = Vec::new();
-            for group_id in loaded.config.group_ids() {
-                let runway = report_runway(&connection, &loaded.config, &group_id, None, None)
-                    .expect("runway");
-                let reserves = report_reserves(&connection, &loaded.config, &group_id, None, None)
-                    .expect("reserves");
-                let accounts =
-                    view_accounts(&connection, &loaded.config, Some(&group_id)).expect("accounts");
-                let group = summary.groups.get(&group_id).expect("group summary");
-                groups.push(SummaryDashboardRow {
-                    group_id,
-                    net_worth_minor: group.net_worth_minor,
-                    latest_runway_months: runway.last().map(|point| point.runway_months),
-                    latest_available_minor: reserves.last().map(|point| point.available_minor),
-                    latest_account_count: accounts.len(),
-                });
-            }
-            serde_json::to_writer(
-                std::io::stdout(),
-                &SummaryDashboardPayload {
+            let payload = run_iterations(iterations, || {
+                let summary =
+                    report_summary(&connection, &loaded.config, 12).expect("summary report");
+                let mut groups = Vec::new();
+                for group_id in loaded.config.group_ids() {
+                    let runway = report_runway(&connection, &loaded.config, &group_id, None, None)
+                        .expect("runway");
+                    let reserves =
+                        report_reserves(&connection, &loaded.config, &group_id, None, None)
+                            .expect("reserves");
+                    let accounts = view_accounts(&connection, &loaded.config, Some(&group_id))
+                        .expect("accounts");
+                    let group = summary.groups.get(&group_id).expect("group summary");
+                    groups.push(SummaryDashboardRow {
+                        group_id,
+                        net_worth_minor: group.net_worth_minor,
+                        latest_runway_months: runway.last().map(|point| point.runway_months),
+                        latest_available_minor: reserves.last().map(|point| point.available_minor),
+                        latest_account_count: accounts.len(),
+                    });
+                }
+                SummaryDashboardPayload {
                     generated_at: summary.generated_at,
                     consolidated_net_worth_minor: summary.consolidated.net_worth_minor,
                     groups,
-                },
-            )
-            .expect("write summary dashboard payload");
+                }
+            });
+            serde_json::to_writer(std::io::stdout(), &payload)
+                .expect("write summary dashboard payload");
         }
         "transactions-personal" => {
-            let payload = view_transactions(
-                &connection,
-                &TransactionQueryOptions {
-                    chart_account_ids: Some(group_asset_account_ids(&loaded.config, "personal")),
-                    limit: 1_000,
-                    ..TransactionQueryOptions::default()
-                },
-            )
-            .expect("transactions");
+            let payload = run_iterations(iterations, || {
+                view_transactions(
+                    &connection,
+                    &TransactionQueryOptions {
+                        chart_account_ids: Some(group_asset_account_ids(
+                            &loaded.config,
+                            "personal",
+                        )),
+                        limit: 1_000,
+                        ..TransactionQueryOptions::default()
+                    },
+                )
+                .expect("transactions")
+            });
             serde_json::to_writer(std::io::stdout(), &payload).expect("write transactions");
         }
         "cashflow-business" => {
-            let (series, totals) =
+            let (series, totals) = run_iterations(iterations, || {
                 report_cashflow(&connection, &loaded.config, "business", 24, None, None)
-                    .expect("cashflow");
+                    .expect("cashflow")
+            });
             serde_json::to_writer(
                 std::io::stdout(),
                 &BTreeMap::from([
@@ -117,6 +142,32 @@ fn main() {
                 ]),
             )
             .expect("write cashflow");
+        }
+        "accounts" => {
+            let group_id = args.next();
+            let payload = run_iterations(iterations, || {
+                view_accounts(&connection, &loaded.config, group_id.as_deref()).expect("accounts")
+            });
+            serde_json::to_writer(std::io::stdout(), &payload).expect("write accounts");
+        }
+        "ledger" => {
+            let limit = args
+                .next()
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(500);
+            let account_id = args.next();
+            let payload = run_iterations(iterations, || {
+                view_ledger(
+                    &connection,
+                    &LedgerQueryOptions {
+                        account_id: account_id.clone(),
+                        limit,
+                        ..LedgerQueryOptions::default()
+                    },
+                )
+                .expect("ledger")
+            });
+            serde_json::to_writer(std::io::stdout(), &payload).expect("write ledger");
         }
         other => {
             eprintln!("unsupported fixture read command: {other}");

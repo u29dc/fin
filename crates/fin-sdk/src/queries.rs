@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 
 use crate::config::FinConfig;
@@ -157,21 +157,34 @@ pub fn view_accounts(
     if let Some(group_filter) = group_filter {
         asset_accounts.retain(|account| account.group == group_filter);
     }
+    if asset_accounts.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let account_ids = asset_accounts
+        .iter()
+        .map(|account| account.id.clone())
+        .collect::<Vec<_>>();
+    let sql = format!(
+        "SELECT p.account_id,\n                COALESCE(SUM(p.amount_minor), 0) AS balance_minor,\n                MAX(je.posted_at) AS updated_at\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         WHERE p.account_id IN ({})\n         GROUP BY p.account_id",
+        placeholders(account_ids.len())
+    );
+    let mut statement = connection.prepare(&sql)?;
+    let mut rows = statement.query(rusqlite::params_from_iter(account_ids.iter()))?;
+    let mut aggregates = BTreeMap::<String, (i64, Option<String>)>::new();
+    while let Some(row) = rows.next()? {
+        let account_id: String = row.get(0)?;
+        let balance_minor: i64 = row.get(1)?;
+        let updated_at: Option<String> = row.get(2)?;
+        aggregates.insert(account_id, (balance_minor, updated_at));
+    }
 
     let mut rows = Vec::new();
     for account in asset_accounts {
-        let balance_minor = connection.query_row(
-            "SELECT SUM(p.amount_minor)\n             FROM postings p\n             WHERE p.account_id = ?1",
-            [&account.id],
-            |row| row.get::<usize, Option<i64>>(0),
-        )?;
-        let updated_at = connection
-            .query_row(
-                "SELECT je.posted_at\n                 FROM postings p\n                 JOIN journal_entries je ON p.journal_entry_id = je.id\n                 WHERE p.account_id = ?1\n                 ORDER BY je.posted_at DESC\n                 LIMIT 1",
-                [&account.id],
-                |row| row.get::<usize, String>(0),
-            )
-            .optional()?;
+        let (balance_minor, updated_at) = aggregates
+            .get(&account.id)
+            .map(|(balance_minor, updated_at)| (Some(*balance_minor), updated_at.clone()))
+            .unwrap_or((None, None));
 
         rows.push(AccountBalanceRow {
             id: account.id,
@@ -256,11 +269,12 @@ pub fn view_ledger(
     );
     let mut statement = connection.prepare(&sql)?;
     let mut rows = statement.query(rusqlite::params_from_iter(params.iter()))?;
-    let mut entries = Vec::new();
+    let mut entry_rows = Vec::new();
+    let mut journal_ids = Vec::new();
     while let Some(row) = rows.next()? {
         let journal_id: String = row.get(0)?;
-        let postings = load_postings(connection, &journal_id)?;
-        entries.push(JournalEntryRow {
+        journal_ids.push(journal_id.clone());
+        entry_rows.push(JournalEntryRow {
             id: journal_id,
             posted_at: row.get(1)?,
             posted_date: row.get(2)?,
@@ -270,20 +284,34 @@ pub fn view_ledger(
             clean_description: row.get(6)?,
             counterparty: row.get(7)?,
             source_file: row.get(8)?,
-            postings,
+            postings: Vec::new(),
         });
     }
+    let mut postings_by_journal = load_postings_batch(connection, &journal_ids)?;
+    for entry in &mut entry_rows {
+        entry.postings = postings_by_journal.remove(&entry.id).unwrap_or_default();
+    }
+    let entries = entry_rows;
     Ok(entries)
 }
 
-fn load_postings(connection: &Connection, journal_id: &str) -> Result<Vec<PostingRow>> {
-    let mut statement = connection.prepare(
-        "SELECT id,\n                journal_entry_id,\n                account_id,\n                amount_minor,\n                currency,\n                memo,\n                provider_txn_id,\n                provider_balance_minor\n         FROM postings\n         WHERE journal_entry_id = ?1\n         ORDER BY id ASC",
-    )?;
-    let mut rows = statement.query([journal_id])?;
-    let mut postings = Vec::new();
+fn load_postings_batch(
+    connection: &Connection,
+    journal_ids: &[String],
+) -> Result<BTreeMap<String, Vec<PostingRow>>> {
+    if journal_ids.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+
+    let sql = format!(
+        "SELECT id,\n                journal_entry_id,\n                account_id,\n                amount_minor,\n                currency,\n                memo,\n                provider_txn_id,\n                provider_balance_minor\n         FROM postings\n         WHERE journal_entry_id IN ({})\n         ORDER BY journal_entry_id ASC, id ASC",
+        placeholders(journal_ids.len())
+    );
+    let mut statement = connection.prepare(&sql)?;
+    let mut rows = statement.query(rusqlite::params_from_iter(journal_ids.iter()))?;
+    let mut postings_by_journal = BTreeMap::<String, Vec<PostingRow>>::new();
     while let Some(row) = rows.next()? {
-        postings.push(PostingRow {
+        let posting = PostingRow {
             id: row.get(0)?,
             journal_entry_id: row.get(1)?,
             account_id: row.get(2)?,
@@ -292,9 +320,13 @@ fn load_postings(connection: &Connection, journal_id: &str) -> Result<Vec<Postin
             memo: row.get(5)?,
             provider_txn_id: row.get(6)?,
             provider_balance_minor: row.get(7)?,
-        });
+        };
+        postings_by_journal
+            .entry(posting.journal_entry_id.clone())
+            .or_default()
+            .push(posting);
     }
-    Ok(postings)
+    Ok(postings_by_journal)
 }
 
 pub fn ledger_entry_count(connection: &Connection, account_id: Option<&str>) -> Result<i64> {
@@ -619,4 +651,105 @@ pub fn unique_months_from_cashflow(points: &[MonthlyCashflowPoint]) -> Vec<Strin
         months.insert(point.month.clone());
     }
     months.into_iter().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::{LedgerQueryOptions, view_accounts, view_ledger};
+    use crate::runtime::{RuntimeContext, RuntimeContextOptions};
+    use crate::testing::fixture::{FixtureBuildOptions, materialize_fixture_home};
+
+    fn open_fixture_runtime() -> RuntimeContext {
+        let temp = tempdir().expect("tempdir");
+        let fixture = materialize_fixture_home(temp.path(), &FixtureBuildOptions::default())
+            .expect("materialize fixture");
+        RuntimeContext::open(RuntimeContextOptions {
+            config_path: Some(fixture.paths.config_path),
+            db_path: Some(fixture.paths.db_path),
+            create: false,
+            ..RuntimeContextOptions::read_only()
+        })
+        .expect("open runtime")
+    }
+
+    #[test]
+    fn view_accounts_preserves_config_order_with_batched_aggregates() {
+        let runtime = open_fixture_runtime();
+        let expected_ids = runtime
+            .config()
+            .accounts
+            .iter()
+            .filter(|account| account.group == "personal" && account.account_type == "asset")
+            .map(|account| account.id.clone())
+            .collect::<Vec<_>>();
+
+        let rows = view_accounts(runtime.connection(), runtime.config(), Some("personal"))
+            .expect("view accounts");
+
+        assert_eq!(
+            rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>(),
+            expected_ids
+        );
+        assert!(rows.iter().all(|row| row.balance_minor.is_some()));
+        assert!(rows.iter().all(|row| row.updated_at.is_some()));
+    }
+
+    #[test]
+    fn view_ledger_keeps_entry_and_posting_order_when_batched() {
+        let runtime = open_fixture_runtime();
+        let entries = view_ledger(
+            runtime.connection(),
+            &LedgerQueryOptions {
+                limit: 12,
+                ..LedgerQueryOptions::default()
+            },
+        )
+        .expect("view ledger");
+
+        assert_eq!(entries.len(), 12);
+        assert!(
+            entries
+                .windows(2)
+                .all(|window| window[0].posted_at >= window[1].posted_at)
+        );
+        assert!(entries.iter().all(|entry| !entry.postings.is_empty()));
+        assert!(entries.iter().all(|entry| {
+            entry
+                .postings
+                .windows(2)
+                .all(|window| window[0].id <= window[1].id)
+        }));
+    }
+
+    #[test]
+    fn view_ledger_account_filter_only_returns_matching_entries() {
+        let runtime = open_fixture_runtime();
+        let account_id = runtime
+            .config()
+            .accounts
+            .iter()
+            .find(|account| account.group == "business" && account.account_type == "asset")
+            .map(|account| account.id.clone())
+            .expect("business asset account");
+
+        let entries = view_ledger(
+            runtime.connection(),
+            &LedgerQueryOptions {
+                account_id: Some(account_id.clone()),
+                limit: 20,
+                ..LedgerQueryOptions::default()
+            },
+        )
+        .expect("filtered ledger");
+
+        assert!(!entries.is_empty());
+        assert!(entries.iter().all(|entry| {
+            entry
+                .postings
+                .iter()
+                .any(|posting| posting.account_id == account_id)
+        }));
+    }
 }
