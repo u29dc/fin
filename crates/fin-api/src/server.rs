@@ -718,6 +718,168 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn report_endpoints_return_fixture_payloads() -> Result<()> {
+        let temp = tempdir().expect("tempdir");
+        let fixture = fin_sdk::testing::fixture::materialize_fixture_home(
+            temp.path(),
+            &fin_sdk::testing::fixture::FixtureBuildOptions::default(),
+        )?;
+        let (address, shutdown_tx, server) = spawn_tcp_server(StartArgs {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })
+        .await?;
+
+        let (cashflow_status, cashflow_body) =
+            request_json(address, "/v1/report/cashflow?group=business&months=12").await?;
+        assert_eq!(cashflow_status, 200);
+        assert_eq!(cashflow_body["ok"], true);
+        assert_eq!(cashflow_body["meta"]["tool"], "report.cashflow");
+        assert!(
+            cashflow_body["data"]["series"]
+                .as_array()
+                .is_some_and(|series| !series.is_empty())
+        );
+        assert!(
+            cashflow_body["data"]["totals"]["net_minor"]
+                .as_i64()
+                .is_some()
+        );
+
+        let (health_status, health_body) =
+            request_json(address, "/v1/report/health?group=business").await?;
+        assert_eq!(health_status, 200);
+        assert_eq!(health_body["ok"], true);
+        assert_eq!(health_body["meta"]["tool"], "report.health");
+        assert!(
+            health_body["data"]["latest"]["health_minor"]
+                .as_i64()
+                .is_some()
+        );
+
+        let (runway_status, runway_body) =
+            request_json(address, "/v1/report/runway?group=personal").await?;
+        assert_eq!(runway_status, 200);
+        assert_eq!(runway_body["ok"], true);
+        assert_eq!(runway_body["meta"]["tool"], "report.runway");
+        assert_eq!(runway_body["data"]["groups"][0], "personal");
+        assert!(
+            runway_body["data"]["latest"]["runway_months"]
+                .as_f64()
+                .is_some()
+        );
+
+        let (runway_consolidated_status, runway_consolidated_body) = request_json(
+            address,
+            "/v1/report/runway?consolidated=true&include=personal%2Cbusiness",
+        )
+        .await?;
+        assert_eq!(runway_consolidated_status, 200);
+        assert_eq!(runway_consolidated_body["ok"], true);
+        assert_eq!(runway_consolidated_body["data"]["groups"][0], "personal");
+        assert_eq!(runway_consolidated_body["data"]["groups"][1], "business");
+
+        let (reserves_status, reserves_body) =
+            request_json(address, "/v1/report/reserves?group=business").await?;
+        assert_eq!(reserves_status, 200);
+        assert_eq!(reserves_body["ok"], true);
+        assert_eq!(reserves_body["meta"]["tool"], "report.reserves");
+        assert!(
+            reserves_body["data"]["latest"]["available_minor"]
+                .as_i64()
+                .is_some()
+        );
+
+        let (summary_status, summary_body) =
+            request_json(address, "/v1/report/summary?months=12").await?;
+        assert_eq!(summary_status, 200);
+        assert_eq!(summary_body["ok"], true);
+        assert_eq!(summary_body["meta"]["tool"], "report.summary");
+        assert!(
+            summary_body["data"]["groups"]
+                .as_object()
+                .is_some_and(|groups| !groups.is_empty())
+        );
+        assert!(
+            summary_body["data"]["consolidated"]["net_worth_minor"]
+                .as_i64()
+                .is_some()
+        );
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn report_categories_audit_and_invalid_mode_are_supported() -> Result<()> {
+        let temp = tempdir().expect("tempdir");
+        let fixture = fin_sdk::testing::fixture::materialize_fixture_home(
+            temp.path(),
+            &fin_sdk::testing::fixture::FixtureBuildOptions::default(),
+        )?;
+        let (address, shutdown_tx, server) = spawn_tcp_server(StartArgs {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })
+        .await?;
+
+        let (breakdown_status, breakdown_body) = request_json(
+            address,
+            "/v1/report/categories?group=business&mode=breakdown",
+        )
+        .await?;
+        assert_eq!(breakdown_status, 200);
+        assert_eq!(breakdown_body["ok"], true);
+        assert_eq!(breakdown_body["data"]["mode"], "breakdown");
+        assert!(
+            breakdown_body["data"]["categories"]
+                .as_array()
+                .is_some_and(|items| !items.is_empty())
+        );
+
+        let (median_status, median_body) =
+            request_json(address, "/v1/report/categories?group=business&mode=median").await?;
+        assert_eq!(median_status, 200);
+        assert_eq!(median_body["ok"], true);
+        assert_eq!(median_body["data"]["mode"], "median");
+        assert!(median_body["data"]["estimatedMonthly"].as_i64().is_some());
+
+        let (audit_status, audit_body) = request_json(
+            address,
+            "/v1/report/audit?account=Expenses%3ABusiness%3ASoftware&months=6&limit=10",
+        )
+        .await?;
+        assert_eq!(audit_status, 200);
+        assert_eq!(audit_body["ok"], true);
+        assert_eq!(audit_body["meta"]["tool"], "report.audit");
+        assert!(
+            audit_body["data"]["payees"]
+                .as_array()
+                .is_some_and(|items| !items.is_empty())
+        );
+
+        let (invalid_status, invalid_body) =
+            request_json(address, "/v1/report/categories?group=business&mode=unknown").await?;
+        assert_eq!(invalid_status, 400);
+        assert_eq!(invalid_body["ok"], false);
+        assert_eq!(invalid_body["error"]["code"], "INVALID_INPUT");
+        assert_eq!(invalid_body["meta"]["tool"], "report.categories");
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
     async fn spawn_tcp_server(
         args: StartArgs,
     ) -> Result<(

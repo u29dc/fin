@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -9,14 +10,17 @@ use axum::{Json, Router, routing::get};
 use fin_sdk::config::{LoadedConfig, load_config};
 use fin_sdk::rules::{NameMappingConfig, load_rules, resolve_rules_path};
 use fin_sdk::{
-    AccountBalanceRow, BalanceSheet, ConfigShowData, ConfigValidationResult, DescriptionSummary,
-    EnvelopeMeta, ErrorEnvelope, ErrorPayload, FinError, FinSdkError, GlobalFlag,
-    HealthCheckOptions, HealthReport, JournalEntryRow, LedgerQueryOptions, RuntimeContext,
-    RuntimeContextOptions, SDK_VERSION, SortDirection, SuccessEnvelope, ToolMeta,
-    TransactionCursor, TransactionDetail, TransactionListRow, TransactionPageQuery,
-    TransactionSortField, ValidationError, build_config_show, discover_descriptions,
-    discover_unmapped_descriptions, get_balance_sheet, global_flags, ledger_entry_count,
-    load_transaction_detail, query_transactions_page, run_health_checks, sdk_banner, tool_registry,
+    AccountBalanceRow, AuditPayeePoint, BalanceSheet, CashflowTotals, CategoryBreakdownPoint,
+    CategoryMedianPoint, ConfigShowData, ConfigValidationResult, DescriptionSummary, EnvelopeMeta,
+    ErrorEnvelope, ErrorPayload, FinError, FinSdkError, GlobalFlag, HealthCheckOptions,
+    HealthPoint, HealthReport, JournalEntryRow, LedgerQueryOptions, ReserveBreakdownPoint,
+    RuntimeContext, RuntimeContextOptions, RunwayPoint, SDK_VERSION, SortDirection,
+    SuccessEnvelope, SummaryReport, ToolMeta, TransactionCursor, TransactionDetail,
+    TransactionListRow, TransactionPageQuery, TransactionSortField, ValidationError, audit_payees,
+    build_config_show, discover_descriptions, discover_unmapped_descriptions, get_balance_sheet,
+    global_flags, group_category_breakdown, group_category_monthly_median, ledger_entry_count,
+    load_transaction_detail, query_transactions_page, report_cashflow, report_health,
+    report_reserves, report_runway, report_summary, run_health_checks, sdk_banner, tool_registry,
     validate_config, view_accounts, view_ledger,
 };
 use serde::{Deserialize, Serialize};
@@ -387,6 +391,72 @@ struct ViewBalanceQuery {
     as_of: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportCashflowQuery {
+    group: String,
+    #[serde(default = "default_report_months")]
+    months: usize,
+    from: Option<String>,
+    to: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportHealthQuery {
+    group: String,
+    from: Option<String>,
+    to: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportRunwayQuery {
+    group: Option<String>,
+    #[serde(default)]
+    consolidated: bool,
+    include: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportReservesQuery {
+    group: String,
+    from: Option<String>,
+    to: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportCategoriesQuery {
+    group: String,
+    #[serde(default = "default_categories_mode")]
+    mode: String,
+    #[serde(default = "default_categories_months")]
+    months: usize,
+    #[serde(default = "default_categories_limit")]
+    limit: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportAuditQuery {
+    account: String,
+    #[serde(default = "default_audit_months")]
+    months: usize,
+    #[serde(default = "default_audit_limit")]
+    limit: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportSummaryQuery {
+    #[serde(default = "default_report_months")]
+    months: usize,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RulesShowPayload {
@@ -463,6 +533,60 @@ impl From<BalanceSheet> for BalancePayload {
     }
 }
 
+#[derive(Debug, Serialize)]
+struct CashflowPayload {
+    series: Vec<fin_sdk::MonthlyCashflowPoint>,
+    totals: CashflowTotals,
+}
+
+#[derive(Debug, Serialize)]
+struct HealthSeriesPayload {
+    series: Vec<HealthPoint>,
+    latest: Option<HealthPoint>,
+}
+
+#[derive(Debug, Serialize)]
+struct RunwayPayload {
+    series: Vec<RunwayPoint>,
+    latest: Option<RunwayPoint>,
+    groups: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ReservesPayload {
+    series: Vec<ReserveBreakdownPoint>,
+    latest: Option<ReserveBreakdownPoint>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BreakdownCategoriesPayload {
+    mode: &'static str,
+    categories: Vec<CategoryBreakdownPoint>,
+    total: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MedianCategoriesPayload {
+    mode: &'static str,
+    categories: Vec<CategoryMedianPoint>,
+    estimated_monthly: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum CategoriesPayload {
+    Breakdown(BreakdownCategoriesPayload),
+    Median(MedianCategoriesPayload),
+}
+
+#[derive(Debug, Serialize)]
+struct AuditPayload {
+    payees: Vec<AuditPayeePoint>,
+    total: i64,
+}
+
 pub fn build_router(state: ApiState) -> Router {
     Router::new()
         .route("/__probe", get(probe_handler))
@@ -483,6 +607,13 @@ pub fn build_router(state: ApiState) -> Router {
         )
         .route("/v1/view/ledger", get(view_ledger_handler))
         .route("/v1/view/balance", get(view_balance_handler))
+        .route("/v1/report/cashflow", get(report_cashflow_handler))
+        .route("/v1/report/health", get(report_health_handler))
+        .route("/v1/report/runway", get(report_runway_handler))
+        .route("/v1/report/reserves", get(report_reserves_handler))
+        .route("/v1/report/categories", get(report_categories_handler))
+        .route("/v1/report/audit", get(report_audit_handler))
+        .route("/v1/report/summary", get(report_summary_handler))
         .fallback(fallback_handler)
         .with_state(state)
 }
@@ -884,6 +1015,281 @@ async fn view_balance_handler(
     ))
 }
 
+async fn report_cashflow_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<ReportCashflowQuery>, QueryRejection>,
+) -> ApiResult<CashflowPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "report.cashflow", started)?;
+    let runtime = open_read_runtime(&state, "report.cashflow", started)?;
+    let (series, totals) = report_cashflow(
+        runtime.connection(),
+        runtime.config(),
+        &query.group,
+        query.months,
+        query.from.as_deref(),
+        query.to.as_deref(),
+    )
+    .map_err(|error| ApiError::from_fin_error("report.cashflow", error, started))?;
+    let count = series.len();
+
+    Ok(success(
+        "report.cashflow",
+        CashflowPayload { series, totals },
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn report_health_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<ReportHealthQuery>, QueryRejection>,
+) -> ApiResult<HealthSeriesPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "report.health", started)?;
+    let runtime = open_read_runtime(&state, "report.health", started)?;
+    let series = report_health(
+        runtime.connection(),
+        runtime.config(),
+        &query.group,
+        query.from.as_deref(),
+        query.to.as_deref(),
+    )
+    .map_err(|error| ApiError::from_fin_error("report.health", error, started))?;
+    let latest = series.last().cloned();
+    let count = series.len();
+
+    Ok(success(
+        "report.health",
+        HealthSeriesPayload { series, latest },
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn report_runway_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<ReportRunwayQuery>, QueryRejection>,
+) -> ApiResult<RunwayPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "report.runway", started)?;
+    let runtime = open_read_runtime(&state, "report.runway", started)?;
+
+    let payload = if query.consolidated {
+        let groups = selected_runway_groups(runtime.config(), query.include.as_deref());
+        let series = consolidate_runway_series(
+            &runtime,
+            &groups,
+            query.from.as_deref(),
+            query.to.as_deref(),
+            started,
+        )?;
+        let latest = series.last().cloned();
+        RunwayPayload {
+            series,
+            latest,
+            groups,
+        }
+    } else {
+        let group = query.group.ok_or_else(|| {
+            ApiError::bad_request(
+                "report.runway",
+                "INVALID_INPUT",
+                "Missing group for runway report",
+                "Pass group or set consolidated=true for a combined runway series.",
+                started,
+            )
+        })?;
+        let series = report_runway(
+            runtime.connection(),
+            runtime.config(),
+            &group,
+            query.from.as_deref(),
+            query.to.as_deref(),
+        )
+        .map_err(|error| ApiError::from_fin_error("report.runway", error, started))?;
+        let latest = series.last().cloned();
+        RunwayPayload {
+            series,
+            latest,
+            groups: vec![group],
+        }
+    };
+    let count = payload.series.len();
+
+    Ok(success(
+        "report.runway",
+        payload,
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn report_reserves_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<ReportReservesQuery>, QueryRejection>,
+) -> ApiResult<ReservesPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "report.reserves", started)?;
+    let runtime = open_read_runtime(&state, "report.reserves", started)?;
+    let series = report_reserves(
+        runtime.connection(),
+        runtime.config(),
+        &query.group,
+        query.from.as_deref(),
+        query.to.as_deref(),
+    )
+    .map_err(|error| ApiError::from_fin_error("report.reserves", error, started))?;
+    let latest = series.last().cloned();
+    let count = series.len();
+
+    Ok(success(
+        "report.reserves",
+        ReservesPayload { series, latest },
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn report_categories_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<ReportCategoriesQuery>, QueryRejection>,
+) -> ApiResult<CategoriesPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "report.categories", started)?;
+    let runtime = open_read_runtime(&state, "report.categories", started)?;
+
+    let (payload, count) = match query.mode.as_str() {
+        "breakdown" => {
+            let categories = group_category_breakdown(
+                runtime.connection(),
+                runtime.config(),
+                &query.group,
+                query.months,
+                query.limit,
+            )
+            .map_err(|error| ApiError::from_fin_error("report.categories", error, started))?;
+            let total = categories
+                .iter()
+                .map(|point| point.total_minor)
+                .sum::<i64>();
+            let count = categories.len();
+            (
+                CategoriesPayload::Breakdown(BreakdownCategoriesPayload {
+                    mode: "breakdown",
+                    categories,
+                    total,
+                }),
+                count,
+            )
+        }
+        "median" => {
+            let categories = group_category_monthly_median(
+                runtime.connection(),
+                runtime.config(),
+                &query.group,
+                query.months,
+                query.limit,
+            )
+            .map_err(|error| ApiError::from_fin_error("report.categories", error, started))?;
+            let estimated_monthly = categories
+                .iter()
+                .map(|point| point.monthly_median_minor)
+                .sum::<i64>();
+            let count = categories.len();
+            (
+                CategoriesPayload::Median(MedianCategoriesPayload {
+                    mode: "median",
+                    categories,
+                    estimated_monthly,
+                }),
+                count,
+            )
+        }
+        other => {
+            return Err(ApiError::bad_request(
+                "report.categories",
+                "INVALID_INPUT",
+                format!("Unsupported categories mode: {other}"),
+                "Use mode=breakdown or mode=median.",
+                started,
+            ));
+        }
+    };
+
+    Ok(success(
+        "report.categories",
+        payload,
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn report_audit_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<ReportAuditQuery>, QueryRejection>,
+) -> ApiResult<AuditPayload> {
+    let started = Instant::now();
+    let query = parse_query(query, "report.audit", started)?;
+    let runtime = open_read_runtime(&state, "report.audit", started)?;
+    let payees = audit_payees(
+        runtime.connection(),
+        &query.account,
+        query.months,
+        query.limit,
+    )
+    .map_err(|error| ApiError::from_fin_error("report.audit", error, started))?;
+    let total = payees.iter().map(|point| point.total_minor).sum::<i64>();
+    let count = payees.len();
+
+    Ok(success(
+        "report.audit",
+        AuditPayload { payees, total },
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
+async fn report_summary_handler(
+    State(state): State<ApiState>,
+    query: Result<Query<ReportSummaryQuery>, QueryRejection>,
+) -> ApiResult<SummaryReport> {
+    let started = Instant::now();
+    let query = parse_query(query, "report.summary", started)?;
+    let runtime = open_read_runtime(&state, "report.summary", started)?;
+    let report = report_summary(runtime.connection(), runtime.config(), query.months)
+        .map_err(|error| ApiError::from_fin_error("report.summary", error, started))?;
+    let count = report.groups.len();
+
+    Ok(success(
+        "report.summary",
+        report,
+        started,
+        MetaExtras {
+            count: Some(count),
+            ..MetaExtras::default()
+        },
+    ))
+}
+
 async fn fallback_handler(uri: Uri) -> ApiError {
     ApiError::not_found(
         "api",
@@ -957,6 +1363,61 @@ fn serialize_cursor_token(cursor: &TransactionCursor) -> Result<String, String> 
         .map_err(|error| format!("failed to serialize transaction cursor: {error}"))
 }
 
+fn selected_runway_groups(
+    config: &fin_sdk::config::FinConfig,
+    include: Option<&str>,
+) -> Vec<String> {
+    let include_groups = include
+        .unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>();
+    if include_groups.is_empty() {
+        config.group_ids()
+    } else {
+        include_groups
+    }
+}
+
+fn consolidate_runway_series(
+    runtime: &RuntimeContext,
+    groups: &[String],
+    from: Option<&str>,
+    to: Option<&str>,
+    started: Instant,
+) -> Result<Vec<RunwayPoint>, ApiError> {
+    let mut merged = BTreeMap::<String, (i64, i64, i64)>::new();
+    for group_id in groups {
+        let series = report_runway(runtime.connection(), runtime.config(), group_id, from, to)
+            .map_err(|error| ApiError::from_fin_error("report.runway", error, started))?;
+        for point in series {
+            let slot = merged.entry(point.date).or_insert((0, 0, 0));
+            slot.0 += point.balance_minor;
+            slot.1 += point.burn_rate_minor;
+            slot.2 += point.median_expense_minor;
+        }
+    }
+
+    Ok(merged
+        .into_iter()
+        .map(
+            |(date, (balance_minor, burn_rate_minor, median_expense_minor))| RunwayPoint {
+                runway_months: if burn_rate_minor <= 0 {
+                    999.0
+                } else {
+                    (balance_minor as f64) / (burn_rate_minor as f64)
+                },
+                date,
+                balance_minor,
+                burn_rate_minor,
+                median_expense_minor,
+            },
+        )
+        .collect())
+}
+
 fn success<T: Serialize>(
     tool: &'static str,
     data: T,
@@ -986,7 +1447,31 @@ const fn default_discover_limit() -> usize {
     500
 }
 
+const fn default_report_months() -> usize {
+    12
+}
+
 const fn default_page_limit() -> usize {
+    50
+}
+
+fn default_categories_mode() -> String {
+    "breakdown".to_owned()
+}
+
+const fn default_categories_months() -> usize {
+    3
+}
+
+const fn default_categories_limit() -> usize {
+    10
+}
+
+const fn default_audit_months() -> usize {
+    6
+}
+
+const fn default_audit_limit() -> usize {
     50
 }
 
