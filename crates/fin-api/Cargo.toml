@@ -17,8 +17,8 @@ axum.workspace = true
 clap.workspace = true
 fin-sdk = { path = "../fin-sdk" }
 serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 tempfile = "3.19.1"

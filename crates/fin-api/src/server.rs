@@ -490,6 +490,265 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn config_rules_and_sanitize_endpoints_use_fixture_runtime() -> Result<()> {
+        let temp = tempdir().expect("tempdir");
+        let fixture = fin_sdk::testing::fixture::materialize_fixture_home(
+            temp.path(),
+            &fin_sdk::testing::fixture::FixtureBuildOptions::default(),
+        )?;
+        let (address, shutdown_tx, server) = spawn_tcp_server(StartArgs {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })
+        .await?;
+
+        let (config_status, config_body) = request_json(address, "/v1/config/show").await?;
+        assert_eq!(config_status, 200);
+        assert_eq!(config_body["ok"], true);
+        assert_eq!(config_body["meta"]["tool"], "config.show");
+        assert!(
+            config_body["data"]["groups"]
+                .as_array()
+                .is_some_and(|groups| !groups.is_empty())
+        );
+        assert!(config_body["data"]["configPath"].as_str().is_some());
+
+        let (validate_status, validate_body) = request_json(address, "/v1/config/validate").await?;
+        assert_eq!(validate_status, 200);
+        assert_eq!(validate_body["ok"], true);
+        assert_eq!(validate_body["data"]["valid"], true);
+
+        let (rules_status, rules_body) = request_json(address, "/v1/rules/show").await?;
+        assert_eq!(rules_status, 200);
+        assert_eq!(rules_body["ok"], true);
+        assert_eq!(rules_body["meta"]["tool"], "rules.show");
+        assert!(
+            rules_body["data"]["ruleCount"]
+                .as_u64()
+                .is_some_and(|count| count > 0)
+        );
+        assert_eq!(rules_body["data"]["externalLoaded"], true);
+
+        let (rules_validate_status, rules_validate_body) =
+            request_json(address, "/v1/rules/validate").await?;
+        assert_eq!(rules_validate_status, 200);
+        assert_eq!(rules_validate_body["ok"], true);
+        assert_eq!(rules_validate_body["data"]["valid"], true);
+
+        let (sanitize_status, sanitize_body) =
+            request_json(address, "/v1/sanitize/discover?min=2").await?;
+        assert_eq!(sanitize_status, 200);
+        assert_eq!(sanitize_body["ok"], true);
+        assert_eq!(sanitize_body["meta"]["tool"], "sanitize.discover");
+        let descriptions = sanitize_body["data"]["descriptions"]
+            .as_array()
+            .context("sanitize descriptions array")?;
+        assert!(!descriptions.is_empty());
+        assert_eq!(
+            sanitize_body["data"]["count"].as_u64(),
+            Some(descriptions.len() as u64)
+        );
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn view_endpoints_support_pagination_detail_and_balance() -> Result<()> {
+        let temp = tempdir().expect("tempdir");
+        let fixture = fin_sdk::testing::fixture::materialize_fixture_home(
+            temp.path(),
+            &fin_sdk::testing::fixture::FixtureBuildOptions::default(),
+        )?;
+        let (address, shutdown_tx, server) = spawn_tcp_server(StartArgs {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })
+        .await?;
+
+        let (accounts_status, accounts_body) =
+            request_json(address, "/v1/view/accounts?group=personal").await?;
+        assert_eq!(accounts_status, 200);
+        assert_eq!(accounts_body["ok"], true);
+        assert_eq!(accounts_body["meta"]["tool"], "view.accounts");
+        assert!(
+            accounts_body["meta"]["count"]
+                .as_u64()
+                .is_some_and(|count| count > 0)
+        );
+        assert!(
+            accounts_body["data"]["accounts"]
+                .as_array()
+                .is_some_and(|rows| !rows.is_empty())
+        );
+
+        let (page_status, first_page) =
+            request_json(address, "/v1/view/transactions?group=personal&limit=1").await?;
+        assert_eq!(page_status, 200);
+        assert_eq!(first_page["ok"], true);
+        assert_eq!(first_page["meta"]["tool"], "view.transactions");
+        assert_eq!(first_page["meta"]["count"], 1);
+        assert!(
+            first_page["meta"]["total"]
+                .as_u64()
+                .is_some_and(|count| count > 1)
+        );
+        assert_eq!(first_page["meta"]["hasMore"], true);
+        let items = first_page["data"]["items"]
+            .as_array()
+            .context("first page items")?;
+        assert_eq!(items.len(), 1);
+        let first_posting_id = items[0]["posting_id"]
+            .as_str()
+            .context("first posting id")?
+            .to_owned();
+        let cursor_token = first_page["data"]["nextCursorToken"]
+            .as_str()
+            .context("next cursor token")?;
+        let second_path = format!(
+            "/v1/view/transactions?group=personal&limit=1&after={}",
+            percent_encode(cursor_token)
+        );
+        let (second_status, second_page) = request_json(address, &second_path).await?;
+        assert_eq!(second_status, 200);
+        assert_eq!(second_page["ok"], true);
+        let second_items = second_page["data"]["items"]
+            .as_array()
+            .context("second page items")?;
+        assert_eq!(second_items.len(), 1);
+        let second_posting_id = second_items[0]["posting_id"]
+            .as_str()
+            .context("second posting id")?;
+        assert_ne!(second_posting_id, first_posting_id);
+
+        let detail_path = format!("/v1/view/transactions/{first_posting_id}");
+        let (detail_status, detail_body) = request_json(address, &detail_path).await?;
+        assert_eq!(detail_status, 200);
+        assert_eq!(detail_body["ok"], true);
+        assert_eq!(detail_body["data"]["posting_id"], first_posting_id);
+
+        let (ledger_status, ledger_body) = request_json(address, "/v1/view/ledger?limit=2").await?;
+        assert_eq!(ledger_status, 200);
+        assert_eq!(ledger_body["ok"], true);
+        assert_eq!(ledger_body["meta"]["tool"], "view.ledger");
+        assert_eq!(ledger_body["meta"]["count"], 2);
+        assert!(
+            ledger_body["meta"]["total"]
+                .as_u64()
+                .is_some_and(|count| count >= 2)
+        );
+
+        let (balance_status, balance_body) = request_json(address, "/v1/view/balance").await?;
+        assert_eq!(balance_status, 200);
+        assert_eq!(balance_body["ok"], true);
+        assert_eq!(balance_body["meta"]["tool"], "view.balance");
+        assert!(balance_body["data"]["netWorth"].as_i64().is_some());
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn blocked_and_invalid_requests_return_envelope_errors() -> Result<()> {
+        let temp = tempdir().expect("tempdir");
+        let fixture = fin_sdk::testing::fixture::materialize_fixture_home(
+            temp.path(),
+            &fin_sdk::testing::fixture::FixtureBuildOptions::default(),
+        )?;
+        let (address, shutdown_tx, server) = spawn_tcp_server(StartArgs {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })
+        .await?;
+
+        let (invalid_status, invalid_body) = request_json(
+            address,
+            "/v1/view/transactions?group=personal&account=Assets:Personal:Monzo",
+        )
+        .await?;
+        assert_eq!(invalid_status, 400);
+        assert_eq!(invalid_body["ok"], false);
+        assert_eq!(invalid_body["error"]["code"], "INVALID_INPUT");
+        assert_eq!(invalid_body["meta"]["tool"], "view.transactions");
+
+        let (cursor_status, cursor_body) =
+            request_json(address, "/v1/view/transactions?after=not-json").await?;
+        assert_eq!(cursor_status, 400);
+        assert_eq!(cursor_body["ok"], false);
+        assert_eq!(cursor_body["error"]["code"], "INVALID_INPUT");
+
+        let _ = shutdown_tx.send(());
+        server.await.expect("join server")?;
+
+        let missing_config = temp.path().join("missing.config.toml");
+        let (blocked_address, blocked_shutdown_tx, blocked_server) = spawn_tcp_server(StartArgs {
+            config_path: Some(missing_config),
+            db_path: Some(fixture.paths.db_path.clone()),
+            socket_path: None,
+            tcp_addr: Some("127.0.0.1:0".parse().expect("tcp addr")),
+            transport: Some(TransportKind::Tcp),
+            check_runtime: false,
+        })
+        .await?;
+
+        let (blocked_status, blocked_body) =
+            request_json(blocked_address, "/v1/config/show").await?;
+        assert_eq!(blocked_status, 503);
+        assert_eq!(blocked_body["ok"], false);
+        assert_eq!(blocked_body["error"]["code"], "NO_CONFIG");
+        assert_eq!(blocked_body["meta"]["tool"], "config.show");
+
+        let _ = blocked_shutdown_tx.send(());
+        blocked_server.await.expect("join server")?;
+        Ok(())
+    }
+
+    async fn spawn_tcp_server(
+        args: StartArgs,
+    ) -> Result<(
+        std::net::SocketAddr,
+        oneshot::Sender<()>,
+        tokio::task::JoinHandle<Result<()>>,
+    )> {
+        let plan = prepare_start_plan(&args)?;
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            serve_with_shutdown(
+                plan,
+                async move {
+                    let _ = shutdown_rx.await;
+                },
+                Some(ready_tx),
+            )
+            .await
+        });
+
+        let endpoint = timeout(Duration::from_secs(3), ready_rx)
+            .await
+            .expect("ready timeout")
+            .expect("ready sender dropped");
+        let BoundEndpoint::Tcp(address) = endpoint else {
+            panic!("expected tcp endpoint");
+        };
+        Ok((address, shutdown_tx, server))
+    }
+
     async fn request_tcp(address: std::net::SocketAddr, path: &str) -> Result<String> {
         let mut stream = tokio::net::TcpStream::connect(address)
             .await
@@ -527,6 +786,28 @@ mod tests {
             .await
             .context("read fin-api unix probe response")?;
         String::from_utf8(bytes).context("decode fin-api unix probe response")
+    }
+
+    async fn request_json(
+        address: std::net::SocketAddr,
+        path: &str,
+    ) -> Result<(u16, serde_json::Value)> {
+        let response = request_tcp(address, path).await?;
+        parse_http_json(&response)
+    }
+
+    fn percent_encode(value: &str) -> String {
+        let mut encoded = String::new();
+        for byte in value.bytes() {
+            let is_unreserved =
+                matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~');
+            if is_unreserved {
+                encoded.push(char::from(byte));
+            } else {
+                encoded.push_str(&format!("%{byte:02X}"));
+            }
+        }
+        encoded
     }
 
     fn parse_http_json(response: &str) -> Result<(u16, serde_json::Value)> {

@@ -45,6 +45,7 @@ impl From<FinError> for FinSdkError {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GroupMetadata {
     pub id: String,
     pub label: String,
@@ -55,6 +56,7 @@ pub struct GroupMetadata {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AccountSummary {
     pub id: String,
     pub provider: String,
@@ -65,6 +67,7 @@ pub struct AccountSummary {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfigShowData {
     pub groups: Vec<GroupMetadata>,
     pub accounts: BTreeMap<String, Vec<AccountSummary>>,
@@ -73,20 +76,22 @@ pub struct ConfigShowData {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValidationError {
     pub path: String,
     pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfigValidationResult {
     pub valid: bool,
     pub errors: Vec<ValidationError>,
     pub config_path: String,
 }
 
-pub fn resolve_config_path(explicit_path: Option<&str>) -> Result<PathBuf, FinSdkError> {
-    Ok(resolve_config_path_impl(explicit_path.map(Path::new)))
+pub fn resolve_config_path(explicit_path: Option<&Path>) -> Result<PathBuf, FinSdkError> {
+    Ok(resolve_config_path_impl(explicit_path))
 }
 
 fn title_case(identifier: &str) -> String {
@@ -104,7 +109,9 @@ fn title_case(identifier: &str) -> String {
         .join(" ")
 }
 
-pub fn validate_config(explicit_path: Option<&str>) -> Result<ConfigValidationResult, FinSdkError> {
+pub fn validate_config(
+    explicit_path: Option<&Path>,
+) -> Result<ConfigValidationResult, FinSdkError> {
     let config_path = resolve_config_path(explicit_path)?;
     if !config_path.exists() {
         return Err(FinSdkError::ConfigNotFound {
@@ -134,8 +141,8 @@ pub fn validate_config(explicit_path: Option<&str>) -> Result<ConfigValidationRe
     }
 }
 
-pub fn build_config_show(explicit_path: Option<&str>) -> Result<ConfigShowData, FinSdkError> {
-    let loaded = load_config(explicit_path.map(Path::new)).map_err(FinSdkError::from)?;
+pub fn build_config_show(explicit_path: Option<&Path>) -> Result<ConfigShowData, FinSdkError> {
+    let loaded = load_config(explicit_path).map_err(FinSdkError::from)?;
 
     let mut accounts = BTreeMap::<String, Vec<AccountSummary>>::new();
     for account in &loaded.config.accounts {
