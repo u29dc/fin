@@ -43,7 +43,7 @@ const SELECTED_PARAM = "selected";
 const SORT_FIELD_MAP = {
 	postedAt: "posted_at",
 	cleanDescription: "description",
-	pairAccountId: "counterparty",
+	pairAccountId: "account_id",
 	amountMinor: "amount_minor",
 } as const satisfies Record<TransactionsSortColumn, TransactionSortField>;
 

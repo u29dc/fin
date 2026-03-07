@@ -1,9 +1,9 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import Briefcase from '@lucide/svelte/icons/briefcase';
+	import { onMount } from 'svelte';
+	import Briefcase from '@lucide/svelte/icons/briefcase';
 	import Building from '@lucide/svelte/icons/building';
 	import Heart from '@lucide/svelte/icons/heart';
-import Home from '@lucide/svelte/icons/home';
+	import Home from '@lucide/svelte/icons/home';
 	import Layers from '@lucide/svelte/icons/layers';
 	import LayoutGrid from '@lucide/svelte/icons/layout-grid';
 	import List from '@lucide/svelte/icons/list';
@@ -15,6 +15,8 @@ import Home from '@lucide/svelte/icons/home';
 	type GroupId = string;
 	type PageId = 'dashboard' | 'transactions' | 'overview';
 	type GroupMeta = { label: string; icon: string };
+	const STATUS_POLL_INTERVAL_MS = 5_000;
+	const STATUS_FAILURE_THRESHOLD = 2;
 
 	type Props = {
 		activePage: PageId;
@@ -92,114 +94,135 @@ import Home from '@lucide/svelte/icons/home';
 		}
 	}
 
-    function deriveStatusLabel(): string {
-        if (liveConnection.loading) {
-            return "API CONNECTING";
-        }
-        if (!liveConnection.error) {
-            return "API CONNECTED";
-        }
-        switch (liveConnection.error) {
-            case "api blocked":
-                return "API BLOCKED";
-            case "api degraded":
-                return "API DEGRADED";
-            case "health unavailable":
+	function deriveStatusLabel(): string {
+		if (liveConnection.loading) {
+			return "API CONNECTING";
+		}
+		if (!liveConnection.error) {
+			return "API CONNECTED";
+		}
+		switch (liveConnection.error) {
+			case "api blocked":
+				return "API BLOCKED";
+			case "api degraded":
+				return "API DEGRADED";
+			case "health unavailable":
 				return "HEALTH UNKNOWN";
 			case "api unavailable":
 				return "API OFFLINE";
 			default:
 				return "API ERROR";
 		}
-    }
+	}
 
-    function statusToneClass(): string {
-        if (liveConnection.loading) {
-            return "text-pending";
-        }
-        switch (liveConnection.error) {
-            case "api blocked":
-            case "api degraded":
-            case "health unavailable":
-                return "text-pending";
-            case null:
-                return "text-success";
-            default:
-                return "text-error";
-        }
-    }
+	function statusToneClass(): string {
+		if (liveConnection.loading) {
+			return "text-pending";
+		}
+		switch (liveConnection.error) {
+			case "api blocked":
+			case "api degraded":
+			case "health unavailable":
+				return "text-pending";
+			case null:
+				return "text-success";
+			default:
+				return "text-error";
+		}
+	}
 
-    function statusDotClass(): string {
-        if (liveConnection.loading) {
-            return "bg-pending";
-        }
-        switch (liveConnection.error) {
-            case "api blocked":
-            case "api degraded":
-            case "health unavailable":
-                return "bg-pending";
-            case null:
-                return "bg-success";
-            default:
-                return "bg-error";
-        }
-    }
+	function statusDotClass(): string {
+		if (liveConnection.loading) {
+			return "bg-pending";
+		}
+		switch (liveConnection.error) {
+			case "api blocked":
+			case "api degraded":
+			case "health unavailable":
+				return "bg-pending";
+			case null:
+				return "bg-success";
+			default:
+				return "bg-error";
+		}
+	}
 
 	let liveConnection = $state({
 		loading: false,
 		error: null as string | null,
 		detail: null as string | null,
 	});
+	let consecutiveStatusFailures = $state(0);
 
-    $effect(() => {
-        liveConnection = {
-            loading,
-            error,
-            detail,
-        };
-    });
+	$effect(() => {
+		liveConnection = {
+			loading,
+			error,
+			detail,
+		};
+		if (!error) {
+			consecutiveStatusFailures = 0;
+		}
+	});
 
-    async function refreshStatus(markConnecting = false) {
-        if (markConnecting) {
-            liveConnection = {
-                ...liveConnection,
-                loading: true,
-            };
-        }
-        try {
-            const response = await fetch('/api/status', {
-                headers: { accept: 'application/json' },
-                cache: 'no-store',
-            });
-            if (!response.ok) {
-                throw new Error(`status ${response.status}`);
-            }
-            const payload = (await response.json()) as {
-                connection?: { loading: boolean; error: string | null; detail: string | null };
-            };
-            liveConnection = {
-                loading: payload.connection?.loading ?? false,
-                error: payload.connection?.error ?? 'api unavailable',
-                detail: payload.connection?.detail ?? null,
-            };
-        } catch (requestError) {
-            liveConnection = {
-                loading: false,
-                error: 'api unavailable',
-                detail: requestError instanceof Error ? requestError.message : 'status request failed',
-            };
-        }
-    }
+	async function refreshStatus(markConnecting = false) {
+		if (markConnecting) {
+			liveConnection = {
+				...liveConnection,
+				loading: true,
+			};
+		}
+		try {
+			const response = await fetch('/api/status', {
+				headers: { accept: 'application/json' },
+				cache: 'no-store',
+			});
+			if (!response.ok) {
+				throw new Error(`status ${response.status}`);
+			}
+			const payload = (await response.json()) as {
+				connection?: { loading: boolean; error: string | null; detail: string | null };
+			};
+			const connection = payload.connection;
+			if (!connection) {
+				throw new Error("status payload missing connection");
+			}
+			consecutiveStatusFailures = 0;
+			liveConnection = {
+				loading: connection.loading,
+				error: connection.error,
+				detail: connection.detail,
+			};
+		} catch (requestError) {
+			consecutiveStatusFailures += 1;
+			if (
+				consecutiveStatusFailures < STATUS_FAILURE_THRESHOLD &&
+				liveConnection.error !== 'api unavailable'
+			) {
+				liveConnection = {
+					...liveConnection,
+					loading: false,
+					detail: `${liveConnection.detail ?? 'status poll warning'} (transient status poll failure)`,
+				};
+				return;
+			}
+			liveConnection = {
+				loading: false,
+				error: 'api unavailable',
+				detail: requestError instanceof Error ? requestError.message : 'status request failed',
+			};
+		}
+	}
 
-    onMount(() => {
-        void refreshStatus(Boolean(liveConnection.error));
-        const interval = window.setInterval(() => {
-            void refreshStatus(false);
-        }, 5000);
-        return () => {
-            window.clearInterval(interval);
-        };
-    });
+	onMount(() => {
+		void refreshStatus(Boolean(liveConnection.error));
+		const interval = window.setInterval(() => {
+			void refreshStatus(false);
+		}, STATUS_POLL_INTERVAL_MS);
+		return () => {
+			window.clearInterval(interval);
+		};
+	});
 </script>
 
 <header
@@ -280,15 +303,15 @@ import Home from '@lucide/svelte/icons/home';
 
 	<!-- Right: Status + Theme -->
 	<div class="flex items-center gap-3">
-        <div
-            class="text-xs uppercase tracking-wider flex items-center gap-1.5"
-            role="status"
-            aria-live="polite"
-            title={liveConnection.detail ?? undefined}
-        >
-            <span class={`hidden md:inline ${statusToneClass()}`}>{deriveStatusLabel()}</span>
-            <span class={`size-1.5 rounded-full shrink-0 ${statusDotClass()}`}></span>
-        </div>
+		<div
+			class="text-xs uppercase tracking-wider flex items-center gap-1.5"
+			role="status"
+			aria-live="polite"
+			title={liveConnection.detail ?? undefined}
+		>
+			<span class={`hidden md:inline ${statusToneClass()}`}>{deriveStatusLabel()}</span>
+			<span class={`size-1.5 rounded-full shrink-0 ${statusDotClass()}`}></span>
+		</div>
 		<ThemeToggle />
 	</div>
 </header>

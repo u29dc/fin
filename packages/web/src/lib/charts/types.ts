@@ -7,7 +7,8 @@ export type TreemapDataItem = {
 };
 
 export type SankeyNode = {
-	name: string;
+	id: string;
+	label: string;
 	itemStyle?: {
 		color: string;
 	};

@@ -126,17 +126,37 @@ body {
 	text-rendering: optimizeLegibility;
 }
 
+/* Keep scroll behavior, hide visual scrollbars on shared layout containers to prevent route shift */
+html,
+body,
+#main,
+main {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+	scrollbar-gutter: stable both-edges;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#main::-webkit-scrollbar,
+main::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
 /* Text selection styling */
 ::selection {
 	background: var(--text);
 	color: var(--bg);
 }
 
-/* Prevent iOS zoom on input focus */
-input,
-textarea,
-select {
-	font-size: 16px;
+/* Prevent mobile browser zoom on form controls while allowing compact desktop typography */
+@media (hover: none), (pointer: coarse) {
+	input,
+	textarea,
+	select {
+		font-size: 16px;
+	}
 }
 
 

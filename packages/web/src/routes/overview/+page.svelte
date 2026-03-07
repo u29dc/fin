@@ -21,14 +21,16 @@
 	const groupMetadata = $derived(data.groupMetadata);
 	const connection = $derived(data.connection);
 	const chartAccounts = $derived(data.chartAccounts as OverviewChartAccount[]);
+	const chartAccountIds = $derived(chartAccounts.map((account) => account.id));
 	const totalBalanceSeries = $derived(data.totalBalanceSeries);
 	const accountBalanceSeries = $derived(data.accountBalanceSeries);
     const projection = $derived(data.projection);
     const totalSeriesId = $derived(data.totalSeriesId);
     const colorScheme = $derived(theme.resolved);
 
-    let isMobile = $state(false);
-    let enabledSeriesIds = $state<string[]>([]);
+	let isMobile = $state(false);
+	let enabledSeriesIds = $state<string[]>([]);
+	let disabledSeriesIds = $state<string[]>([]);
 
 	const moneyFormatter = new Intl.NumberFormat("en-GB", {
 		style: "currency",
@@ -150,27 +152,47 @@
 		};
     });
 
-    $effect(() => {
-        const nextIds = [totalSeriesId, ...chartAccounts.map((account) => account.id)];
-        if (nextIds.length === 0) {
-            enabledSeriesIds = [];
-            return;
-        }
-        if (enabledSeriesIds.length === 0) {
-            enabledSeriesIds = nextIds;
-            return;
-        }
-        enabledSeriesIds = enabledSeriesIds.filter((id) => nextIds.includes(id));
-        for (const id of nextIds) {
-            if (!enabledSeriesIds.includes(id)) {
-                enabledSeriesIds = [...enabledSeriesIds, id];
-            }
-        }
-    });
+	$effect(() => {
+		const nextIds = [totalSeriesId, ...chartAccountIds];
+		if (nextIds.length === 0) {
+			if (enabledSeriesIds.length > 0) {
+				enabledSeriesIds = [];
+			}
+			if (disabledSeriesIds.length > 0) {
+				disabledSeriesIds = [];
+			}
+			return;
+		}
+
+		const nextIdSet = new Set(nextIds);
+		let nextDisabled = disabledSeriesIds.filter((id) => nextIdSet.has(id));
+		let nextEnabled = nextIds.filter((id) => !nextDisabled.includes(id));
+		if (nextEnabled.length === 0) {
+			const fallback = nextIds[0];
+			if (fallback) {
+				nextEnabled = [fallback];
+				nextDisabled = nextIds.filter((id) => id !== fallback);
+			}
+		}
+
+		if (!sameSeries(nextDisabled, disabledSeriesIds)) {
+			disabledSeriesIds = nextDisabled;
+		}
+		if (!sameSeries(nextEnabled, enabledSeriesIds)) {
+			enabledSeriesIds = nextEnabled;
+		}
+	});
 
 	function getAccountColor(groupId: string, groupIndex: number): string {
 		const palette = linePalette[groupId as keyof typeof linePalette] ?? linePalette.other;
 		return palette[Math.min(groupIndex, palette.length - 1)] ?? linePalette.other[0];
+	}
+
+	function sameSeries(left: string[], right: string[]): boolean {
+		if (left.length !== right.length) {
+			return false;
+		}
+		return left.every((entry, index) => entry === right[index]);
 	}
 
 	function formatMoney(minor: number | null | undefined): string {
@@ -180,8 +202,21 @@
 		return moneyFormatter.format(minor / 100);
 	}
 
+	function parseIsoDate(date: string): Date | null {
+		const normalized = date.includes("T") ? date : `${date}T00:00:00Z`;
+		const parsed = new Date(normalized);
+		if (Number.isNaN(parsed.getTime())) {
+			return null;
+		}
+		return parsed;
+	}
+
 	function formatMonthYear(date: string): string {
-		return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", {
+		const parsed = parseIsoDate(date);
+		if (!parsed) {
+			return "—";
+		}
+		return parsed.toLocaleDateString("en-GB", {
 			month: "short",
 			year: "numeric",
 		});
@@ -191,7 +226,11 @@
 		if (!date) {
 			return "—";
 		}
-		return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", {
+		const parsed = parseIsoDate(date);
+		if (!parsed) {
+			return "—";
+		}
+		return parsed.toLocaleDateString("en-GB", {
 			day: "numeric",
 			month: "short",
 			year: "numeric",
@@ -267,16 +306,39 @@
 		};
     }
 
-    function toggleSeries(id: string) {
-        if (enabledSeriesSet.has(id)) {
-            if (enabledSeriesIds.length === 1) {
-                return;
-            }
-            enabledSeriesIds = enabledSeriesIds.filter((entry) => entry !== id);
-            return;
-        }
-        enabledSeriesIds = [...enabledSeriesIds, id];
-    }
+	function toggleSeries(id: string) {
+		const isCurrentlyEnabled = enabledSeriesSet.has(id);
+		const nextDisabled = new Set(disabledSeriesIds);
+
+		if (isCurrentlyEnabled) {
+			if (enabledSeriesIds.length === 1 || disabledSeriesIds.includes(id)) {
+				return;
+			}
+			nextDisabled.add(id);
+		} else {
+			nextDisabled.delete(id);
+		}
+
+		// If account selection is narrowed, default to account-only view by hiding all-assets aggregate.
+		if (id !== totalSeriesId && !nextDisabled.has(totalSeriesId) && chartAccountIds.length > 0) {
+			const enabledAccountCount = chartAccountIds.reduce((count, accountId) => {
+				return nextDisabled.has(accountId) ? count : count + 1;
+			}, 0);
+			if (enabledAccountCount > 0 && enabledAccountCount < chartAccountIds.length) {
+				nextDisabled.add(totalSeriesId);
+			}
+		}
+
+		const nextSeriesIds = [totalSeriesId, ...chartAccountIds];
+		const nextEnabledCount = nextSeriesIds.reduce((count, seriesId) => {
+			return nextDisabled.has(seriesId) ? count : count + 1;
+		}, 0);
+		if (nextEnabledCount === 0) {
+			return;
+		}
+
+		disabledSeriesIds = nextSeriesIds.filter((seriesId) => nextDisabled.has(seriesId));
+	}
 
     function isSeriesEnabled(id: string): boolean {
         return enabledSeriesSet.has(id);
@@ -313,13 +375,13 @@
                 <div class="text-lg font-normal tabular-nums">{formatMoney(projection?.liquidBalanceMinor)}</div>
                 <div class="text-2xs uppercase tracking-widest text-muted">{includedGroupsLabel}</div>
             </article>
-            <article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
-                <div class="text-2xs uppercase tracking-widest text-muted">Current burn</div>
-                <div class="text-lg font-normal tabular-nums">{formatMoney(projection?.currentBurnMinor)}</div>
-                <div class="text-2xs uppercase tracking-widest text-muted">
-                    Minimum burn {formatMoney(projection?.minimumBurnMinor)}
-                </div>
-            </article>
+			<article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
+				<div class="text-2xs uppercase tracking-widest text-muted">System outflow burn</div>
+				<div class="text-lg font-normal tabular-nums">{formatMoney(projection?.currentBurnMinor)}</div>
+				<div class="text-2xs uppercase tracking-widest text-muted">
+					Median over {projection?.assumptions.trailingOutflowWindowMonths ?? 0} full months · internal transfers excluded
+				</div>
+			</article>
             <article class="border border-border bg-panel p-2.5 flex flex-col gap-1.5">
                 <div class="text-2xs uppercase tracking-widest text-muted">Runway status</div>
                 <div class={`text-lg font-normal tabular-nums ${projectionStatus.toneClass}`}>{projectionStatus.label}</div>
@@ -430,12 +492,12 @@
 
 		<article class="border border-border bg-panel p-2.5 flex flex-col gap-3 fade-in">
 			<header class="flex flex-col gap-1.5 xl:flex-row xl:items-end xl:justify-between">
-				<div>
-					<h2 class="font-normal text-sm uppercase tracking-widest">Runway projection</h2>
-					<div class="text-sm mt-0.5 leading-snug uppercase tracking-wider text-muted">
-						Server-defined current-burn and minimum-burn scenarios
+					<div>
+						<h2 class="font-normal text-sm uppercase tracking-widest">Runway projection</h2>
+						<div class="text-sm mt-0.5 leading-snug uppercase tracking-wider text-muted">
+							Current burn uses median monthly outflow across selected groups, excluding internal transfers
+						</div>
 					</div>
-				</div>
 				<div class="text-sm uppercase tracking-widest text-muted">
 					As of {formatLongDate(projection?.assumptions.asOfDate)}
 				</div>

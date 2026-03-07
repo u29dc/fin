@@ -98,6 +98,7 @@ export function createTreemapOption(data: TreemapDataItem[], colorScheme: ColorS
 export function createSankeyOption(nodes: SankeyNode[], links: SankeyLink[], colorScheme: ColorScheme = 'dark', compact = false): echarts.EChartsCoreOption {
 	const colors = ECHARTS_COLORS[colorScheme];
 	const fontSize = compact ? 9 : 11;
+	const labelById = new Map(nodes.map((node) => [node.id, node.label]));
 
 	return {
 		tooltip: {
@@ -110,15 +111,20 @@ export function createSankeyOption(nodes: SankeyNode[], links: SankeyLink[], col
 				fontFamily: DEFAULT_FONT_FAMILY,
 				fontSize: 12,
 			},
-			formatter: (params: unknown) => {
-				const p = params as { dataType: string; name?: string; data?: { source: string; target: string; value: number } };
-				if (p.dataType === 'edge' && p.data) {
-					return `${p.data.source} → ${p.data.target}<br/><strong>${formatGbpMinor(p.data.value)}</strong>`;
-				}
-				return p.name ?? '';
+				formatter: (params: unknown) => {
+					const p = params as { dataType: string; name?: string; data?: { source: string; target: string; value: number } };
+					if (p.dataType === 'edge' && p.data) {
+						const sourceLabel = labelById.get(p.data.source) ?? p.data.source;
+						const targetLabel = labelById.get(p.data.target) ?? p.data.target;
+						return `${sourceLabel} → ${targetLabel}<br/><strong>${formatGbpMinor(p.data.value)}</strong>`;
+					}
+					if (!p.name) {
+						return '';
+					}
+					return labelById.get(p.name) ?? p.name;
+				},
 			},
-		},
-		animation: false,
+			animation: false,
         series: [
             {
                 type: 'sankey',
@@ -146,14 +152,24 @@ export function createSankeyOption(nodes: SankeyNode[], links: SankeyLink[], col
 					curveness: 0.5,
 					opacity: 0.4,
 				},
-				itemStyle: {
-					borderWidth: 0,
+					itemStyle: {
+						borderWidth: 0,
+					},
+					data: nodes.map((node) => ({
+						name: node.id,
+						itemStyle: node.itemStyle,
+						label: {
+							formatter: node.label,
+						},
+					})),
+					links: links.map((link) => ({
+						source: link.source,
+						target: link.target,
+						value: link.value,
+					})),
 				},
-				data: nodes,
-				links,
-			},
-		],
-	};
+			],
+		};
 }
 
 function mapLineStyle(style?: 'solid' | 'dashed' | 'dotted'): 'solid' | 'dashed' | 'dotted' {

@@ -555,13 +555,13 @@ describe("loadDashboardPageData", () => {
 		expect(data.groupAllocationSnapshots.personal?.dashboard.availableMinor).toBe(180_000);
 		expect(data.groupCashFlowData.personal).toEqual({
 			nodes: [
-				{ name: "Salary", category: "income" },
-				{ name: "Personal Monzo", category: "asset" },
-				{ name: "Rent", category: "expense" },
+				{ id: "Income:Salary", label: "Salary", category: "income" },
+				{ id: "Assets:Personal:Monzo", label: "Personal Monzo", category: "asset" },
+				{ id: "Expenses:Housing:Rent", label: "Rent", category: "expense" },
 			],
 			links: [
-				{ source: "Salary", target: "Personal Monzo", value: 200_000 },
-				{ source: "Personal Monzo", target: "Rent", value: 120_000 },
+				{ source: "Income:Salary", target: "Assets:Personal:Monzo", value: 200_000 },
+				{ source: "Assets:Personal:Monzo", target: "Expenses:Housing:Rent", value: 120_000 },
 			],
 		});
 		expect(data.groupExpenseHierarchy.personal?.[0]).toEqual({

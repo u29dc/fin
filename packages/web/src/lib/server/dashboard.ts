@@ -103,7 +103,7 @@ export type DashboardAllocationSnapshot = {
 };
 
 export type SankeyFlowData = {
-	nodes: Array<{ name: string; category: "income" | "asset" | "expense" }>;
+	nodes: Array<{ id: string; label: string; category: "income" | "asset" | "expense" }>;
 	links: Array<{ source: string; target: string; value: number }>;
 };
 
@@ -610,22 +610,21 @@ function mapAllocationSnapshot(payload: DashboardAllocationData): DashboardAlloc
 }
 
 function mapSankeyFlowData(payload: DashboardFlowData): SankeyFlowData {
-	const labelById = new Map(payload.graph.nodes.map((node) => [node.id, node.label]));
+	const nodeIds = new Set(payload.graph.nodes.map((node) => node.id));
 	return {
 		nodes: payload.graph.nodes.map((node) => ({
-			name: node.label,
+			id: node.id,
+			label: node.label,
 			category: node.kind,
 		})),
 		links: payload.graph.edges
 			.map((edge) => {
-				const source = labelById.get(edge.source_id);
-				const target = labelById.get(edge.target_id);
-				if (!source || !target) {
+				if (!nodeIds.has(edge.source_id) || !nodeIds.has(edge.target_id)) {
 					return null;
 				}
 				return {
-					source,
-					target,
+					source: edge.source_id,
+					target: edge.target_id,
 					value: edge.amount_minor,
 				};
 			})

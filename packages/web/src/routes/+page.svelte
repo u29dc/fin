@@ -147,16 +147,25 @@
 		};
 	}
 
-	function getLastTwoMonthsData(targetGroup: GroupId): { current: CashflowPoint | null; previous: CashflowPoint | null } {
+	function currentMonthKey(): string {
+		const now = new Date();
+		const year = now.getUTCFullYear();
+		const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+		return `${year}-${month}`;
+	}
+
+	function getLastTwoCompletedMonthsData(targetGroup: GroupId): { current: CashflowPoint | null; previous: CashflowPoint | null } {
 		const series = groupCashflowSeries[targetGroup] ?? [];
+		const completed = series.filter((point) => point.month < currentMonthKey());
+		const history = completed.length > 0 ? completed : series;
 		return {
-			current: series.at(-1) ?? null,
-			previous: series.at(-2) ?? null,
+			current: history.at(-1) ?? null,
+			previous: history.at(-2) ?? null,
 		};
 	}
 
 	function getPeriodSummary(targetGroup: GroupId): { current: CashflowPoint; previous: CashflowPoint | null } | null {
-		const monthData = getLastTwoMonthsData(targetGroup);
+		const monthData = getLastTwoCompletedMonthsData(targetGroup);
 		if (!monthData.current) {
 			return null;
 		}
@@ -187,7 +196,8 @@
 		}
 		const palette = SANKEY_PALETTE[colorScheme];
 		return flowData.nodes.map((node) => ({
-			name: node.name,
+			id: node.id,
+			label: node.label,
 			itemStyle: {
 				color: palette[node.category],
 			},

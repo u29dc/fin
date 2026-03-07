@@ -281,6 +281,43 @@ describe("fetchTransactionsDataset", () => {
 			truncated: true,
 		});
 	});
+
+	test("maps pair-account sorting to account_id for deterministic account-code ordering", async () => {
+		const transactionQueries: Array<Record<string, string | number | undefined>> = [];
+		const client = createMockClient({
+			viewTransactions: async (query) => {
+				transactionQueries.push({
+					group: query.group,
+					limit: query.limit,
+					sortField: query.sortField,
+					sortDirection: query.sortDirection,
+				});
+				return {
+					items: [],
+					count: 0,
+					totalCount: 0,
+					hasMore: false,
+					nextCursor: null,
+					nextCursorToken: null,
+				};
+			},
+		});
+
+		await fetchTransactionsDataset(client, {
+			group: "business",
+			sort: "pairAccountId",
+			direction: "asc",
+		});
+
+		expect(transactionQueries).toEqual([
+			{
+				group: "business",
+				limit: TRANSACTION_LIST_LIMIT,
+				sortField: "account_id",
+				sortDirection: "asc",
+			},
+		]);
+	});
 });
 
 describe("fetchTransactionDetail", () => {

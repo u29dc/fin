@@ -3,7 +3,6 @@
 
 	import Header from "$lib/Header.svelte";
 	import {
-		filterTransactionItems,
 		type TransactionDetail,
 		type TransactionListItem,
 		type TransactionListState,
@@ -27,7 +26,7 @@
 	const SORT_COLUMNS: Array<{ id: TransactionsSortColumn; label: string }> = [
 		{ id: "postedAt", label: "Date" },
 		{ id: "cleanDescription", label: "Title" },
-		{ id: "pairAccountId", label: "Counterparty" },
+		{ id: "pairAccountId", label: "Pair account" },
 		{ id: "amountMinor", label: "Amount" },
 	];
 
@@ -51,10 +50,8 @@
 	let currentGroup = $state<GroupId>("personal");
 	let currentSort = $state<TransactionsSortColumn>("postedAt");
 	let currentDir = $state<TransactionsSortDirection>("desc");
-	let searchInput = $state("");
-	let committedSearch = $state("");
 	let selectedPostingId = $state<string | null>(null);
-	let didInitializeState = false;
+	let didInitializeState = $state(false);
 
 	let listState = $state<TransactionListState>(EMPTY_LIST);
 	let listLoading = $state(true);
@@ -65,19 +62,15 @@
 	let detailLoading = $state(false);
 	let detailError = $state<string | null>(null);
 
-	let searchDebounceHandle: number | null = null;
 	let listAbortController: AbortController | null = null;
 	let detailAbortController: AbortController | null = null;
 
 	const effectiveGroup = $derived(didInitializeState ? currentGroup : pageData.initialGroup);
-	const filteredItems = $derived.by(() => filterTransactionItems(listState.items, committedSearch));
+	const filteredItems = $derived(listState.items);
 	const activeGroupLabel = $derived(groupMetadata[effectiveGroup]?.label ?? effectiveGroup);
 	const listSummary = $derived.by(() => {
 		if (listLoading && listState.loadedCount === 0) {
 			return `Loading transactions for ${activeGroupLabel}`;
-		}
-		if (committedSearch) {
-			return `Showing ${filteredItems.length.toLocaleString("en-GB")} matches from ${listState.loadedCount.toLocaleString("en-GB")} loaded for ${activeGroupLabel}`;
 		}
 		if (listState.truncated) {
 			return `Showing ${filteredItems.length.toLocaleString("en-GB")} loaded of ${listState.totalCount.toLocaleString("en-GB")} for ${activeGroupLabel}`;
@@ -104,32 +97,8 @@
 		currentGroup = pageData.initialGroup;
 		currentSort = pageData.initialSort;
 		currentDir = pageData.initialDir;
-		searchInput = pageData.searchQuery;
-		committedSearch = pageData.searchQuery;
 		selectedPostingId = pageData.selectedPostingId;
 		didInitializeState = true;
-	});
-
-	$effect(() => {
-		if (typeof window === "undefined") {
-			return;
-		}
-		if (!didInitializeState) {
-			return;
-		}
-		if (searchDebounceHandle) {
-			window.clearTimeout(searchDebounceHandle);
-		}
-		searchDebounceHandle = window.setTimeout(() => {
-			committedSearch = searchInput.trim();
-		}, 160);
-
-		return () => {
-			if (searchDebounceHandle) {
-				window.clearTimeout(searchDebounceHandle);
-				searchDebounceHandle = null;
-			}
-		};
 	});
 
 	$effect(() => {
@@ -182,9 +151,6 @@
 	});
 
 	onDestroy(() => {
-		if (searchDebounceHandle) {
-			window.clearTimeout(searchDebounceHandle);
-		}
 		listAbortController?.abort();
 		detailAbortController?.abort();
 	});
@@ -218,20 +184,12 @@
 		selectedPostingId = postingId;
 	}
 
-	function handleClearSearch() {
-		searchInput = "";
-	}
-
 	function syncUrl() {
 		const url = new URL(window.location.href);
 		url.searchParams.set("group", currentGroup);
 		url.searchParams.set("sort", currentSort);
 		url.searchParams.set("dir", currentDir);
-		if (committedSearch) {
-			url.searchParams.set("search", committedSearch);
-		} else {
-			url.searchParams.delete("search");
-		}
+		url.searchParams.delete("search");
 		if (selectedPostingId) {
 			url.searchParams.set("selected", selectedPostingId);
 		} else {
@@ -377,11 +335,11 @@
 	}
 
 	function getPairLabel(item: TransactionListItem): string {
-		if (item.counterparty) {
-			return item.counterparty;
-		}
 		if (item.pairAccountIds.length > 0) {
 			return item.pairAccountIds.join(" · ");
+		}
+		if (item.counterparty) {
+			return item.counterparty;
 		}
 		return "—";
 	}
@@ -419,43 +377,19 @@
 	/>
 
 	<section class="border border-border bg-panel flex-1 min-h-0 grid xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,1fr)] fade-in overflow-hidden">
-		<div class="min-h-0 flex flex-col">
-			<header class="border-b border-border p-2.5 flex flex-col gap-2">
-				<div class="flex flex-col gap-1 lg:flex-row lg:items-end lg:justify-between">
-					<div>
-						<h2 class="font-normal text-sm uppercase tracking-widest">Transactions</h2>
-						<div class="text-sm mt-0.5 leading-snug uppercase tracking-wider text-muted">
-							{listSummary}
+			<div class="min-h-0 flex flex-col">
+				<header class="border-b border-border p-2.5 flex flex-col gap-2">
+					<div class="flex flex-col gap-1 lg:flex-row lg:items-end lg:justify-between">
+						<div>
+							<h2 class="font-normal text-2xs uppercase tracking-widest">Transactions</h2>
+							<div class="text-2xs mt-0.5 leading-snug uppercase tracking-wider text-muted">
+								{listSummary}
+							</div>
 						</div>
-					</div>
-					<div class="text-2xs uppercase tracking-widest text-muted">{fetchStatusLabel}</div>
-				</div>
-
-				<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-					<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-						<label class="sr-only" for="transaction-search">Search transactions</label>
-						<input
-							id="transaction-search"
-							type="search"
-							bind:value={searchInput}
-							placeholder="Filter description, counterparty, account"
-							class="min-h-[44px] w-full sm:w-[22rem] bg-transparent border border-border-subtle px-2.5 text-[16px] leading-none outline-none focus:border-text placeholder:text-muted"
-						/>
-						{#if searchInput.length > 0}
-							<button
-								type="button"
-								class="min-h-[44px] px-2.5 border border-border-subtle text-2xs uppercase tracking-widest text-muted hover:text-text"
-								onclick={handleClearSearch}
-							>
-								Clear
-							</button>
-						{/if}
+						<div class="text-2xs uppercase tracking-widest text-muted">{fetchStatusLabel}</div>
 					</div>
 
 					<div class="flex items-center gap-2 text-2xs uppercase tracking-widest text-muted">
-						{#if committedSearch}
-							<span>Live filter</span>
-						{/if}
 						{#if listRefreshing}
 							<span class="text-pending">Updating</span>
 						{/if}
@@ -463,8 +397,7 @@
 							<span>Limit {listState.limit.toLocaleString("en-GB")}</span>
 						{/if}
 					</div>
-				</div>
-			</header>
+				</header>
 
 			<div class="border-b border-border bg-panel">
 				<div class="hidden md:grid md:grid-cols-[118px_minmax(0,1.75fr)_minmax(0,1.15fr)_132px] md:gap-3 md:px-2.5">
@@ -506,7 +439,7 @@
 					<div class="h-full flex flex-col items-center justify-center gap-2 p-6 text-center">
 						<div class="text-sm uppercase tracking-widest">No transactions found</div>
 						<div class="text-sm text-muted leading-relaxed max-w-xl">
-							Adjust the group or clear the live filter to return to the latest transactions.
+							Adjust the selected group to load a different transaction stream.
 						</div>
 					</div>
 				{:else}
