@@ -626,49 +626,49 @@
           {
             "amount_minor": 3218750,
             "share_of_source_pct": 100.0,
-            "share_of_total_pct": 60.09,
+            "share_of_total_pct": 60.18,
             "source_id": "Income:Other",
             "target_id": "Assets:Business:Operating"
           },
           {
-            "amount_minor": 278605,
-            "share_of_source_pct": 13.03,
-            "share_of_total_pct": 5.2,
-            "source_id": "Assets:Business:Operating",
-            "target_id": "Expenses:Transport:Travel"
-          },
-          {
             "amount_minor": 276213,
-            "share_of_source_pct": 12.92,
+            "share_of_source_pct": 12.97,
             "share_of_total_pct": 5.16,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Insurance"
           },
           {
             "amount_minor": 275938,
-            "share_of_source_pct": 12.91,
-            "share_of_total_pct": 5.15,
+            "share_of_source_pct": 12.96,
+            "share_of_total_pct": 5.16,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Equipment"
           },
           {
-            "amount_minor": 270995,
-            "share_of_source_pct": 12.68,
-            "share_of_total_pct": 5.06,
+            "amount_minor": 274800,
+            "share_of_source_pct": 12.9,
+            "share_of_total_pct": 5.14,
+            "source_id": "Assets:Business:Operating",
+            "target_id": "Expenses:Transport:Travel"
+          },
+          {
+            "amount_minor": 267268,
+            "share_of_source_pct": 12.55,
+            "share_of_total_pct": 5.0,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Contractors"
           },
           {
             "amount_minor": 266052,
-            "share_of_source_pct": 12.45,
+            "share_of_source_pct": 12.49,
             "share_of_total_pct": 4.97,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Software"
           },
           {
             "amount_minor": 262953,
-            "share_of_source_pct": 12.3,
-            "share_of_total_pct": 4.91,
+            "share_of_source_pct": 12.35,
+            "share_of_total_pct": 4.92,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Services"
           }
@@ -715,7 +715,7 @@
             "label": "Other"
           }
         ],
-        "total_minor": 4849506
+        "total_minor": 4841974
       },
       "groupId": "business",
       "mode": "monthly_average",
@@ -734,11 +734,96 @@
       "groupId": "business",
       "mode": "monthly_average",
       "months": 6,
-      "nodes": [],
-      "totalMinor": 0
+      "nodes": [
+        {
+          "account_id": "Expenses",
+          "children": [
+            {
+              "account_id": "Expenses:Business",
+              "children": [
+                {
+                  "account_id": "Expenses:Business:Insurance",
+                  "children": [],
+                  "kind": "expense",
+                  "name": "Insurance",
+                  "share_of_parent_pct": 20.48,
+                  "share_of_root_pct": 12.97,
+                  "total_minor": 276213
+                },
+                {
+                  "account_id": "Expenses:Business:Equipment",
+                  "children": [],
+                  "kind": "expense",
+                  "name": "Equipment",
+                  "share_of_parent_pct": 20.46,
+                  "share_of_root_pct": 12.96,
+                  "total_minor": 275938
+                },
+                {
+                  "account_id": "Expenses:Business:Contractors",
+                  "children": [],
+                  "kind": "expense",
+                  "name": "Contractors",
+                  "share_of_parent_pct": 19.82,
+                  "share_of_root_pct": 12.55,
+                  "total_minor": 267268
+                },
+                {
+                  "account_id": "Expenses:Business:Software",
+                  "children": [],
+                  "kind": "expense",
+                  "name": "Software",
+                  "share_of_parent_pct": 19.73,
+                  "share_of_root_pct": 12.49,
+                  "total_minor": 266052
+                },
+                {
+                  "account_id": "Expenses:Business:Services",
+                  "children": [],
+                  "kind": "expense",
+                  "name": "Services",
+                  "share_of_parent_pct": 19.5,
+                  "share_of_root_pct": 12.35,
+                  "total_minor": 262953
+                }
+              ],
+              "kind": "expense",
+              "name": "Business",
+              "share_of_parent_pct": 83.07,
+              "share_of_root_pct": 63.31,
+              "total_minor": 1348424
+            },
+            {
+              "account_id": "Expenses:Transport",
+              "children": [
+                {
+                  "account_id": "Expenses:Transport:Travel",
+                  "children": [],
+                  "kind": "expense",
+                  "name": "Travel",
+                  "share_of_parent_pct": 100.0,
+                  "share_of_root_pct": 12.9,
+                  "total_minor": 274800
+                }
+              ],
+              "kind": "expense",
+              "name": "Transport",
+              "share_of_parent_pct": 16.93,
+              "share_of_root_pct": 12.9,
+              "total_minor": 274800
+            }
+          ],
+          "kind": "expense",
+          "name": "Expenses",
+          "share_of_parent_pct": 76.21,
+          "share_of_root_pct": 76.21,
+          "total_minor": 1623224
+        }
+      ],
+      "totalMinor": 1623224
     },
     "meta": {
-      "count": 0,
+      "count": 9,
       "elapsed": 0,
       "tool": "dashboard.hierarchy"
     },
@@ -1186,11 +1271,6 @@
     "data": {
       "categories": [
         {
-          "category": "Travel",
-          "total_minor": 1671635,
-          "transaction_count": 70
-        },
-        {
           "category": "Insurance",
           "total_minor": 1657278,
           "transaction_count": 69
@@ -1201,9 +1281,14 @@
           "transaction_count": 70
         },
         {
+          "category": "Travel",
+          "total_minor": 1648804,
+          "transaction_count": 69
+        },
+        {
           "category": "Contractors",
-          "total_minor": 1625972,
-          "transaction_count": 68
+          "total_minor": 1603611,
+          "transaction_count": 67
         },
         {
           "category": "Software",
@@ -1212,7 +1297,7 @@
         }
       ],
       "mode": "breakdown",
-      "total": 8206829
+      "total": 8161637
     },
     "meta": {
       "count": 5,

@@ -263,14 +263,16 @@ fn expense_totals(
     account_ids: &[String],
     options: &HierarchyQueryOptions,
 ) -> Result<BTreeMap<String, i64>> {
-    let (asset_clause, mut params) = asset_match_clause("asset_posting", account_ids);
+    let (asset_clause, asset_params) = asset_match_clause("asset_posting", account_ids);
     let mut clauses = vec!["coa.account_type = 'expense'".to_owned()];
+    let mut params = Vec::new();
     apply_window_clause(
         &mut clauses,
         &mut params,
         options.months,
         options.to.as_deref(),
     );
+    params.extend(asset_params);
 
     let sql = format!(
         "SELECT p.account_id,\n                COALESCE(SUM(p.amount_minor), 0) AS total_minor\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         WHERE {}\n           AND EXISTS (\n                SELECT 1\n                FROM postings asset_posting\n                WHERE asset_posting.journal_entry_id = p.journal_entry_id\n                  AND {}\n           )\n         GROUP BY p.account_id",
@@ -300,9 +302,11 @@ fn expense_average_totals(
     options: &HierarchyQueryOptions,
 ) -> Result<BTreeMap<String, i64>> {
     let months = normalize_months(options.months);
-    let (asset_clause, mut params) = asset_match_clause("asset_posting", account_ids);
+    let (asset_clause, asset_params) = asset_match_clause("asset_posting", account_ids);
     let mut clauses = vec!["coa.account_type = 'expense'".to_owned()];
+    let mut params = Vec::new();
     apply_window_clause(&mut clauses, &mut params, months, options.to.as_deref());
+    params.extend(asset_params);
 
     let sql = format!(
         "SELECT p.account_id,\n                strftime('%Y-%m', je.posted_date) AS month,\n                COALESCE(SUM(p.amount_minor), 0) AS month_total\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         WHERE {}\n           AND EXISTS (\n                SELECT 1\n                FROM postings asset_posting\n                WHERE asset_posting.journal_entry_id = p.journal_entry_id\n                  AND {}\n           )\n         GROUP BY p.account_id, strftime('%Y-%m', je.posted_date)",
@@ -1128,6 +1132,39 @@ mod tests {
             left.total_minor >= right.total_minor
         }));
         assert!(root.children.iter().all(|node| node.total_minor > 0));
+    }
+
+    #[test]
+    fn fixture_hierarchy_includes_expense_root_for_scoped_queries() {
+        let temp = tempdir().expect("tempdir");
+        let fixture = materialize_fixture_home(temp.path(), &FixtureBuildOptions::default())
+            .expect("materialize fixture");
+        let runtime = RuntimeContext::open(RuntimeContextOptions {
+            config_path: Some(fixture.paths.config_path.clone()),
+            db_path: Some(fixture.paths.db_path.clone()),
+            create: false,
+            ..RuntimeContextOptions::read_only()
+        })
+        .expect("open runtime");
+
+        let hierarchy = group_expense_hierarchy(
+            runtime.connection(),
+            runtime.config(),
+            "business",
+            &HierarchyQueryOptions {
+                months: 6,
+                mode: RollupMode::MonthlyAverage,
+                to: Some("2026-03-31".to_owned()),
+            },
+        )
+        .expect("expense hierarchy");
+
+        let expense_root = hierarchy
+            .iter()
+            .find(|node| node.kind == ExpenseHierarchyNodeKind::Expense)
+            .expect("expected expense root node");
+        assert!(expense_root.total_minor > 0);
+        assert!(!expense_root.children.is_empty());
     }
 
     #[test]
