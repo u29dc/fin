@@ -37,7 +37,7 @@ fn map_fin_error(error: FinError) -> CliError {
         FinError::ConfigInvalid { path, message } => CliError::new(
             ErrorCode::InvalidConfig,
             format!("Invalid config at {}: {message}", path.display()),
-            "Run `fin config validate --json` for structured validation output",
+            "Run `fin config validate` for JSON output or `fin config validate --text` for a readable summary",
         ),
         other => CliError::new(
             ErrorCode::Runtime,

@@ -14,7 +14,14 @@ fn render_tool_detail(tool: &ToolMeta) -> String {
         format!("  Category: {}", tool.category),
         format!("  Idempotent: {}", tool.idempotent),
         format!("  Read only: {}", tool.read_only),
-        format!("  JSON: {}", tool.supports_json),
+        format!(
+            "  Default output: {}",
+            if tool.interactive_only {
+                "interactive"
+            } else {
+                "json"
+            }
+        ),
         format!("  Interactive only: {}", tool.interactive_only),
     ];
     if let Some(limit) = &tool.rate_limit {
@@ -61,7 +68,7 @@ pub fn run(name: Option<&str>) -> Result<CommandResult, CommandFailure> {
                 error: CliError::new(
                     ErrorCode::NotFound,
                     format!("Tool \"{name}\" not found"),
-                    "Run `fin tools --json` to list all available tools",
+                    "Run `fin tools` to list all available tools",
                 ),
             });
         };

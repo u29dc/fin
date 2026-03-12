@@ -21,16 +21,16 @@ run_cold() {
   /usr/bin/time -lp bash -lc "$command >/dev/null" > /dev/null 2> "$output"
 }
 
-run_cold "transactions-personal" "$CLI_BIN --json view transactions --group personal --limit 1000"
-run_cold "cashflow-business" "$CLI_BIN --json report cashflow --group business --months 24"
-run_cold "summary-report" "$CLI_BIN --json report summary"
+run_cold "transactions-personal" "$CLI_BIN view transactions --group personal --limit 1000"
+run_cold "cashflow-business" "$CLI_BIN report cashflow --group business --months 24"
+run_cold "summary-report" "$CLI_BIN report summary"
 run_cold "summary-dashboard" "$SDK_EXAMPLE_BIN summary-dashboard $FIXTURE_HOME"
 
 hyperfine \
   --warmup 3 \
   --runs 10 \
   --export-json "$OUT_DIR/warm.json" \
-  --command-name transactions-personal "$CLI_BIN --json view transactions --group personal --limit 1000 >/dev/null" \
-  --command-name cashflow-business "$CLI_BIN --json report cashflow --group business --months 24 >/dev/null" \
-  --command-name summary-report "$CLI_BIN --json report summary >/dev/null" \
+  --command-name transactions-personal "$CLI_BIN view transactions --group personal --limit 1000 >/dev/null" \
+  --command-name cashflow-business "$CLI_BIN report cashflow --group business --months 24 >/dev/null" \
+  --command-name summary-report "$CLI_BIN report summary >/dev/null" \
   --command-name summary-dashboard "$SDK_EXAMPLE_BIN summary-dashboard $FIXTURE_HOME >/dev/null"

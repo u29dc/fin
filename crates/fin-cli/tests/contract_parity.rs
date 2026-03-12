@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 use fin_sdk::ToolMeta;
 use fin_sdk::testing::fixture::{FixtureBuildOptions, materialize_fixture_home};
@@ -23,12 +23,16 @@ fn fixture_home() -> FixtureRuntime {
     }
 }
 
-fn run_json(home: &Path, args: &[&str]) -> Value {
-    let output = Command::new(env!("CARGO_BIN_EXE_fin"))
+fn run_command(home: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_fin"))
         .env("FIN_HOME", home)
         .args(args)
         .output()
-        .expect("run fin");
+        .expect("run fin")
+}
+
+fn run_json(home: &Path, args: &[&str]) -> Value {
+    let output = run_command(home, args);
 
     assert!(
         output.status.success(),
@@ -51,7 +55,7 @@ fn data_keys(document: &Value) -> BTreeSet<String> {
 }
 
 fn tools_registry(home: &Path) -> BTreeMap<String, ToolMeta> {
-    let tools = run_json(home, &["--json", "tools"]);
+    let tools = run_json(home, &["tools"]);
     let entries: Vec<ToolMeta> =
         serde_json::from_value(tools["data"]["tools"].clone()).expect("tool registry");
     entries
@@ -78,14 +82,98 @@ export const NAME_MAPPING_CONFIG = {
 }
 
 #[test]
+fn help_surface_exposes_text_not_json() {
+    let output = Command::new(env!("CARGO_BIN_EXE_fin"))
+        .arg("--help")
+        .output()
+        .expect("run fin --help");
+
+    assert!(output.status.success(), "help command should succeed");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--text"));
+    assert!(!stdout.contains("--json"));
+}
+
+#[test]
+fn bare_invocation_prints_help_instead_of_json() {
+    let output = Command::new(env!("CARGO_BIN_EXE_fin"))
+        .output()
+        .expect("run fin");
+
+    assert!(output.status.success(), "bare fin should succeed");
+    assert!(
+        output.stderr.is_empty(),
+        "unexpected stderr for bare invocation"
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Usage:"));
+    assert!(stdout.contains("Commands:"));
+    assert!(!stdout.trim_start().starts_with('{'));
+}
+
+#[test]
+fn default_json_success_writes_envelope_to_stdout() {
+    let fixture = fixture_home();
+    let output = run_command(&fixture.home, &["version"]);
+
+    assert!(
+        output.status.success(),
+        "version failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "unexpected stderr for default JSON output"
+    );
+
+    let document: Value = serde_json::from_slice(&output.stdout).expect("parse version json");
+    assert_eq!(document["ok"], Value::Bool(true));
+    assert_eq!(
+        document["meta"]["tool"],
+        Value::String("version".to_owned())
+    );
+}
+
+#[test]
+fn text_success_writes_human_output_to_stdout() {
+    let fixture = fixture_home();
+    let output = run_command(&fixture.home, &["--text", "version"]);
+
+    assert!(
+        output.status.success(),
+        "version --text failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "unexpected stderr for text output"
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("fin-sdk v"));
+}
+
+#[test]
 fn tools_snapshot_matches_golden_file() {
     let fixture = fixture_home();
-    let mut tools = run_json(&fixture.home, &["--json", "tools"]);
+    let mut tools = run_json(&fixture.home, &["tools"]);
     tools["meta"]["elapsed"] = Value::from(0);
 
-    let expected =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/tools.json"))
-            .expect("read golden snapshot");
+    let golden_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/tools.json");
+    if std::env::var("UPDATE_GOLDEN").as_deref() == Ok("1") {
+        fs::create_dir_all(golden_path.parent().expect("golden parent")).expect("golden dir");
+        fs::write(
+            &golden_path,
+            serde_json::to_string_pretty(&tools).expect("serialize tools snapshot"),
+        )
+        .expect("write golden snapshot");
+    }
+
+    let expected = fs::read_to_string(&golden_path).expect("read golden snapshot");
     let expected: Value = serde_json::from_str(&expected).expect("parse golden snapshot");
 
     assert_eq!(tools, expected);
@@ -116,7 +204,6 @@ fn registry_metadata_matches_real_command_payloads() {
     let tx_list = run_json(
         &fixture.home,
         &[
-            "--json",
             "view",
             "transactions",
             "--group",
@@ -133,7 +220,6 @@ fn registry_metadata_matches_real_command_payloads() {
     let category_list = run_json(
         &fixture.home,
         &[
-            "--json",
             "report",
             "categories",
             "--group",
@@ -154,35 +240,25 @@ fn registry_metadata_matches_real_command_payloads() {
     let (legacy_rules_source, legacy_rules_target) = write_legacy_rules_ts(&fixture.home);
 
     let samples: Vec<(&str, Vec<Vec<String>>)> = vec![
-        ("version", vec![vec!["--json".into(), "version".into()]]),
+        ("version", vec![vec!["version".into()]]),
         (
             "tools",
-            vec![
-                vec!["--json".into(), "tools".into()],
-                vec!["--json".into(), "tools".into(), "version".into()],
-            ],
+            vec![vec!["tools".into()], vec!["tools".into(), "version".into()]],
         ),
-        ("health", vec![vec!["--json".into(), "health".into()]]),
-        (
-            "config.show",
-            vec![vec!["--json".into(), "config".into(), "show".into()]],
-        ),
+        ("health", vec![vec!["health".into()]]),
+        ("config.show", vec![vec!["config".into(), "show".into()]]),
         (
             "config.validate",
-            vec![vec!["--json".into(), "config".into(), "validate".into()]],
+            vec![vec!["config".into(), "validate".into()]],
         ),
-        (
-            "rules.show",
-            vec![vec!["--json".into(), "rules".into(), "show".into()]],
-        ),
+        ("rules.show", vec![vec!["rules".into(), "show".into()]]),
         (
             "rules.validate",
-            vec![vec!["--json".into(), "rules".into(), "validate".into()]],
+            vec![vec!["rules".into(), "validate".into()]],
         ),
         (
             "rules.migrate_ts",
             vec![vec![
-                "--json".into(),
                 "rules".into(),
                 "migrate-ts".into(),
                 "--source".into(),
@@ -191,11 +267,10 @@ fn registry_metadata_matches_real_command_payloads() {
                 legacy_rules_target.display().to_string(),
             ]],
         ),
-        ("import", vec![vec!["--json".into(), "import".into()]]),
+        ("import", vec![vec!["import".into()]]),
         (
             "sanitize.discover",
             vec![vec![
-                "--json".into(),
                 "sanitize".into(),
                 "discover".into(),
                 "--min".into(),
@@ -205,7 +280,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "sanitize.migrate",
             vec![vec![
-                "--json".into(),
                 "sanitize".into(),
                 "migrate".into(),
                 "--dry-run".into(),
@@ -214,7 +288,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "sanitize.recategorize",
             vec![vec![
-                "--json".into(),
                 "sanitize".into(),
                 "recategorize".into(),
                 "--dry-run".into(),
@@ -223,7 +296,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "view.accounts",
             vec![vec![
-                "--json".into(),
                 "view".into(),
                 "accounts".into(),
                 "--group".into(),
@@ -233,7 +305,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "view.transactions",
             vec![vec![
-                "--json".into(),
                 "view".into(),
                 "transactions".into(),
                 "--group".into(),
@@ -245,21 +316,16 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "view.ledger",
             vec![vec![
-                "--json".into(),
                 "view".into(),
                 "ledger".into(),
                 "--limit".into(),
                 "5".into(),
             ]],
         ),
-        (
-            "view.balance",
-            vec![vec!["--json".into(), "view".into(), "balance".into()]],
-        ),
+        ("view.balance", vec![vec!["view".into(), "balance".into()]]),
         (
             "view.void",
             vec![vec![
-                "--json".into(),
                 "view".into(),
                 "void".into(),
                 entry_id.clone(),
@@ -269,7 +335,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "edit.transaction",
             vec![vec![
-                "--json".into(),
                 "edit".into(),
                 "transaction".into(),
                 entry_id,
@@ -281,7 +346,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "report.cashflow",
             vec![vec![
-                "--json".into(),
                 "report".into(),
                 "cashflow".into(),
                 "--group".into(),
@@ -293,7 +357,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "report.health",
             vec![vec![
-                "--json".into(),
                 "report".into(),
                 "health".into(),
                 "--group".into(),
@@ -304,14 +367,12 @@ fn registry_metadata_matches_real_command_payloads() {
             "report.runway",
             vec![
                 vec![
-                    "--json".into(),
                     "report".into(),
                     "runway".into(),
                     "--group".into(),
                     "personal".into(),
                 ],
                 vec![
-                    "--json".into(),
                     "report".into(),
                     "runway".into(),
                     "--consolidated".into(),
@@ -323,7 +384,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "report.reserves",
             vec![vec![
-                "--json".into(),
                 "report".into(),
                 "reserves".into(),
                 "--group".into(),
@@ -334,7 +394,6 @@ fn registry_metadata_matches_real_command_payloads() {
             "report.categories",
             vec![
                 vec![
-                    "--json".into(),
                     "report".into(),
                     "categories".into(),
                     "--group".into(),
@@ -347,7 +406,6 @@ fn registry_metadata_matches_real_command_payloads() {
                     "5".into(),
                 ],
                 vec![
-                    "--json".into(),
                     "report".into(),
                     "categories".into(),
                     "--group".into(),
@@ -364,7 +422,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "report.audit",
             vec![vec![
-                "--json".into(),
                 "report".into(),
                 "audit".into(),
                 "--account".into(),
@@ -378,7 +435,6 @@ fn registry_metadata_matches_real_command_payloads() {
         (
             "report.summary",
             vec![vec![
-                "--json".into(),
                 "report".into(),
                 "summary".into(),
                 "--months".into(),

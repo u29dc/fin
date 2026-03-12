@@ -7,20 +7,31 @@ mod registry;
 
 use std::time::Instant;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use fin_sdk::SDK_VERSION;
 
 use crate::commands::{CommandFailure, CommandResult, GlobalOptions};
 use crate::envelope::{emit_error, emit_success, print_text_error};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutputMode {
+    Json,
+    Text,
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "fin", version = SDK_VERSION, about = "fin rust cli")]
 struct Cli {
-    #[arg(long, global = true, help = "Output as JSON envelope")]
-    json: bool,
+    #[arg(long, global = true, help = "Output human-readable text")]
+    text: bool,
     #[arg(long, global = true, help = "Override database path")]
     db: Option<String>,
-    #[arg(long, global = true, help = "Output format (table|tsv)")]
+    #[arg(
+        long,
+        global = true,
+        requires = "text",
+        help = "Text output format (table|tsv)"
+    )]
     format: Option<String>,
     #[command(subcommand)]
     command: Option<Command>,
@@ -330,8 +341,8 @@ fn execute(
     options: &GlobalOptions,
 ) -> Result<CommandResult, CommandFailure> {
     match command {
-        Some(Command::Version) | None => Ok(commands::version::run()),
-        Some(Command::Start) => commands::start::run(options.json),
+        Some(Command::Version) => Ok(commands::version::run()),
+        Some(Command::Start) => commands::start::run(),
         Some(Command::Tools(args)) => commands::tools::run(args.name.as_deref()),
         Some(Command::Health) => commands::health::run(options),
         Some(Command::Config(config)) => match config.command {
@@ -443,21 +454,40 @@ fn execute(
                 commands::report::run_summary(options.db.as_deref(), args.months)
             }
         },
+        None => unreachable!("root help path should return before dispatch"),
+    }
+}
+
+fn print_root_help() {
+    let mut command = Cli::command().subcommand_required(true);
+    command.print_help().expect("print fin root help");
+    println!();
+}
+
+fn output_mode(command: Option<&Command>, text: bool) -> OutputMode {
+    if text || matches!(command, Some(Command::Start)) {
+        OutputMode::Text
+    } else {
+        OutputMode::Json
     }
 }
 
 fn main() {
     let cli = Cli::parse();
+    if cli.command.is_none() {
+        print_root_help();
+        return;
+    }
+    let mode = output_mode(cli.command.as_ref(), cli.text);
     let options = GlobalOptions {
         db: cli.db.clone(),
-        json: cli.json,
         format: cli.format.clone(),
     };
     let start = Instant::now();
 
     let result = execute(cli.command, &options);
-    let exit_code = if cli.json {
-        match result {
+    let exit_code = match mode {
+        OutputMode::Json => match result {
             Ok(command) => emit_success(
                 command.tool,
                 &command.data,
@@ -466,12 +496,11 @@ fn main() {
                 command.exit_code,
             ),
             Err(failure) => emit_error(failure.tool, &failure.error, start),
-        }
-    } else {
-        match result {
+        },
+        OutputMode::Text => match result {
             Ok(command) => {
                 if !command.text.trim().is_empty() {
-                    eprintln!("{}", command.text);
+                    println!("{}", command.text);
                 }
                 command.exit_code
             }
@@ -479,7 +508,7 @@ fn main() {
                 print_text_error(&failure.error);
                 failure.error.exit_code()
             }
-        }
+        },
     };
 
     std::process::exit(exit_code.as_i32());

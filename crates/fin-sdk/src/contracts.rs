@@ -247,8 +247,9 @@ fn flag(name: &str, description: &str, required: bool) -> ParameterMeta {
 pub fn global_flags() -> Vec<GlobalFlag> {
     vec![
         GlobalFlag {
-            name: "--json".to_string(),
-            description: "Output as JSON envelope".to_string(),
+            name: "--text".to_string(),
+            description: "Output human-readable text instead of the default JSON envelope"
+                .to_string(),
         },
         GlobalFlag {
             name: "--db".to_string(),
@@ -256,7 +257,7 @@ pub fn global_flags() -> Vec<GlobalFlag> {
         },
         GlobalFlag {
             name: "--format".to_string(),
-            description: "Output format (table|tsv)".to_string(),
+            description: "Text output format (table|tsv); requires --text".to_string(),
         },
     ]
 }
@@ -270,7 +271,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "system",
             "Check prerequisites and local runtime health",
             ToolTraits::read_only(),
-            "fin health --json",
+            "fin health",
             vec![],
             &["checks", "status", "summary"],
         ),
@@ -280,7 +281,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "system",
             "Capability discovery and contract metadata",
             ToolTraits::read_only(),
-            "fin tools --json",
+            "fin tools",
             vec![ParameterMeta {
                 name: "name".to_owned(),
                 param_type: "string".to_owned(),
@@ -295,7 +296,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "system",
             "Print version and sdk identity",
             ToolTraits::read_only(),
-            "fin version --json",
+            "fin version",
             vec![],
             &["sdk", "tool"],
         ),
@@ -303,7 +304,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "tui.start",
             "fin start",
             "tui",
-            "Launch fin terminal UI (interactive only; not supported with --json)",
+            "Launch fin terminal UI (interactive only)",
             ToolTraits::interactive(),
             "fin start",
             vec![],
@@ -315,7 +316,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "config",
             "Show parsed configuration",
             ToolTraits::read_only(),
-            "fin config show --json",
+            "fin config show",
             vec![],
             &["groups", "accounts", "financial", "configPath"],
         ),
@@ -325,7 +326,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "config",
             "Validate config file",
             ToolTraits::read_only(),
-            "fin config validate --json",
+            "fin config validate",
             vec![],
             &["valid", "errors", "configPath"],
         ),
@@ -335,7 +336,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "rules",
             "Show merged rules metadata",
             ToolTraits::read_only(),
-            "fin rules show --json",
+            "fin rules show",
             vec![flag("--path", "Override rules path", false)],
             &[
                 "rulesPath",
@@ -351,7 +352,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "rules",
             "Validate JSON rules file",
             ToolTraits::read_only(),
-            "fin rules validate --json",
+            "fin rules validate",
             vec![flag("--path", "Override rules path", false)],
             &[
                 "valid",
@@ -367,7 +368,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "rules",
             "Migrate legacy TypeScript rules to JSON",
             ToolTraits::mutation(),
-            "fin rules migrate-ts --json",
+            "fin rules migrate-ts",
             vec![
                 flag("--source", "Source fin.rules.ts path", false),
                 flag("--target", "Target fin.rules.json path", false),
@@ -386,7 +387,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "import",
             "Import transactions from inbox",
             ToolTraits::mutation(),
-            "fin import --json",
+            "fin import",
             vec![flag("--inbox", "Override inbox directory", false)],
             &[
                 "processedFiles",
@@ -409,7 +410,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "sanitize",
             "Discover description patterns",
             ToolTraits::read_only(),
-            "fin sanitize discover --unmapped --json",
+            "fin sanitize discover --unmapped",
             vec![
                 flag("--unmapped", "Only include unmapped descriptions", false),
                 flag("--min", "Minimum occurrences", false),
@@ -423,7 +424,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "sanitize",
             "Apply description sanitization rules",
             ToolTraits::mutation(),
-            "fin sanitize migrate --dry-run --json",
+            "fin sanitize migrate --dry-run",
             vec![flag("--dry-run", "Preview changes only", false)],
             &["plan", "result"],
         ),
@@ -433,7 +434,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "sanitize",
             "Recategorize uncategorized postings",
             ToolTraits::mutation(),
-            "fin sanitize recategorize --dry-run --json",
+            "fin sanitize recategorize --dry-run",
             vec![flag("--dry-run", "Preview changes only", false)],
             &["plan", "result"],
         ),
@@ -443,7 +444,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "view",
             "List accounts with balances",
             ToolTraits::read_only(),
-            "fin view accounts --group=personal --json",
+            "fin view accounts --group=personal",
             vec![flag("--group", "Filter by group", false)],
             &["accounts", "total"],
         ),
@@ -453,7 +454,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "view",
             "Query transactions",
             ToolTraits::read_only(),
-            "fin view transactions --group=personal --limit=50 --json",
+            "fin view transactions --group=personal --limit=50",
             vec![
                 flag("--account", "Filter account id", false),
                 flag("--group", "Filter group id", false),
@@ -470,7 +471,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "view",
             "Query journal entries with postings",
             ToolTraits::read_only(),
-            "fin view ledger --limit=50 --json",
+            "fin view ledger --limit=50",
             vec![
                 flag("--account", "Filter account id", false),
                 flag("--from", "Start date YYYY-MM-DD", false),
@@ -485,7 +486,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "view",
             "Show balance sheet",
             ToolTraits::read_only(),
-            "fin view balance --json",
+            "fin view balance",
             vec![flag("--as-of", "As-of date YYYY-MM-DD", false)],
             &[
                 "assets",
@@ -503,7 +504,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "view",
             "Create reversing journal entry",
             ToolTraits::mutation(),
-            "fin view void <id> --json",
+            "fin view void <id>",
             vec![
                 ParameterMeta {
                     name: "<id>".to_owned(),
@@ -526,7 +527,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "edit",
             "Edit transaction description/account",
             ToolTraits::mutation(),
-            "fin edit transaction <id> --description=... --json",
+            "fin edit transaction <id> --description=...",
             vec![
                 ParameterMeta {
                     name: "<id>".to_owned(),
@@ -546,7 +547,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "report",
             "Monthly cashflow series",
             ToolTraits::read_only(),
-            "fin report cashflow --group=personal --months=6 --json",
+            "fin report cashflow --group=personal --months=6",
             vec![
                 flag("--group", "Group id", true),
                 flag("--months", "Months window", false),
@@ -561,7 +562,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "report",
             "Financial health series",
             ToolTraits::read_only(),
-            "fin report health --group=personal --json",
+            "fin report health --group=personal",
             vec![
                 flag("--group", "Group id", true),
                 flag("--from", "Start date YYYY-MM-DD", false),
@@ -575,7 +576,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "report",
             "Runway projection series",
             ToolTraits::read_only(),
-            "fin report runway --group=personal --json",
+            "fin report runway --group=personal",
             vec![
                 flag("--group", "Group id", false),
                 flag("--consolidated", "Consolidated mode", false),
@@ -591,7 +592,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "report",
             "Reserve breakdown series",
             ToolTraits::read_only(),
-            "fin report reserves --group=business --json",
+            "fin report reserves --group=business",
             vec![
                 flag("--group", "Group id", true),
                 flag("--from", "Start date YYYY-MM-DD", false),
@@ -605,7 +606,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "report",
             "Category breakdown or monthly median",
             ToolTraits::read_only(),
-            "fin report categories --group=personal --mode=breakdown --json",
+            "fin report categories --group=personal --mode=breakdown",
             vec![
                 flag("--group", "Group id", true),
                 flag("--mode", "breakdown|median", false),
@@ -620,7 +621,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "report",
             "Payee drill-down for expense account",
             ToolTraits::read_only(),
-            "fin report audit --account=Expenses:Uncategorized --json",
+            "fin report audit --account=Expenses:Uncategorized",
             vec![
                 flag("--account", "Expense account id", true),
                 flag("--months", "Months window", false),
@@ -634,7 +635,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "report",
             "Comprehensive summary payload",
             ToolTraits::read_only(),
-            "fin report summary --json",
+            "fin report summary",
             vec![flag("--months", "Months window", false)],
             &[
                 "generatedAt",

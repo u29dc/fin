@@ -626,49 +626,49 @@
           {
             "amount_minor": 3218750,
             "share_of_source_pct": 100.0,
-            "share_of_total_pct": 60.18,
+            "share_of_total_pct": 60.45,
             "source_id": "Income:Other",
             "target_id": "Assets:Business:Operating"
           },
           {
-            "amount_minor": 276213,
-            "share_of_source_pct": 12.97,
-            "share_of_total_pct": 5.16,
-            "source_id": "Assets:Business:Operating",
-            "target_id": "Expenses:Business:Insurance"
-          },
-          {
-            "amount_minor": 275938,
-            "share_of_source_pct": 12.96,
-            "share_of_total_pct": 5.16,
-            "source_id": "Assets:Business:Operating",
-            "target_id": "Expenses:Business:Equipment"
-          },
-          {
             "amount_minor": 274800,
-            "share_of_source_pct": 12.9,
-            "share_of_total_pct": 5.14,
+            "share_of_source_pct": 13.05,
+            "share_of_total_pct": 5.16,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Transport:Travel"
           },
           {
-            "amount_minor": 267268,
-            "share_of_source_pct": 12.55,
-            "share_of_total_pct": 5.0,
+            "amount_minor": 271858,
+            "share_of_source_pct": 12.91,
+            "share_of_total_pct": 5.11,
+            "source_id": "Assets:Business:Operating",
+            "target_id": "Expenses:Business:Equipment"
+          },
+          {
+            "amount_minor": 268563,
+            "share_of_source_pct": 12.75,
+            "share_of_total_pct": 5.04,
+            "source_id": "Assets:Business:Operating",
+            "target_id": "Expenses:Business:Insurance"
+          },
+          {
+            "amount_minor": 263894,
+            "share_of_source_pct": 12.53,
+            "share_of_total_pct": 4.96,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Contractors"
           },
           {
-            "amount_minor": 266052,
-            "share_of_source_pct": 12.49,
-            "share_of_total_pct": 4.97,
+            "amount_minor": 261698,
+            "share_of_source_pct": 12.43,
+            "share_of_total_pct": 4.91,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Software"
           },
           {
-            "amount_minor": 262953,
-            "share_of_source_pct": 12.35,
-            "share_of_total_pct": 4.92,
+            "amount_minor": 258324,
+            "share_of_source_pct": 12.27,
+            "share_of_total_pct": 4.85,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Services"
           }
@@ -715,7 +715,7 @@
             "label": "Other"
           }
         ],
-        "total_minor": 4841974
+        "total_minor": 4817887
       },
       "groupId": "business",
       "mode": "monthly_average",
@@ -742,56 +742,56 @@
               "account_id": "Expenses:Business",
               "children": [
                 {
-                  "account_id": "Expenses:Business:Insurance",
-                  "children": [],
-                  "kind": "expense",
-                  "name": "Insurance",
-                  "share_of_parent_pct": 20.48,
-                  "share_of_root_pct": 12.97,
-                  "total_minor": 276213
-                },
-                {
                   "account_id": "Expenses:Business:Equipment",
                   "children": [],
                   "kind": "expense",
                   "name": "Equipment",
-                  "share_of_parent_pct": 20.46,
-                  "share_of_root_pct": 12.96,
-                  "total_minor": 275938
+                  "share_of_parent_pct": 20.53,
+                  "share_of_root_pct": 12.91,
+                  "total_minor": 271858
+                },
+                {
+                  "account_id": "Expenses:Business:Insurance",
+                  "children": [],
+                  "kind": "expense",
+                  "name": "Insurance",
+                  "share_of_parent_pct": 20.28,
+                  "share_of_root_pct": 12.75,
+                  "total_minor": 268563
                 },
                 {
                   "account_id": "Expenses:Business:Contractors",
                   "children": [],
                   "kind": "expense",
                   "name": "Contractors",
-                  "share_of_parent_pct": 19.82,
-                  "share_of_root_pct": 12.55,
-                  "total_minor": 267268
+                  "share_of_parent_pct": 19.93,
+                  "share_of_root_pct": 12.53,
+                  "total_minor": 263894
                 },
                 {
                   "account_id": "Expenses:Business:Software",
                   "children": [],
                   "kind": "expense",
                   "name": "Software",
-                  "share_of_parent_pct": 19.73,
-                  "share_of_root_pct": 12.49,
-                  "total_minor": 266052
+                  "share_of_parent_pct": 19.76,
+                  "share_of_root_pct": 12.43,
+                  "total_minor": 261698
                 },
                 {
                   "account_id": "Expenses:Business:Services",
                   "children": [],
                   "kind": "expense",
                   "name": "Services",
-                  "share_of_parent_pct": 19.5,
-                  "share_of_root_pct": 12.35,
-                  "total_minor": 262953
+                  "share_of_parent_pct": 19.51,
+                  "share_of_root_pct": 12.27,
+                  "total_minor": 258324
                 }
               ],
               "kind": "expense",
               "name": "Business",
-              "share_of_parent_pct": 83.07,
-              "share_of_root_pct": 63.31,
-              "total_minor": 1348424
+              "share_of_parent_pct": 82.82,
+              "share_of_root_pct": 62.89,
+              "total_minor": 1324337
             },
             {
               "account_id": "Expenses:Transport",
@@ -802,25 +802,25 @@
                   "kind": "expense",
                   "name": "Travel",
                   "share_of_parent_pct": 100.0,
-                  "share_of_root_pct": 12.9,
+                  "share_of_root_pct": 13.05,
                   "total_minor": 274800
                 }
               ],
               "kind": "expense",
               "name": "Transport",
-              "share_of_parent_pct": 16.93,
-              "share_of_root_pct": 12.9,
+              "share_of_parent_pct": 17.18,
+              "share_of_root_pct": 13.05,
               "total_minor": 274800
             }
           ],
           "kind": "expense",
           "name": "Expenses",
-          "share_of_parent_pct": 76.21,
-          "share_of_root_pct": 76.21,
-          "total_minor": 1623224
+          "share_of_parent_pct": 75.94,
+          "share_of_root_pct": 75.94,
+          "total_minor": 1599137
         }
       ],
-      "totalMinor": 1623224
+      "totalMinor": 1599137
     },
     "meta": {
       "count": 9,
@@ -1271,33 +1271,33 @@
     "data": {
       "categories": [
         {
-          "category": "Insurance",
-          "total_minor": 1657278,
-          "transaction_count": 69
-        },
-        {
-          "category": "Equipment",
-          "total_minor": 1655629,
-          "transaction_count": 70
-        },
-        {
           "category": "Travel",
           "total_minor": 1648804,
           "transaction_count": 69
         },
         {
-          "category": "Contractors",
-          "total_minor": 1603611,
+          "category": "Equipment",
+          "total_minor": 1631150,
+          "transaction_count": 69
+        },
+        {
+          "category": "Insurance",
+          "total_minor": 1611380,
           "transaction_count": 67
         },
         {
+          "category": "Contractors",
+          "total_minor": 1583369,
+          "transaction_count": 66
+        },
+        {
           "category": "Software",
-          "total_minor": 1596315,
-          "transaction_count": 68
+          "total_minor": 1570188,
+          "transaction_count": 67
         }
       ],
       "mode": "breakdown",
-      "total": 8161637
+      "total": 8044891
     },
     "meta": {
       "count": 5,
@@ -7662,15 +7662,15 @@
     "data": {
       "globalFlags": [
         {
-          "description": "Output as JSON envelope",
-          "name": "--json"
+          "description": "Output human-readable text instead of the default JSON envelope",
+          "name": "--text"
         },
         {
           "description": "Override database path",
           "name": "--db"
         },
         {
-          "description": "Output format (table|tsv)",
+          "description": "Text output format (table|tsv); requires --text",
           "name": "--format"
         }
       ],
@@ -7679,7 +7679,7 @@
           "category": "config",
           "command": "fin config show",
           "description": "Show parsed configuration",
-          "example": "fin config show --json",
+          "example": "fin config show",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "config.show",
@@ -7698,7 +7698,7 @@
           "category": "config",
           "command": "fin config validate",
           "description": "Validate config file",
-          "example": "fin config validate --json",
+          "example": "fin config validate",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "config.validate",
@@ -7716,7 +7716,7 @@
           "category": "edit",
           "command": "fin edit transaction",
           "description": "Edit transaction description/account",
-          "example": "fin edit transaction <id> --description=... --json",
+          "example": "fin edit transaction <id> --description=...",
           "idempotent": false,
           "interactiveOnly": false,
           "name": "edit.transaction",
@@ -7760,7 +7760,7 @@
           "category": "import",
           "command": "fin import",
           "description": "Import transactions from inbox",
-          "example": "fin import --json",
+          "example": "fin import",
           "idempotent": false,
           "interactiveOnly": false,
           "name": "import",
@@ -7794,7 +7794,7 @@
           "category": "report",
           "command": "fin report audit",
           "description": "Payee drill-down for expense account",
-          "example": "fin report audit --account=Expenses:Uncategorized --json",
+          "example": "fin report audit --account=Expenses:Uncategorized",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "report.audit",
@@ -7830,7 +7830,7 @@
           "category": "report",
           "command": "fin report cashflow",
           "description": "Monthly cashflow series",
-          "example": "fin report cashflow --group=personal --months=6 --json",
+          "example": "fin report cashflow --group=personal --months=6",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "report.cashflow",
@@ -7872,7 +7872,7 @@
           "category": "report",
           "command": "fin report categories",
           "description": "Category breakdown or monthly median",
-          "example": "fin report categories --group=personal --mode=breakdown --json",
+          "example": "fin report categories --group=personal --mode=breakdown",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "report.categories",
@@ -7915,7 +7915,7 @@
           "category": "report",
           "command": "fin report health",
           "description": "Financial health series",
-          "example": "fin report health --group=personal --json",
+          "example": "fin report health --group=personal",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "report.health",
@@ -7951,7 +7951,7 @@
           "category": "report",
           "command": "fin report reserves",
           "description": "Reserve breakdown series",
-          "example": "fin report reserves --group=business --json",
+          "example": "fin report reserves --group=business",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "report.reserves",
@@ -7987,7 +7987,7 @@
           "category": "report",
           "command": "fin report runway",
           "description": "Runway projection series",
-          "example": "fin report runway --group=personal --json",
+          "example": "fin report runway --group=personal",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "report.runway",
@@ -8036,7 +8036,7 @@
           "category": "report",
           "command": "fin report summary",
           "description": "Comprehensive summary payload",
-          "example": "fin report summary --json",
+          "example": "fin report summary",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "report.summary",
@@ -8064,7 +8064,7 @@
           "category": "rules",
           "command": "fin rules migrate-ts",
           "description": "Migrate legacy TypeScript rules to JSON",
-          "example": "fin rules migrate-ts --json",
+          "example": "fin rules migrate-ts",
           "idempotent": false,
           "interactiveOnly": false,
           "name": "rules.migrate_ts",
@@ -8097,7 +8097,7 @@
           "category": "rules",
           "command": "fin rules show",
           "description": "Show merged rules metadata",
-          "example": "fin rules show --json",
+          "example": "fin rules show",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "rules.show",
@@ -8124,7 +8124,7 @@
           "category": "rules",
           "command": "fin rules validate",
           "description": "Validate JSON rules file",
-          "example": "fin rules validate --json",
+          "example": "fin rules validate",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "rules.validate",
@@ -8151,7 +8151,7 @@
           "category": "sanitize",
           "command": "fin sanitize discover",
           "description": "Discover description patterns",
-          "example": "fin sanitize discover --unmapped --json",
+          "example": "fin sanitize discover --unmapped",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "sanitize.discover",
@@ -8187,7 +8187,7 @@
           "category": "sanitize",
           "command": "fin sanitize migrate",
           "description": "Apply description sanitization rules",
-          "example": "fin sanitize migrate --dry-run --json",
+          "example": "fin sanitize migrate --dry-run",
           "idempotent": false,
           "interactiveOnly": false,
           "name": "sanitize.migrate",
@@ -8211,7 +8211,7 @@
           "category": "sanitize",
           "command": "fin sanitize recategorize",
           "description": "Recategorize uncategorized postings",
-          "example": "fin sanitize recategorize --dry-run --json",
+          "example": "fin sanitize recategorize --dry-run",
           "idempotent": false,
           "interactiveOnly": false,
           "name": "sanitize.recategorize",
@@ -8235,7 +8235,7 @@
           "category": "system",
           "command": "fin health",
           "description": "Check prerequisites and local runtime health",
-          "example": "fin health --json",
+          "example": "fin health",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "health",
@@ -8253,7 +8253,7 @@
           "category": "system",
           "command": "fin tools",
           "description": "Capability discovery and contract metadata",
-          "example": "fin tools --json",
+          "example": "fin tools",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "tools",
@@ -8279,7 +8279,7 @@
           "category": "system",
           "command": "fin version",
           "description": "Print version and sdk identity",
-          "example": "fin version --json",
+          "example": "fin version",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "version",
@@ -8295,7 +8295,7 @@
         {
           "category": "tui",
           "command": "fin start",
-          "description": "Launch fin terminal UI (interactive only; not supported with --json)",
+          "description": "Launch fin terminal UI (interactive only)",
           "example": "fin start",
           "idempotent": true,
           "interactiveOnly": true,
@@ -8313,7 +8313,7 @@
           "category": "view",
           "command": "fin view accounts",
           "description": "List accounts with balances",
-          "example": "fin view accounts --group=personal --json",
+          "example": "fin view accounts --group=personal",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "view.accounts",
@@ -8337,7 +8337,7 @@
           "category": "view",
           "command": "fin view balance",
           "description": "Show balance sheet",
-          "example": "fin view balance --json",
+          "example": "fin view balance",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "view.balance",
@@ -8366,7 +8366,7 @@
           "category": "view",
           "command": "fin view ledger",
           "description": "Query journal entries with postings",
-          "example": "fin view ledger --limit=50 --json",
+          "example": "fin view ledger --limit=50",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "view.ledger",
@@ -8409,7 +8409,7 @@
           "category": "view",
           "command": "fin view transactions",
           "description": "Query transactions",
-          "example": "fin view transactions --group=personal --limit=50 --json",
+          "example": "fin view transactions --group=personal --limit=50",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "view.transactions",
@@ -8463,7 +8463,7 @@
           "category": "view",
           "command": "fin view void",
           "description": "Create reversing journal entry",
-          "example": "fin view void <id> --json",
+          "example": "fin view void <id>",
           "idempotent": false,
           "interactiveOnly": false,
           "name": "view.void",

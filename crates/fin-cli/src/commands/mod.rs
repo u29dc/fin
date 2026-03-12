@@ -23,7 +23,6 @@ use crate::error::{CliError, ErrorCode, ExitCode};
 #[derive(Debug, Clone, Default)]
 pub struct GlobalOptions {
     pub db: Option<String>,
-    pub json: bool,
     #[allow(dead_code)]
     pub format: Option<String>,
 }
@@ -68,7 +67,7 @@ pub fn map_fin_error(tool: &'static str, error: FinError) -> CommandFailure {
         FinError::Database { message } => CliError::new(
             ErrorCode::Db,
             format!("Database error: {message}"),
-            "Run `fin health --json` and verify FIN_HOME/data is writable",
+            "Run `fin health` and verify FIN_HOME/data is writable",
         ),
         FinError::InvalidInput { code, message } => {
             let error_code = if code == "NOT_FOUND" {

@@ -3,10 +3,10 @@
 - Purpose: operate `fin` as an agent-native personal-finance system with Rust-native `sdk/cli/tui` runtime on `main`.
 - Source priority: executable contracts first, then source files, then prose docs.
 - Runtime truth commands:
-    - `:fin tools --json`
-    - `:fin health --json`
-    - `:fin config show --json`
-- JSON contract: in `--json` mode, print exactly one envelope JSON object to stdout; logs/errors go to stderr. `fin start` is interactive-only and returns an error when combined with `--json`.
+    - `:fin tools`
+    - `:fin health`
+    - `:fin config show`
+- JSON contract: non-interactive commands print exactly one envelope JSON object to stdout by default; logs/errors go to stderr. Use `--text` for human-readable output. `fin start` is interactive-only.
 - Agent skill entry: `.claude/skills/fin/SKILL.md` (mirrored via `.agents/skills/fin`).
 - Primary references:
     - Rust: `https://doc.rust-lang.org/book/`
@@ -97,7 +97,7 @@
     - `r` refreshes current route
     - `q` exits TUI
 
-- Common flags: `--json`, `--db`, `--format`.
+- Common flags: `--text`, `--db`, `--format`.
 - Common filters: `--group`, `--from`, `--to`, `--months`, `--limit`, `--account`.
 - Mutation safety flags: `--dry-run`.
 
@@ -142,7 +142,7 @@
     - `bun run util:check`
 
 - Manual validation checklist:
-    - Run `:fin tools --json`, `:fin health --json`, `:fin config show --json`.
+    - Run `:fin tools`, `:fin health`, `:fin config show`.
     - Run `--dry-run` before mutating commands.
     - Confirm group/date filters before interpreting report outputs.
 

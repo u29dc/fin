@@ -20,9 +20,9 @@ This document records the initial benchmark baseline for the synthetic fixture i
 Cold reference commands:
 
 ```bash
-/usr/bin/time -lp target/debug/fin --json view transactions --group personal --limit 1000 >/dev/null
-/usr/bin/time -lp target/debug/fin --json report cashflow --group business --months 24 >/dev/null
-/usr/bin/time -lp target/debug/fin --json report summary >/dev/null
+/usr/bin/time -lp target/debug/fin view transactions --group personal --limit 1000 >/dev/null
+/usr/bin/time -lp target/debug/fin report cashflow --group business --months 24 >/dev/null
+/usr/bin/time -lp target/debug/fin report summary >/dev/null
 /usr/bin/time -lp target/debug/examples/read_fixture summary-dashboard target/bench-fixtures/benchmark-runtime >/dev/null
 ```
 

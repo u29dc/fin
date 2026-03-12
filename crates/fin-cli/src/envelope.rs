@@ -40,7 +40,7 @@ pub fn emit_success<T: Serialize>(
             &CliError::new(
                 crate::error::ErrorCode::Runtime,
                 format!("failed to serialize success envelope: {error}"),
-                "Inspect the command payload and retry with --json",
+                "Retry with `--text` to inspect human-readable output",
             ),
             start,
         ),

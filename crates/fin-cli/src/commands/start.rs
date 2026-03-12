@@ -52,34 +52,20 @@ fn map_start_result(program: &Path, exit_status: i32) -> Result<CommandResult, C
         });
     }
 
+    let binary = program.display().to_string();
     Ok(CommandResult {
         tool: "tui.start",
         data: json!({
-            "binary": program.display().to_string(),
+            "binary": binary,
             "exitCode": exit_status,
         }),
-        text: String::new(),
+        text: format!("binary={binary} exitCode={exit_status}"),
         meta: MetaExtras::default(),
         exit_code: ExitCode::Success,
     })
 }
 
-fn ensure_interactive_mode(json_mode: bool) -> Result<(), CommandFailure> {
-    if json_mode {
-        return Err(CommandFailure {
-            tool: "tui.start",
-            error: CliError::new(
-                ErrorCode::Runtime,
-                "fin start is interactive-only and does not support --json",
-                "Run `fin start` without --json",
-            ),
-        });
-    }
-    Ok(())
-}
-
-pub fn run(json_mode: bool) -> Result<CommandResult, CommandFailure> {
-    ensure_interactive_mode(json_mode)?;
+pub fn run() -> Result<CommandResult, CommandFailure> {
     let program = sibling_tui_binary().unwrap_or_else(|| PathBuf::from(tui_binary_name()));
 
     let exit_status = launch_child(program.clone())?;
@@ -88,7 +74,7 @@ pub fn run(json_mode: bool) -> Result<CommandResult, CommandFailure> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_interactive_mode, map_start_result};
+    use super::map_start_result;
     use crate::error::ExitCode;
 
     #[test]
@@ -105,19 +91,8 @@ mod tests {
         let command = result.expect("expected success");
         assert_eq!(command.tool, "tui.start");
         assert_eq!(command.exit_code, ExitCode::Success);
-    }
-
-    #[test]
-    fn json_mode_is_rejected_before_launch() {
-        let result = ensure_interactive_mode(true);
-        let failure = result.expect_err("expected failure");
-        assert_eq!(failure.tool, "tui.start");
-        assert!(failure.error.message.contains("interactive-only"));
-    }
-
-    #[test]
-    fn non_json_mode_is_allowed() {
-        let result = ensure_interactive_mode(false);
-        assert!(result.is_ok());
+        assert_eq!(command.text, "binary=fin-tui exitCode=0");
+        assert_eq!(command.data["binary"], "fin-tui");
+        assert_eq!(command.data["exitCode"], 0);
     }
 }
