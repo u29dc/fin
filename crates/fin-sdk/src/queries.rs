@@ -153,6 +153,82 @@ fn collect_group_account_ids(config: &FinConfig, group_id: &str) -> Vec<String> 
         .collect()
 }
 
+fn account_match_clause(alias: &str, account_ids: &[String]) -> (String, Vec<String>) {
+    let mut clauses = Vec::new();
+    let mut params = Vec::new();
+    for account_id in account_ids {
+        clauses.push(format!(
+            "({alias}.account_id = ? OR {alias}.account_id LIKE ?)"
+        ));
+        params.push(account_id.clone());
+        params.push(format!("{account_id}:%"));
+    }
+    (format!("({})", clauses.join(" OR ")), params)
+}
+
+fn transfer_exclusion_clause(entry_alias: &str) -> String {
+    format!(
+        "NOT EXISTS (\n             SELECT 1\n             FROM postings transfer_posting\n             WHERE transfer_posting.journal_entry_id = {entry_alias}.id\n               AND (\n                 transfer_posting.account_id = 'Equity:Transfers'\n                 OR transfer_posting.account_id LIKE 'Equity:Transfers:%'\n                 OR transfer_posting.account_id = 'Equity:Investments'\n                 OR transfer_posting.account_id LIKE 'Equity:Investments:%'\n               )\n           )"
+    )
+}
+
+fn parse_iso_date(value: &str) -> Option<(i32, u32, u32)> {
+    let mut parts = value.split('-');
+    let year = parts.next()?.parse::<i32>().ok()?;
+    let month = parts.next()?.parse::<u32>().ok()?;
+    let day = parts.next()?.parse::<u32>().ok()?;
+    Some((year, month, day))
+}
+
+fn infer_relative_window_start(to_date: &str, months: usize) -> String {
+    let Some((year, month, _)) = parse_iso_date(to_date) else {
+        return to_date.to_owned();
+    };
+    let total_months = i64::from(year) * 12 + i64::from(month) - 1;
+    let window_offset = i64::try_from(months.saturating_sub(1)).unwrap_or(0);
+    let start_month_index = total_months - window_offset;
+    let start_year = i32::try_from(start_month_index.div_euclid(12)).unwrap_or(year);
+    let start_month = u32::try_from(start_month_index.rem_euclid(12) + 1).unwrap_or(month);
+    format!("{start_year:04}-{start_month:02}-01")
+}
+
+fn enumerate_months(from_date: &str, to_date: &str) -> Vec<String> {
+    let Some((from_year, from_month, _)) = parse_iso_date(from_date) else {
+        return Vec::new();
+    };
+    let Some((to_year, to_month, _)) = parse_iso_date(to_date) else {
+        return Vec::new();
+    };
+    let mut months = Vec::new();
+    let mut current_year = from_year;
+    let mut current_month = from_month;
+    loop {
+        months.push(format!("{current_year:04}-{current_month:02}"));
+        if current_year == to_year && current_month == to_month {
+            break;
+        }
+        current_month += 1;
+        if current_month > 12 {
+            current_month = 1;
+            current_year += 1;
+        }
+    }
+    months
+}
+
+fn resolved_report_end_date(connection: &Connection, to: Option<&str>) -> Result<String> {
+    if let Some(to) = to {
+        return Ok(to.to_owned());
+    }
+    connection
+        .query_row(
+            "SELECT COALESCE(MAX(posted_date), date('now')) FROM journal_entries",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(Into::into)
+}
+
 pub fn group_asset_account_ids(config: &FinConfig, group_id: &str) -> Vec<String> {
     collect_group_account_ids(config, group_id)
 }
@@ -422,8 +498,7 @@ pub fn group_monthly_cashflow(
     if account_ids.is_empty() {
         return Ok(vec![]);
     }
-    let placeholders_sql = placeholders(account_ids.len());
-    let mut params = account_ids;
+    let (asset_clause, mut params) = account_match_clause("asset", &account_ids);
     let mut extra_conditions = Vec::new();
     if let Some(from) = from {
         extra_conditions.push("je.posted_at >= ?".to_owned());
@@ -439,7 +514,8 @@ pub fn group_monthly_cashflow(
         format!(" AND {}", extra_conditions.join(" AND "))
     };
     let sql = format!(
-        "SELECT month,\n                income_minor,\n                expense_minor\n         FROM (\n             SELECT strftime('%Y-%m', je.posted_at) AS month,\n                    SUM(CASE WHEN coa.account_type = 'income' THEN -p.amount_minor ELSE 0 END) AS income_minor,\n                    SUM(CASE WHEN coa.account_type = 'expense' THEN p.amount_minor ELSE 0 END) AS expense_minor\n             FROM journal_entries je\n             JOIN postings p ON p.journal_entry_id = je.id\n             JOIN chart_of_accounts coa ON coa.id = p.account_id\n             WHERE coa.account_type IN ('income', 'expense')\n               AND EXISTS (\n                 SELECT 1\n                 FROM postings asset\n                 WHERE asset.journal_entry_id = je.id\n                   AND asset.account_id IN ({placeholders_sql})\n               )\n               {extra_sql}\n             GROUP BY month\n             ORDER BY month DESC\n             LIMIT ?\n         ) recent\n         ORDER BY month ASC"
+        "SELECT month,\n                income_minor,\n                expense_minor\n         FROM (\n             SELECT strftime('%Y-%m', je.posted_at) AS month,\n                    SUM(CASE WHEN coa.account_type = 'income' THEN -p.amount_minor ELSE 0 END) AS income_minor,\n                    SUM(CASE WHEN coa.account_type = 'expense' THEN p.amount_minor ELSE 0 END) AS expense_minor\n             FROM journal_entries je\n             JOIN postings p ON p.journal_entry_id = je.id\n             JOIN chart_of_accounts coa ON coa.id = p.account_id\n             WHERE coa.account_type IN ('income', 'expense')\n               AND je.is_transfer = 0\n               AND {transfer_clause}\n               AND EXISTS (\n                 SELECT 1\n                 FROM postings asset\n                 WHERE asset.journal_entry_id = je.id\n                   AND {asset_clause}\n               )\n               {extra_sql}\n             GROUP BY month\n             ORDER BY month DESC\n             LIMIT ?\n         ) recent\n         ORDER BY month ASC",
+        transfer_clause = transfer_exclusion_clause("je")
     );
 
     let limit_value = if limit == 0 { 120 } else { limit };
@@ -518,15 +594,16 @@ pub fn group_category_breakdown(
         return Ok(vec![]);
     }
     let months = if months == 0 { 3 } else { months };
-    let placeholders_sql = placeholders(account_ids.len());
+    let (asset_clause, asset_params) = account_match_clause("asset", &account_ids);
     let mut clauses = vec!["coa.account_type = 'expense'".to_owned()];
     let mut params = Vec::new();
     apply_relative_window_clause(&mut clauses, &mut params, months, to);
     let sql = format!(
-        "SELECT coa.name,\n                COALESCE(SUM(p.amount_minor), 0) AS total_minor,\n                COUNT(*) AS transaction_count\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON coa.id = p.account_id\n         WHERE {}\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND asset.account_id IN ({placeholders_sql})\n           )\n         GROUP BY coa.id, coa.name\n         ORDER BY total_minor DESC\n         LIMIT ?",
-        clauses.join(" AND ")
+        "SELECT coa.name,\n                COALESCE(SUM(p.amount_minor), 0) AS total_minor,\n                COUNT(*) AS transaction_count\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON coa.id = p.account_id\n         WHERE {}\n           AND je.is_transfer = 0\n           AND {}\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND {asset_clause}\n           )\n         GROUP BY coa.id, coa.name\n         ORDER BY total_minor DESC\n         LIMIT ?",
+        clauses.join(" AND "),
+        transfer_exclusion_clause("je")
     );
-    params.extend(account_ids);
+    params.extend(asset_params);
     params.push(if limit == 0 { 100 } else { limit }.to_string());
     let mut statement = connection.prepare(&sql)?;
     let mut rows = statement.query(params_from_iter(params.iter()))?;
@@ -554,27 +631,34 @@ pub fn group_category_monthly_median(
         return Ok(vec![]);
     }
     let months = if months == 0 { 6 } else { months };
-    let placeholders_sql = placeholders(account_ids.len());
+    let (asset_clause, asset_params) = account_match_clause("asset", &account_ids);
     let mut clauses = vec!["coa.account_type = 'expense'".to_owned()];
     let mut params = Vec::new();
     apply_relative_window_clause(&mut clauses, &mut params, months, to);
     let sql = format!(
-        "SELECT p.account_id,\n                coa.name,\n                strftime('%Y-%m', je.posted_at) AS month,\n                COALESCE(SUM(p.amount_minor), 0) AS month_total\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         WHERE {}\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND asset.account_id IN ({placeholders_sql})\n           )\n         GROUP BY p.account_id, coa.name, month\n         ORDER BY p.account_id, month",
-        clauses.join(" AND ")
+        "SELECT p.account_id,\n                coa.name,\n                strftime('%Y-%m', je.posted_at) AS month,\n                COALESCE(SUM(p.amount_minor), 0) AS month_total\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         WHERE {}\n           AND je.is_transfer = 0\n           AND {}\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND {asset_clause}\n           )\n         GROUP BY p.account_id, coa.name, month\n         ORDER BY p.account_id, month",
+        clauses.join(" AND "),
+        transfer_exclusion_clause("je")
     );
-    params.extend(account_ids);
+    params.extend(asset_params);
 
+    let end_date = resolved_report_end_date(connection, to)?;
+    let window_months =
+        enumerate_months(&infer_relative_window_start(&end_date, months), &end_date);
     let mut by_account = HashMap::<String, (String, Vec<i64>)>::new();
     let mut statement = connection.prepare(&sql)?;
     let mut rows = statement.query(params_from_iter(params.iter()))?;
     while let Some(row) = rows.next()? {
         let account_id: String = row.get(0)?;
         let category_name: String = row.get(1)?;
+        let month_key: String = row.get(2)?;
         let month_total: i64 = row.get(3)?;
         let entry = by_account
             .entry(account_id)
-            .or_insert_with(|| (category_name, Vec::new()));
-        entry.1.push(month_total);
+            .or_insert_with(|| (category_name, vec![0; window_months.len()]));
+        if let Some(index) = window_months.iter().position(|month| month == &month_key) {
+            entry.1[index] = month_total;
+        }
     }
 
     let mut medians = by_account
@@ -624,7 +708,7 @@ pub fn audit_payees(
     apply_relative_window_clause(&mut clauses, &mut params, months, to);
     params.push(cap.to_string());
     let sql = format!(
-        "SELECT COALESCE(je.clean_description, je.raw_description, je.description) AS description,\n                COUNT(*) AS transaction_count,\n                COALESCE(SUM(p.amount_minor), 0) AS total_minor,\n                MAX(je.posted_at) AS latest_posted_at\n         FROM postings p\n         JOIN journal_entries je ON je.id = p.journal_entry_id\n         WHERE {}\n         GROUP BY description\n         ORDER BY ABS(total_minor) DESC\n         LIMIT ?",
+        "SELECT grouped.description,\n                COUNT(*) AS transaction_count,\n                COALESCE(SUM(grouped.amount_minor), 0) AS total_minor,\n                MAX(grouped.posted_at) AS latest_posted_at\n         FROM (\n             SELECT CASE\n                        WHEN COALESCE(TRIM(je.counterparty), '') != '' THEN je.counterparty\n                        WHEN COALESCE(TRIM(je.raw_description), '') != '' THEN je.raw_description\n                        ELSE COALESCE(je.clean_description, je.description)\n                    END AS description,\n                    p.amount_minor,\n                    je.posted_at\n             FROM postings p\n             JOIN journal_entries je ON je.id = p.journal_entry_id\n             WHERE {}\n         ) grouped\n         GROUP BY grouped.description\n         ORDER BY ABS(total_minor) DESC\n         LIMIT ?",
         clauses.join(" AND ")
     );
     let mut statement = connection.prepare(&sql)?;
@@ -704,7 +788,10 @@ mod tests {
     use rusqlite::Connection;
     use tempfile::tempdir;
 
-    use super::{LedgerQueryOptions, view_accounts, view_ledger};
+    use super::{
+        LedgerQueryOptions, audit_payees, group_category_monthly_median, group_monthly_cashflow,
+        view_accounts, view_ledger,
+    };
     use crate::config::parse_fin_config;
     use crate::db::migrate::migrate_to_latest;
     use crate::runtime::{RuntimeContext, RuntimeContextOptions};
@@ -856,5 +943,185 @@ INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency, 
                 .iter()
                 .any(|posting| posting.account_id == account_id)
         }));
+    }
+
+    #[test]
+    fn group_monthly_cashflow_excludes_equity_transfer_entries() {
+        let mut connection = Connection::open_in_memory().expect("open sqlite");
+        migrate_to_latest(&mut connection).expect("migrate schema");
+        let config = parse_fin_config(
+            r#"
+[financial]
+
+[[groups]]
+id = "personal"
+label = "Personal"
+tax_type = "income"
+
+[[accounts]]
+id = "Assets:Personal:Checking"
+group = "personal"
+type = "asset"
+provider = "monzo"
+
+[[banks]]
+name = "monzo"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"
+"#,
+        )
+        .expect("config parses");
+
+        connection
+            .execute_batch(
+                r#"
+INSERT INTO chart_of_accounts (id, name, account_type, parent_id) VALUES
+    ('Assets', 'Assets', 'asset', NULL),
+    ('Assets:Personal:Checking', 'Checking', 'asset', 'Assets'),
+    ('Expenses', 'Expenses', 'expense', NULL),
+    ('Expenses:Food', 'Food', 'expense', 'Expenses'),
+    ('Equity', 'Equity', 'equity', NULL),
+    ('Equity:OpeningBalances', 'Opening Balances', 'equity', 'Equity'),
+    ('Equity:Transfers', 'Transfers', 'equity', 'Equity');
+
+INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, description, raw_description, clean_description, counterparty, source_file) VALUES
+    ('je-open', '2026-03-01T09:00:00Z', '2026-03-01', 0, 'Opening', 'Opening', 'Opening', 'Fixture', 'fixture.csv'),
+    ('je-expense', '2026-03-05T09:00:00Z', '2026-03-05', 0, 'Groceries', 'Groceries', 'Groceries', 'Asda', 'fixture.csv'),
+    ('je-transfer-like', '2026-03-06T09:00:00Z', '2026-03-06', 0, 'Pot Transfer', 'Pot Transfer', 'Pot Transfer', 'Savings Pot', 'fixture.csv');
+
+INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency, memo) VALUES
+    ('po-open-asset', 'je-open', 'Assets:Personal:Checking', 100000, 'GBP', NULL),
+    ('po-open-equity', 'je-open', 'Equity:OpeningBalances', -100000, 'GBP', NULL),
+    ('po-expense-asset', 'je-expense', 'Assets:Personal:Checking', -2000, 'GBP', NULL),
+    ('po-expense-expense', 'je-expense', 'Expenses:Food', 2000, 'GBP', NULL),
+    ('po-transfer-asset', 'je-transfer-like', 'Assets:Personal:Checking', -5000, 'GBP', NULL),
+    ('po-transfer-equity', 'je-transfer-like', 'Equity:Transfers', 5000, 'GBP', NULL);
+"#,
+            )
+            .expect("seed ledger");
+
+        let series = group_monthly_cashflow(
+            &connection,
+            &config,
+            "personal",
+            Some("2026-03-01"),
+            Some("2026-03-31"),
+            12,
+        )
+        .expect("cashflow");
+
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].month, "2026-03");
+        assert_eq!(series[0].expense_minor, 2_000);
+        assert_eq!(series[0].income_minor, 0);
+    }
+
+    #[test]
+    fn group_category_monthly_median_zero_fills_missing_months() {
+        let mut connection = Connection::open_in_memory().expect("open sqlite");
+        migrate_to_latest(&mut connection).expect("migrate schema");
+        let config = parse_fin_config(
+            r#"
+[financial]
+
+[[groups]]
+id = "personal"
+label = "Personal"
+tax_type = "income"
+
+[[accounts]]
+id = "Assets:Personal:Checking"
+group = "personal"
+type = "asset"
+provider = "monzo"
+
+[[banks]]
+name = "monzo"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"
+"#,
+        )
+        .expect("config parses");
+
+        connection
+            .execute_batch(
+                r#"
+INSERT INTO chart_of_accounts (id, name, account_type, parent_id) VALUES
+    ('Assets', 'Assets', 'asset', NULL),
+    ('Assets:Personal:Checking', 'Checking', 'asset', 'Assets'),
+    ('Expenses', 'Expenses', 'expense', NULL),
+    ('Expenses:Food', 'Food', 'expense', 'Expenses'),
+    ('Equity', 'Equity', 'equity', NULL),
+    ('Equity:OpeningBalances', 'Opening Balances', 'equity', 'Equity');
+
+INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, description, raw_description, clean_description, counterparty, source_file) VALUES
+    ('je-open', '2026-01-01T09:00:00Z', '2026-01-01', 0, 'Opening', 'Opening', 'Opening', 'Fixture', 'fixture.csv'),
+    ('je-jan', '2026-01-10T09:00:00Z', '2026-01-10', 0, 'Groceries', 'Groceries', 'Groceries', 'Asda', 'fixture.csv'),
+    ('je-mar', '2026-03-10T09:00:00Z', '2026-03-10', 0, 'Groceries', 'Groceries', 'Groceries', 'Tesco', 'fixture.csv');
+
+INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency, memo) VALUES
+    ('po-open-asset', 'je-open', 'Assets:Personal:Checking', 100000, 'GBP', NULL),
+    ('po-open-equity', 'je-open', 'Equity:OpeningBalances', -100000, 'GBP', NULL),
+    ('po-jan-asset', 'je-jan', 'Assets:Personal:Checking', -600, 'GBP', NULL),
+    ('po-jan-expense', 'je-jan', 'Expenses:Food', 600, 'GBP', NULL),
+    ('po-mar-asset', 'je-mar', 'Assets:Personal:Checking', -300, 'GBP', NULL),
+    ('po-mar-expense', 'je-mar', 'Expenses:Food', 300, 'GBP', NULL);
+"#,
+            )
+            .expect("seed ledger");
+
+        let medians = group_category_monthly_median(
+            &connection,
+            &config,
+            "personal",
+            3,
+            10,
+            Some("2026-03-31"),
+        )
+        .expect("category medians");
+
+        assert_eq!(medians.len(), 1);
+        assert_eq!(medians[0].category, "Food");
+        assert_eq!(medians[0].month_count, 3);
+        assert_eq!(medians[0].monthly_median_minor, 300);
+    }
+
+    #[test]
+    fn audit_payees_prefers_counterparty_then_raw_description() {
+        let mut connection = Connection::open_in_memory().expect("open sqlite");
+        migrate_to_latest(&mut connection).expect("migrate schema");
+
+        connection
+            .execute_batch(
+                r#"
+INSERT INTO chart_of_accounts (id, name, account_type, parent_id) VALUES
+    ('Expenses', 'Expenses', 'expense', NULL),
+    ('Expenses:Other', 'Other', 'expense', 'Expenses');
+
+INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, description, raw_description, clean_description, counterparty, source_file) VALUES
+    ('je-counterparty', '2026-03-01T09:00:00Z', '2026-03-01', 0, 'Expense Other', 'HMRC Cumbernauld payment', 'Expense Other', 'HMRC Cumbernauld', 'fixture.csv'),
+    ('je-raw', '2026-03-02T09:00:00Z', '2026-03-02', 0, 'Expense Other', 'Raw Supplier Description', 'Expense Other', '', 'fixture.csv');
+
+INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency, memo) VALUES
+    ('po-counterparty', 'je-counterparty', 'Expenses:Other', 1500, 'GBP', NULL),
+    ('po-raw', 'je-raw', 'Expenses:Other', 700, 'GBP', NULL);
+"#,
+            )
+            .expect("seed audit ledger");
+
+        let payees = audit_payees(&connection, "Expenses:Other", 3, 10, Some("2026-03-31"))
+            .expect("audit payees");
+
+        let labels = payees
+            .iter()
+            .map(|point| point.description.as_str())
+            .collect::<Vec<_>>();
+        assert!(labels.contains(&"HMRC Cumbernauld"));
+        assert!(labels.contains(&"Raw Supplier Description"));
+        assert!(!labels.contains(&"Expense Other"));
     }
 }

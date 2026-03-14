@@ -3,13 +3,31 @@ use std::collections::BTreeMap;
 use serde_json::json;
 
 use fin_sdk::{
-    audit_payees, group_category_breakdown, group_category_monthly_median, report_cashflow,
-    report_health, report_reserves, report_runway, report_summary, view_accounts,
+    BurnReportOptions, OwnershipMode, TwoPoolRunwayOptions, TwoPoolScenarioKind, audit_payees,
+    group_category_breakdown, group_category_monthly_median, report_burn, report_cashflow,
+    report_health, report_reserves, report_runway, report_summary, report_two_pool_runway,
+    view_accounts,
 };
 
 use crate::commands::{CommandFailure, CommandResult, map_fin_error, open_runtime};
 use crate::envelope::MetaExtras;
 use crate::error::ExitCode;
+
+pub struct RunwayCommandArgs<'a> {
+    pub db: Option<&'a str>,
+    pub group: Option<&'a str>,
+    pub consolidated: bool,
+    pub include: Option<&'a str>,
+    pub months: usize,
+    pub mode: &'a str,
+    pub scenario: &'a str,
+    pub ownership_mode: &'a str,
+    pub salary_monthly_minor: Option<i64>,
+    pub dividends_monthly_minor: Option<i64>,
+    pub include_joint_expenses: Option<bool>,
+    pub from: Option<&'a str>,
+    pub to: Option<&'a str>,
+}
 
 pub fn run_cashflow(
     db: Option<&str>,
@@ -60,6 +78,80 @@ pub fn run_cashflow(
     })
 }
 
+pub fn run_burn(
+    db: Option<&str>,
+    include: Option<&str>,
+    months: usize,
+    from: Option<&str>,
+    to: Option<&str>,
+    include_partial_month: bool,
+    ownership_mode: &str,
+) -> Result<CommandResult, CommandFailure> {
+    let runtime = open_runtime("report.burn", db, true)?;
+    let groups = include
+        .unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    let ownership_mode = ownership_mode.parse::<OwnershipMode>().map_err(|message| {
+        map_fin_error(
+            "report.burn",
+            fin_sdk::FinError::InvalidInput {
+                code: "INVALID_OWNERSHIP_MODE",
+                message,
+            },
+        )
+    })?;
+    let report = report_burn(
+        runtime.connection(),
+        runtime.config(),
+        &groups,
+        &BurnReportOptions {
+            months,
+            from,
+            to,
+            ownership_mode,
+            include_partial_month,
+        },
+    )
+    .map_err(|error| map_fin_error("report.burn", error))?;
+
+    Ok(CommandResult {
+        tool: "report.burn",
+        data: json!({
+            "fromDate": report.from_date,
+            "toDate": report.to_date,
+            "requestedToDate": report.requested_to_date,
+            "windowMode": report.window_mode,
+            "includesPartialMonth": report.includes_partial_month,
+            "ownershipMode": report.ownership_mode,
+            "groups": report.groups,
+            "groupTotals": report.group_totals,
+            "recurringBaseline": report.recurring_baseline,
+            "periodicObligations": report.periodic_obligations,
+            "nonRecurring": report.non_recurring,
+            "vatPassThrough": report.vat_pass_through,
+            "transfersExcluded": report.transfers_excluded,
+            "periodicItems": report.periodic_items,
+            "nonRecurringItems": report.non_recurring_items,
+            "monthlySeries": report.monthly_series,
+            "confidence": report.confidence,
+        }),
+        text: format!(
+            "burn | baseline={} periodic={} non_recurring={} vat={} transfers_excluded={}",
+            report.recurring_baseline.monthly_equivalent_minor,
+            report.periodic_obligations.monthly_equivalent_minor,
+            report.non_recurring.monthly_equivalent_minor,
+            report.vat_pass_through.monthly_equivalent_minor,
+            report.transfers_excluded.monthly_equivalent_minor,
+        ),
+        meta: MetaExtras::default(),
+        exit_code: ExitCode::Success,
+    })
+}
+
 pub fn run_health(
     db: Option<&str>,
     group: &str,
@@ -86,15 +178,125 @@ pub fn run_health(
     })
 }
 
-pub fn run_runway(
-    db: Option<&str>,
-    group: Option<&str>,
-    consolidated: bool,
-    include: Option<&str>,
-    from: Option<&str>,
-    to: Option<&str>,
-) -> Result<CommandResult, CommandFailure> {
+pub fn run_runway(args: RunwayCommandArgs<'_>) -> Result<CommandResult, CommandFailure> {
+    let RunwayCommandArgs {
+        db,
+        group,
+        consolidated,
+        include,
+        months,
+        mode,
+        scenario,
+        ownership_mode,
+        salary_monthly_minor,
+        dividends_monthly_minor,
+        include_joint_expenses,
+        from,
+        to,
+    } = args;
+
     let runtime = open_runtime("report.runway", db, true)?;
+    let normalized_mode = mode.trim().to_ascii_lowercase();
+
+    if matches!(normalized_mode.as_str(), "two-pool" | "two_pool") {
+        if consolidated || group.is_some() || include.is_some() || from.is_some() {
+            return Err(map_fin_error(
+                "report.runway",
+                fin_sdk::FinError::InvalidInput {
+                    code: "INVALID_INPUT",
+                    message: "two-pool runway does not accept --group, --consolidated, --include, or --from".to_owned(),
+                },
+            ));
+        }
+        let ownership_mode = ownership_mode.parse::<OwnershipMode>().map_err(|message| {
+            map_fin_error(
+                "report.runway",
+                fin_sdk::FinError::InvalidInput {
+                    code: "INVALID_OWNERSHIP_MODE",
+                    message,
+                },
+            )
+        })?;
+        let scenario = scenario.parse::<TwoPoolScenarioKind>().map_err(|message| {
+            map_fin_error(
+                "report.runway",
+                fin_sdk::FinError::InvalidInput {
+                    code: "INVALID_SCENARIO",
+                    message,
+                },
+            )
+        })?;
+        let report = report_two_pool_runway(
+            runtime.connection(),
+            runtime.config(),
+            &TwoPoolRunwayOptions {
+                months,
+                to,
+                ownership_mode,
+                scenario,
+                salary_monthly_minor,
+                dividends_monthly_minor,
+                include_joint_expenses,
+            },
+        )
+        .map_err(|error| map_fin_error("report.runway", error))?;
+        let scenario_name = match report.scenario {
+            TwoPoolScenarioKind::Config => "config",
+            TwoPoolScenarioKind::TaxEfficient => "tax-efficient",
+            TwoPoolScenarioKind::Custom => "custom",
+        };
+
+        return Ok(CommandResult {
+            tool: "report.runway",
+            data: json!({
+                "mode": "two_pool",
+                "ownershipMode": report.ownership_mode,
+                "groups": ["business", "personal", "joint"],
+                "series": [],
+                "latest": null,
+                "twoPool": report,
+            }),
+            text: format!(
+                "two-pool runway | scenario={} source={} constraint={} months={:.2}",
+                scenario_name,
+                report.scenario_source,
+                report.constraint_pool,
+                report.constraint_months,
+            ),
+            meta: MetaExtras {
+                count: Some(0),
+                total: None,
+                has_more: None,
+            },
+            exit_code: ExitCode::Success,
+        });
+    }
+
+    if normalized_mode != "historical" {
+        return Err(map_fin_error(
+            "report.runway",
+            fin_sdk::FinError::InvalidInput {
+                code: "INVALID_MODE",
+                message: format!("unsupported runway mode: {mode}"),
+            },
+        ));
+    }
+
+    if salary_monthly_minor.is_some()
+        || dividends_monthly_minor.is_some()
+        || include_joint_expenses.is_some()
+        || scenario != "tax-efficient"
+    {
+        return Err(map_fin_error(
+            "report.runway",
+            fin_sdk::FinError::InvalidInput {
+                code: "INVALID_INPUT",
+                message: "historical runway does not accept scenario or two-pool override flags"
+                    .to_owned(),
+            },
+        ));
+    }
+
     if consolidated {
         if include.map(str::trim).is_none_or(str::is_empty) {
             return Err(map_fin_error(
@@ -148,9 +350,12 @@ pub fn run_runway(
         return Ok(CommandResult {
             tool: "report.runway",
             data: json!({
+                "mode": "historical",
+                "ownershipMode": null,
                 "series": series,
                 "latest": latest,
                 "groups": groups,
+                "twoPool": null,
             }),
             text: "consolidated runway".to_owned(),
             meta: MetaExtras {
@@ -188,6 +393,9 @@ pub fn run_runway(
             .map(|point| {
                 json!({
                     "date": point.date,
+                    "balance": point.balance_minor,
+                    "burnRate": point.burn_rate_minor,
+                    "medianExpense": point.median_expense_minor,
                     "runway": point.runway_months,
                 })
             })
@@ -198,8 +406,12 @@ pub fn run_runway(
     Ok(CommandResult {
         tool: "report.runway",
         data: json!({
+            "mode": "historical",
+            "ownershipMode": null,
             "series": series,
             "latest": latest,
+            "groups": [group],
+            "twoPool": null,
         }),
         text: format!("{} points", series.len()),
         meta: MetaExtras {

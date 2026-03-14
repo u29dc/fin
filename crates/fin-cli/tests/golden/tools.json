@@ -174,6 +174,75 @@
       },
       {
         "category": "report",
+        "command": "fin report burn",
+        "description": "Burn-safe outflow classification across selected groups",
+        "example": "fin report burn --include=business,personal,joint --months=6 --ownership-mode=user-share",
+        "idempotent": true,
+        "interactiveOnly": false,
+        "name": "report.burn",
+        "outputFields": [
+          "fromDate",
+          "toDate",
+          "requestedToDate",
+          "windowMode",
+          "includesPartialMonth",
+          "ownershipMode",
+          "groups",
+          "groupTotals",
+          "recurringBaseline",
+          "periodicObligations",
+          "nonRecurring",
+          "vatPassThrough",
+          "transfersExcluded",
+          "periodicItems",
+          "nonRecurringItems",
+          "monthlySeries",
+          "confidence"
+        ],
+        "parameters": [
+          {
+            "description": "Groups csv; defaults to all configured groups",
+            "name": "--include",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Months window",
+            "name": "--months",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Start date YYYY-MM-DD",
+            "name": "--from",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Include the current partial month in trailing month windows",
+            "name": "--include-partial-month",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "gross|user-share",
+            "name": "--ownership-mode",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "rateLimit": null,
+        "readOnly": true,
+        "supportsJson": true
+      },
+      {
+        "category": "report",
         "command": "fin report cashflow",
         "description": "Monthly cashflow series",
         "example": "fin report cashflow --group=personal --months=6",
@@ -338,15 +407,18 @@
       {
         "category": "report",
         "command": "fin report runway",
-        "description": "Runway projection series",
-        "example": "fin report runway --group=personal",
+        "description": "Historical or two-pool runway report",
+        "example": "fin report runway --mode=two-pool --months=12 --ownership-mode=user-share",
         "idempotent": true,
         "interactiveOnly": false,
         "name": "report.runway",
         "outputFields": [
+          "mode",
+          "ownershipMode",
+          "groups",
           "series",
           "latest",
-          "groups"
+          "twoPool"
         ],
         "parameters": [
           {
@@ -364,6 +436,48 @@
           {
             "description": "Groups csv for consolidated",
             "name": "--include",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Trailing months for two-pool burn baseline",
+            "name": "--months",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "historical|two-pool",
+            "name": "--mode",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "config|tax-efficient|custom",
+            "name": "--scenario",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "gross|user-share for two-pool mode",
+            "name": "--ownership-mode",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Override salary draw for two-pool mode",
+            "name": "--salary-monthly-minor",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Override dividend draw for two-pool mode",
+            "name": "--dividends-monthly-minor",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "true|false override for whether joint recurring burn is counted in two-pool mode",
+            "name": "--include-joint-expenses",
             "required": false,
             "type": "string"
           },
@@ -853,7 +967,7 @@
     "version": "0.1.0"
   },
   "meta": {
-    "count": 26,
+    "count": 27,
     "elapsed": 0,
     "tool": "tools"
   },

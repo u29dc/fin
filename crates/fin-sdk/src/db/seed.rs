@@ -305,6 +305,27 @@ fn static_seeds() -> Vec<ChartAccountSeed> {
             Some("Expenses:Taxes"),
             false,
         ),
+        (
+            "Expenses:Taxes:CorporationTax",
+            "Corporation Tax",
+            "expense",
+            Some("Expenses:Taxes"),
+            false,
+        ),
+        (
+            "Expenses:Taxes:SelfAssessment",
+            "Self Assessment",
+            "expense",
+            Some("Expenses:Taxes"),
+            false,
+        ),
+        (
+            "Expenses:Taxes:PAYE",
+            "PAYE",
+            "expense",
+            Some("Expenses:Taxes"),
+            false,
+        ),
         ("Expenses:Bills", "Bills", "expense", Some("Expenses"), true),
         (
             "Expenses:Bills:Energy",

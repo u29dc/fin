@@ -33,6 +33,9 @@ salary_dividend_split_minor = 200000
 dividends_monthly_minor = 600000
 salary_monthly_minor = 300000
 joint_expenses_monthly_minor = 300000
+tax_efficient_salary_monthly_minor = 104750
+tax_efficient_dividends_monthly_minor = 314167
+tax_efficient_include_joint_expenses = true
 
 [financial.scenario.toggles]
 include_dividends = true

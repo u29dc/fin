@@ -19,6 +19,9 @@ fn map_exact_category_to_account(category: &str) -> Option<&'static str> {
         "software" => Some("Expenses:Business:Software"),
         "tax" | "government" => Some("Expenses:Taxes:VAT"),
         "hmrctax" => Some("Expenses:Taxes:HMRC"),
+        "corporationtax" => Some("Expenses:Taxes:CorporationTax"),
+        "selfassessment" => Some("Expenses:Taxes:SelfAssessment"),
+        "paye" => Some("Expenses:Taxes:PAYE"),
         "insurance" => Some("Expenses:Business:Insurance"),
         "office" => Some("Expenses:Business:Equipment"),
         "vehicle" => Some("Expenses:Transport:Vehicle"),
@@ -122,6 +125,9 @@ fn is_expense_category(category: &str) -> bool {
             | "tax"
             | "government"
             | "hmrctax"
+            | "corporationtax"
+            | "selfassessment"
+            | "paye"
             | "professional"
             | "contractors"
             | "charity"
@@ -136,7 +142,9 @@ pub fn map_category_to_account(
     category: Option<&str>,
     description: &str,
     is_inflow: bool,
+    source_account_id: Option<&str>,
 ) -> String {
+    let normalized_description = normalize(description);
     if let Some(category) = category
         && normalize(category) == "transfer"
     {
@@ -155,6 +163,32 @@ pub fn map_category_to_account(
             }
         }
         return map_to_income_account(category);
+    }
+
+    if normalized_description.contains("hmrc vat") || normalized_description.contains(" vat ") {
+        return "Expenses:Taxes:VAT".to_owned();
+    }
+    if normalized_description.contains("hmrc")
+        || normalized_description.contains("cumbernauld")
+        || normalized_description.contains("hm revenue")
+    {
+        if normalized_description.contains("paye")
+            || normalized_description.contains(" nic")
+            || normalized_description.contains(" ni ")
+        {
+            return "Expenses:Taxes:PAYE".to_owned();
+        }
+        if let Some(source_account_id) = source_account_id {
+            if source_account_id.starts_with("Assets:Business:") {
+                return "Expenses:Taxes:CorporationTax".to_owned();
+            }
+            if source_account_id.starts_with("Assets:Personal:")
+                || source_account_id.starts_with("Assets:Joint:")
+            {
+                return "Expenses:Taxes:SelfAssessment".to_owned();
+            }
+        }
+        return "Expenses:Taxes:HMRC".to_owned();
     }
 
     map_to_expense_account(category)

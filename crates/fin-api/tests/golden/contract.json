@@ -1089,40 +1089,16 @@
     "data": {
       "payees": [
         {
-          "description": "SaaS tooling 03/11",
-          "latest_posted_at": "2025-11-06T12:00:00",
-          "total_minor": 28010,
-          "transaction_count": 1
-        },
-        {
-          "description": "SaaS tooling 10/10",
-          "latest_posted_at": "2025-10-13T12:00:00",
-          "total_minor": 27774,
-          "transaction_count": 1
-        },
-        {
-          "description": "SaaS tooling 04/10",
-          "latest_posted_at": "2025-10-07T12:00:00",
-          "total_minor": 27068,
-          "transaction_count": 1
-        },
-        {
-          "description": "SaaS tooling 23/03",
-          "latest_posted_at": "2026-03-04T12:00:00",
-          "total_minor": 25421,
-          "transaction_count": 1
-        },
-        {
-          "description": "SaaS tooling 17/03",
+          "description": "Software Vendor",
           "latest_posted_at": "2026-03-20T12:00:00",
-          "total_minor": 24714,
-          "transaction_count": 1
+          "total_minor": 590556,
+          "transaction_count": 26
         }
       ],
-      "total": 132987
+      "total": 590556
     },
     "meta": {
-      "count": 5,
+      "count": 1,
       "elapsed": 0,
       "tool": "report.audit"
     },
@@ -1310,201 +1286,201 @@
   "report_health": {
     "data": {
       "latest": {
-        "date": "2026-12-01",
-        "health_minor": 30191913
+        "date": "2026-12-31",
+        "health_minor": 32241913
       },
       "series": [
         {
-          "date": "2023-01-01",
-          "health_minor": -533725
+          "date": "2023-01-31",
+          "health_minor": 1516275
         },
         {
-          "date": "2023-02-01",
-          "health_minor": 158180
+          "date": "2023-02-28",
+          "health_minor": 2208180
         },
         {
-          "date": "2023-03-01",
-          "health_minor": 839525
+          "date": "2023-03-31",
+          "health_minor": 2889525
         },
         {
-          "date": "2023-04-01",
-          "health_minor": 1519490
+          "date": "2023-04-30",
+          "health_minor": 3569490
         },
         {
-          "date": "2023-05-01",
-          "health_minor": 2198074
+          "date": "2023-05-31",
+          "health_minor": 4248074
         },
         {
-          "date": "2023-06-01",
-          "health_minor": 2856918
+          "date": "2023-06-30",
+          "health_minor": 4906918
         },
         {
-          "date": "2023-07-01",
-          "health_minor": 3514382
+          "date": "2023-07-31",
+          "health_minor": 5564382
         },
         {
-          "date": "2023-08-01",
-          "health_minor": 4161286
+          "date": "2023-08-31",
+          "health_minor": 6211286
         },
         {
-          "date": "2023-09-01",
-          "health_minor": 4797631
+          "date": "2023-09-30",
+          "health_minor": 6847631
         },
         {
-          "date": "2023-10-01",
-          "health_minor": 5490916
+          "date": "2023-10-31",
+          "health_minor": 7540916
         },
         {
-          "date": "2023-11-01",
-          "health_minor": 6182821
+          "date": "2023-11-30",
+          "health_minor": 8232821
         },
         {
-          "date": "2023-12-01",
-          "health_minor": 6453346
+          "date": "2023-12-31",
+          "health_minor": 8503346
         },
         {
-          "date": "2024-01-01",
-          "health_minor": 7124131
+          "date": "2024-01-31",
+          "health_minor": 9174131
         },
         {
-          "date": "2024-02-01",
-          "health_minor": 7793536
+          "date": "2024-02-29",
+          "health_minor": 9843536
         },
         {
-          "date": "2024-03-01",
-          "health_minor": 8461560
+          "date": "2024-03-31",
+          "health_minor": 10511560
         },
         {
-          "date": "2024-04-01",
-          "health_minor": 9119024
+          "date": "2024-04-30",
+          "health_minor": 11169024
         },
         {
-          "date": "2024-05-01",
-          "health_minor": 9765928
+          "date": "2024-05-31",
+          "health_minor": 11815928
         },
         {
-          "date": "2024-06-01",
-          "health_minor": 10402273
+          "date": "2024-06-30",
+          "health_minor": 12452273
         },
         {
-          "date": "2024-07-01",
-          "health_minor": 11104738
+          "date": "2024-07-31",
+          "health_minor": 13154738
         },
         {
-          "date": "2024-08-01",
-          "health_minor": 11787463
+          "date": "2024-08-31",
+          "health_minor": 13837463
         },
         {
-          "date": "2024-09-01",
-          "health_minor": 12468808
+          "date": "2024-09-30",
+          "health_minor": 14518808
         },
         {
-          "date": "2024-10-01",
-          "health_minor": 13148773
+          "date": "2024-10-31",
+          "health_minor": 15198773
         },
         {
-          "date": "2024-11-01",
-          "health_minor": 13818178
+          "date": "2024-11-30",
+          "health_minor": 15868178
         },
         {
-          "date": "2024-12-01",
-          "health_minor": 14477023
+          "date": "2024-12-31",
+          "health_minor": 16527023
         },
         {
-          "date": "2025-01-01",
-          "health_minor": 15134487
+          "date": "2025-01-31",
+          "health_minor": 17184487
         },
         {
-          "date": "2025-02-01",
-          "health_minor": 15790571
+          "date": "2025-02-28",
+          "health_minor": 17840571
         },
         {
-          "date": "2025-03-01",
-          "health_minor": 16426915
+          "date": "2025-03-31",
+          "health_minor": 18476915
         },
         {
-          "date": "2025-04-01",
-          "health_minor": 16760200
+          "date": "2025-04-30",
+          "health_minor": 18810200
         },
         {
-          "date": "2025-05-01",
-          "health_minor": 17452105
+          "date": "2025-05-31",
+          "health_minor": 19502105
         },
         {
-          "date": "2025-06-01",
-          "health_minor": 18133450
+          "date": "2025-06-30",
+          "health_minor": 20183450
         },
         {
-          "date": "2025-07-01",
-          "health_minor": 18804235
+          "date": "2025-07-31",
+          "health_minor": 20854235
         },
         {
-          "date": "2025-08-01",
-          "health_minor": 19473640
+          "date": "2025-08-31",
+          "health_minor": 21523640
         },
         {
-          "date": "2025-09-01",
-          "health_minor": 20141665
+          "date": "2025-09-30",
+          "health_minor": 22191665
         },
         {
-          "date": "2025-10-01",
-          "health_minor": 20799130
+          "date": "2025-10-31",
+          "health_minor": 22849130
         },
         {
-          "date": "2025-11-01",
-          "health_minor": 21446034
+          "date": "2025-11-30",
+          "health_minor": 23496034
         },
         {
-          "date": "2025-12-01",
-          "health_minor": 22091558
+          "date": "2025-12-31",
+          "health_minor": 24141558
         },
         {
-          "date": "2026-01-01",
-          "health_minor": 22794022
+          "date": "2026-01-31",
+          "health_minor": 24844022
         },
         {
-          "date": "2026-02-01",
-          "health_minor": 23476747
+          "date": "2026-02-28",
+          "health_minor": 25526747
         },
         {
-          "date": "2026-03-01",
-          "health_minor": 24158092
+          "date": "2026-03-31",
+          "health_minor": 26208092
         },
         {
-          "date": "2026-04-01",
-          "health_minor": 24838057
+          "date": "2026-04-30",
+          "health_minor": 26888057
         },
         {
-          "date": "2026-05-01",
-          "health_minor": 25507462
+          "date": "2026-05-31",
+          "health_minor": 27557462
         },
         {
-          "date": "2026-06-01",
-          "health_minor": 26166307
+          "date": "2026-06-30",
+          "health_minor": 28216307
         },
         {
-          "date": "2026-07-01",
-          "health_minor": 26823772
+          "date": "2026-07-31",
+          "health_minor": 28873772
         },
         {
-          "date": "2026-08-01",
-          "health_minor": 27479856
+          "date": "2026-08-31",
+          "health_minor": 29529856
         },
         {
-          "date": "2026-09-01",
-          "health_minor": 28116200
+          "date": "2026-09-30",
+          "health_minor": 30166200
         },
         {
-          "date": "2026-10-01",
-          "health_minor": 28818664
+          "date": "2026-10-31",
+          "health_minor": 30868664
         },
         {
-          "date": "2026-11-01",
-          "health_minor": 29510568
+          "date": "2026-11-30",
+          "health_minor": 31560568
         },
         {
-          "date": "2026-12-01",
-          "health_minor": 30191913
+          "date": "2026-12-31",
+          "health_minor": 32241913
         }
       ]
     },
@@ -1519,348 +1495,348 @@
   "report_reserves": {
     "data": {
       "latest": {
-        "available_minor": 22334887,
-        "balance_minor": 31428103,
-        "date": "2026-12-01",
+        "available_minor": 30733458,
+        "balance_minor": 33478103,
+        "date": "2026-12-31",
         "expense_reserve_minor": 1236190,
-        "tax_reserve_minor": 7857026
+        "tax_reserve_minor": 1508455
       },
       "series": [
         {
-          "available_minor": -709341,
-          "balance_minor": 702465,
-          "date": "2023-01-01",
+          "available_minor": 1340659,
+          "balance_minor": 2752465,
+          "date": "2023-01-31",
           "expense_reserve_minor": 1236190,
           "tax_reserve_minor": 175616
         },
         {
-          "available_minor": -190413,
-          "balance_minor": 1394370,
-          "date": "2023-02-01",
+          "available_minor": 1859587,
+          "balance_minor": 3444370,
+          "date": "2023-02-28",
           "expense_reserve_minor": 1236190,
           "tax_reserve_minor": 348593
         },
         {
-          "available_minor": 320596,
-          "balance_minor": 2075715,
-          "date": "2023-03-01",
+          "available_minor": 2370596,
+          "balance_minor": 4125715,
+          "date": "2023-03-31",
           "expense_reserve_minor": 1236190,
           "tax_reserve_minor": 518929
         },
         {
-          "available_minor": 830570,
-          "balance_minor": 2755680,
-          "date": "2023-04-01",
+          "available_minor": 3399499,
+          "balance_minor": 4805680,
+          "date": "2023-04-30",
           "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 688920
+          "tax_reserve_minor": 169991
         },
         {
-          "available_minor": 1339508,
-          "balance_minor": 3434264,
-          "date": "2023-05-01",
+          "available_minor": 3908437,
+          "balance_minor": 5484264,
+          "date": "2023-05-31",
           "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 858566
+          "tax_reserve_minor": 339637
         },
         {
-          "available_minor": 1833641,
-          "balance_minor": 4093108,
-          "date": "2023-06-01",
+          "available_minor": 4402570,
+          "balance_minor": 6143108,
+          "date": "2023-06-30",
           "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 1023277
+          "tax_reserve_minor": 504348
         },
         {
-          "available_minor": 2326739,
-          "balance_minor": 4750572,
-          "date": "2023-07-01",
+          "available_minor": 4895668,
+          "balance_minor": 6800572,
+          "date": "2023-07-31",
           "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 1187643
+          "tax_reserve_minor": 668714
         },
         {
-          "available_minor": 2811917,
-          "balance_minor": 5397476,
-          "date": "2023-08-01",
+          "available_minor": 5380846,
+          "balance_minor": 7447476,
+          "date": "2023-08-31",
           "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 1349369
+          "tax_reserve_minor": 830440
         },
         {
-          "available_minor": 3289176,
-          "balance_minor": 6033821,
-          "date": "2023-09-01",
+          "available_minor": 5858104,
+          "balance_minor": 8083821,
+          "date": "2023-09-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 989527
+        },
+        {
+          "available_minor": 6378068,
+          "balance_minor": 8777106,
+          "date": "2023-10-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1162848
+        },
+        {
+          "available_minor": 6896997,
+          "balance_minor": 9469011,
+          "date": "2023-11-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1335824
+        },
+        {
+          "available_minor": 7099891,
+          "balance_minor": 9739536,
+          "date": "2023-12-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1403455
+        },
+        {
+          "available_minor": 7602979,
+          "balance_minor": 10410321,
+          "date": "2024-01-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1571152
+        },
+        {
+          "available_minor": 8105033,
+          "balance_minor": 11079726,
+          "date": "2024-02-29",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1738503
+        },
+        {
+          "available_minor": 8606051,
+          "balance_minor": 11747750,
+          "date": "2024-03-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1905509
+        },
+        {
+          "available_minor": 11004658,
+          "balance_minor": 12405214,
+          "date": "2024-04-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 164366
+        },
+        {
+          "available_minor": 11489836,
+          "balance_minor": 13052118,
+          "date": "2024-05-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 326092
+        },
+        {
+          "available_minor": 11967095,
+          "balance_minor": 13688463,
+          "date": "2024-06-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 485178
+        },
+        {
+          "available_minor": 12493943,
+          "balance_minor": 14390928,
+          "date": "2024-07-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 660795
+        },
+        {
+          "available_minor": 13005987,
+          "balance_minor": 15073653,
+          "date": "2024-08-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 831476
+        },
+        {
+          "available_minor": 13516996,
+          "balance_minor": 15754998,
+          "date": "2024-09-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1001812
+        },
+        {
+          "available_minor": 14026970,
+          "balance_minor": 16434963,
+          "date": "2024-10-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1171803
+        },
+        {
+          "available_minor": 14529023,
+          "balance_minor": 17104368,
+          "date": "2024-11-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1339155
+        },
+        {
+          "available_minor": 15023157,
+          "balance_minor": 17763213,
+          "date": "2024-12-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1503866
+        },
+        {
+          "available_minor": 15516255,
+          "balance_minor": 18420677,
+          "date": "2025-01-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1668232
+        },
+        {
+          "available_minor": 16008318,
+          "balance_minor": 19076761,
+          "date": "2025-02-28",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1832253
+        },
+        {
+          "available_minor": 16485576,
+          "balance_minor": 19713105,
+          "date": "2025-03-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1991339
+        },
+        {
+          "available_minor": 18726879,
+          "balance_minor": 20046390,
+          "date": "2025-04-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 83321
+        },
+        {
+          "available_minor": 19245807,
+          "balance_minor": 20738295,
+          "date": "2025-05-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 256298
+        },
+        {
+          "available_minor": 19756816,
+          "balance_minor": 21419640,
+          "date": "2025-06-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 426634
+        },
+        {
+          "available_minor": 20259905,
+          "balance_minor": 22090425,
+          "date": "2025-07-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 594330
+        },
+        {
+          "available_minor": 20761959,
+          "balance_minor": 22759830,
+          "date": "2025-08-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 761681
+        },
+        {
+          "available_minor": 21262977,
+          "balance_minor": 23427855,
+          "date": "2025-09-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 928688
+        },
+        {
+          "available_minor": 21756076,
+          "balance_minor": 24085320,
+          "date": "2025-10-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1093054
+        },
+        {
+          "available_minor": 22241254,
+          "balance_minor": 24732224,
+          "date": "2025-11-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1254780
+        },
+        {
+          "available_minor": 22725397,
+          "balance_minor": 25377748,
+          "date": "2025-12-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1416161
+        },
+        {
+          "available_minor": 23252245,
+          "balance_minor": 26080212,
+          "date": "2026-01-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1591777
+        },
+        {
+          "available_minor": 23764289,
+          "balance_minor": 26762937,
+          "date": "2026-02-28",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1762458
+        },
+        {
+          "available_minor": 24275298,
+          "balance_minor": 27444282,
+          "date": "2026-03-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1932794
+        },
+        {
+          "available_minor": 26718066,
+          "balance_minor": 28124247,
+          "date": "2026-04-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 169991
+        },
+        {
+          "available_minor": 27220119,
+          "balance_minor": 28793652,
+          "date": "2026-05-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 337343
+        },
+        {
+          "available_minor": 27714253,
+          "balance_minor": 29452497,
+          "date": "2026-06-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 502054
+        },
+        {
+          "available_minor": 28207352,
+          "balance_minor": 30109962,
+          "date": "2026-07-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 666420
+        },
+        {
+          "available_minor": 28699415,
+          "balance_minor": 30766046,
+          "date": "2026-08-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 830441
+        },
+        {
+          "available_minor": 29176673,
+          "balance_minor": 31402390,
+          "date": "2026-09-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 989527
+        },
+        {
+          "available_minor": 29703521,
+          "balance_minor": 32104854,
+          "date": "2026-10-31",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1165143
+        },
+        {
+          "available_minor": 30222449,
+          "balance_minor": 32796758,
+          "date": "2026-11-30",
+          "expense_reserve_minor": 1236190,
+          "tax_reserve_minor": 1338119
+        },
+        {
+          "available_minor": 30733458,
+          "balance_minor": 33478103,
+          "date": "2026-12-31",
           "expense_reserve_minor": 1236190,
           "tax_reserve_minor": 1508455
-        },
-        {
-          "available_minor": 3809139,
-          "balance_minor": 6727106,
-          "date": "2023-10-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 1681777
-        },
-        {
-          "available_minor": 4328068,
-          "balance_minor": 7419011,
-          "date": "2023-11-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 1854753
-        },
-        {
-          "available_minor": 4530962,
-          "balance_minor": 7689536,
-          "date": "2023-12-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 1922384
-        },
-        {
-          "available_minor": 5034051,
-          "balance_minor": 8360321,
-          "date": "2024-01-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 2090080
-        },
-        {
-          "available_minor": 5536104,
-          "balance_minor": 9029726,
-          "date": "2024-02-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 2257432
-        },
-        {
-          "available_minor": 6037122,
-          "balance_minor": 9697750,
-          "date": "2024-03-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 2424438
-        },
-        {
-          "available_minor": 6530220,
-          "balance_minor": 10355214,
-          "date": "2024-04-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 2588804
-        },
-        {
-          "available_minor": 7015398,
-          "balance_minor": 11002118,
-          "date": "2024-05-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 2750530
-        },
-        {
-          "available_minor": 7492657,
-          "balance_minor": 11638463,
-          "date": "2024-06-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 2909616
-        },
-        {
-          "available_minor": 8019506,
-          "balance_minor": 12340928,
-          "date": "2024-07-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 3085232
-        },
-        {
-          "available_minor": 8531550,
-          "balance_minor": 13023653,
-          "date": "2024-08-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 3255913
-        },
-        {
-          "available_minor": 9042558,
-          "balance_minor": 13704998,
-          "date": "2024-09-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 3426250
-        },
-        {
-          "available_minor": 9552532,
-          "balance_minor": 14384963,
-          "date": "2024-10-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 3596241
-        },
-        {
-          "available_minor": 10054586,
-          "balance_minor": 15054368,
-          "date": "2024-11-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 3763592
-        },
-        {
-          "available_minor": 10548720,
-          "balance_minor": 15713213,
-          "date": "2024-12-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 3928303
-        },
-        {
-          "available_minor": 11041818,
-          "balance_minor": 16370677,
-          "date": "2025-01-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 4092669
-        },
-        {
-          "available_minor": 11533881,
-          "balance_minor": 17026761,
-          "date": "2025-02-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 4256690
-        },
-        {
-          "available_minor": 12011139,
-          "balance_minor": 17663105,
-          "date": "2025-03-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 4415776
-        },
-        {
-          "available_minor": 12261102,
-          "balance_minor": 17996390,
-          "date": "2025-04-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 4499098
-        },
-        {
-          "available_minor": 12780031,
-          "balance_minor": 18688295,
-          "date": "2025-05-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 4672074
-        },
-        {
-          "available_minor": 13291040,
-          "balance_minor": 19369640,
-          "date": "2025-06-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 4842410
-        },
-        {
-          "available_minor": 13794129,
-          "balance_minor": 20040425,
-          "date": "2025-07-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 5010106
-        },
-        {
-          "available_minor": 14296182,
-          "balance_minor": 20709830,
-          "date": "2025-08-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 5177458
-        },
-        {
-          "available_minor": 14797201,
-          "balance_minor": 21377855,
-          "date": "2025-09-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 5344464
-        },
-        {
-          "available_minor": 15290300,
-          "balance_minor": 22035320,
-          "date": "2025-10-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 5508830
-        },
-        {
-          "available_minor": 15775478,
-          "balance_minor": 22682224,
-          "date": "2025-11-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 5670556
-        },
-        {
-          "available_minor": 16259621,
-          "balance_minor": 23327748,
-          "date": "2025-12-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 5831937
-        },
-        {
-          "available_minor": 16786469,
-          "balance_minor": 24030212,
-          "date": "2026-01-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 6007553
-        },
-        {
-          "available_minor": 17298513,
-          "balance_minor": 24712937,
-          "date": "2026-02-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 6178234
-        },
-        {
-          "available_minor": 17809521,
-          "balance_minor": 25394282,
-          "date": "2026-03-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 6348571
-        },
-        {
-          "available_minor": 18319495,
-          "balance_minor": 26074247,
-          "date": "2026-04-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 6518562
-        },
-        {
-          "available_minor": 18821549,
-          "balance_minor": 26743652,
-          "date": "2026-05-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 6685913
-        },
-        {
-          "available_minor": 19315683,
-          "balance_minor": 27402497,
-          "date": "2026-06-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 6850624
-        },
-        {
-          "available_minor": 19808781,
-          "balance_minor": 28059962,
-          "date": "2026-07-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 7014991
-        },
-        {
-          "available_minor": 20300844,
-          "balance_minor": 28716046,
-          "date": "2026-08-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 7179012
-        },
-        {
-          "available_minor": 20778102,
-          "balance_minor": 29352390,
-          "date": "2026-09-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 7338098
-        },
-        {
-          "available_minor": 21304950,
-          "balance_minor": 30054854,
-          "date": "2026-10-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 7513714
-        },
-        {
-          "available_minor": 21823878,
-          "balance_minor": 30746758,
-          "date": "2026-11-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 7686690
-        },
-        {
-          "available_minor": 22334887,
-          "balance_minor": 31428103,
-          "date": "2026-12-01",
-          "expense_reserve_minor": 1236190,
-          "tax_reserve_minor": 7857026
         }
       ]
     },
@@ -1878,348 +1854,348 @@
         "personal"
       ],
       "latest": {
-        "balance_minor": 12241709,
+        "balance_minor": 15821709,
         "burn_rate_minor": 279205,
-        "date": "2026-12-01",
+        "date": "2026-12-31",
         "median_expense_minor": 279205,
-        "runway_months": 43.84487741981698
+        "runway_months": 56.66699736752565
       },
       "series": [
         {
-          "balance_minor": 289095,
+          "balance_minor": 3869095,
           "burn_rate_minor": 279205,
-          "date": "2023-01-01",
+          "date": "2023-01-31",
           "median_expense_minor": 279205,
-          "runway_months": 1.035422001754983
+          "runway_months": 13.857541949463656
         },
         {
-          "balance_minor": 571479,
+          "balance_minor": 4151479,
           "burn_rate_minor": 279205,
-          "date": "2023-02-01",
+          "date": "2023-02-28",
           "median_expense_minor": 279205,
-          "runway_months": 2.0468079010046383
+          "runway_months": 14.86892784871331
         },
         {
-          "balance_minor": 847154,
+          "balance_minor": 4427154,
           "burn_rate_minor": 279205,
-          "date": "2023-03-01",
+          "date": "2023-03-31",
           "median_expense_minor": 279205,
-          "runway_months": 3.0341648609444674
+          "runway_months": 15.85628480865314
         },
         {
-          "balance_minor": 1116119,
+          "balance_minor": 4696119,
           "burn_rate_minor": 279205,
-          "date": "2023-04-01",
+          "date": "2023-04-30",
           "median_expense_minor": 279205,
-          "runway_months": 3.99748929997672
+          "runway_months": 16.819609247685392
         },
         {
-          "balance_minor": 1384353,
+          "balance_minor": 4964353,
           "burn_rate_minor": 279205,
-          "date": "2023-05-01",
+          "date": "2023-05-31",
           "median_expense_minor": 279205,
-          "runway_months": 4.958195591053169
+          "runway_months": 17.78031553876184
         },
         {
-          "balance_minor": 1639898,
+          "balance_minor": 5219898,
           "burn_rate_minor": 279205,
-          "date": "2023-06-01",
+          "date": "2023-06-30",
           "median_expense_minor": 279205,
-          "runway_months": 5.873454988270267
+          "runway_months": 18.69557493597894
         },
         {
-          "balance_minor": 1881233,
+          "balance_minor": 5461233,
           "burn_rate_minor": 279205,
-          "date": "2023-07-01",
+          "date": "2023-07-31",
           "median_expense_minor": 279205,
-          "runway_months": 6.737819881449115
+          "runway_months": 19.559939829157788
         },
         {
-          "balance_minor": 2115858,
+          "balance_minor": 5695858,
           "burn_rate_minor": 279205,
-          "date": "2023-08-01",
+          "date": "2023-08-31",
           "median_expense_minor": 279205,
-          "runway_months": 7.578152253720384
+          "runway_months": 20.400272201429058
         },
         {
-          "balance_minor": 2343773,
+          "balance_minor": 5923773,
           "burn_rate_minor": 279205,
-          "date": "2023-09-01",
+          "date": "2023-09-30",
           "median_expense_minor": 279205,
-          "runway_months": 8.394452105084078
+          "runway_months": 21.216572052792753
         },
         {
-          "balance_minor": 2632478,
+          "balance_minor": 6212478,
           "burn_rate_minor": 279205,
-          "date": "2023-10-01",
+          "date": "2023-10-31",
           "median_expense_minor": 279205,
-          "runway_months": 9.428477283716266
+          "runway_months": 22.250597231424937
         },
         {
-          "balance_minor": 2914473,
+          "balance_minor": 6494473,
           "burn_rate_minor": 279205,
-          "date": "2023-11-01",
+          "date": "2023-11-30",
           "median_expense_minor": 279205,
-          "runway_months": 10.438469941440877
+          "runway_months": 23.26058988914955
         },
         {
-          "balance_minor": 3195737,
+          "balance_minor": 6775737,
           "burn_rate_minor": 279205,
-          "date": "2023-12-01",
+          "date": "2023-12-31",
           "median_expense_minor": 279205,
-          "runway_months": 11.445844451209684
+          "runway_months": 24.26796439891836
         },
         {
-          "balance_minor": 3462791,
+          "balance_minor": 7042791,
           "burn_rate_minor": 279205,
-          "date": "2024-01-01",
+          "date": "2024-01-31",
           "median_expense_minor": 279205,
-          "runway_months": 12.40232445694024
+          "runway_months": 25.224444404648914
         },
         {
-          "balance_minor": 3723136,
+          "balance_minor": 7303136,
           "burn_rate_minor": 279205,
-          "date": "2024-02-01",
+          "date": "2024-02-29",
           "median_expense_minor": 279205,
-          "runway_months": 13.334775523360973
+          "runway_months": 26.15689547106964
         },
         {
-          "balance_minor": 3791770,
+          "balance_minor": 7371770,
           "burn_rate_minor": 279205,
-          "date": "2024-03-01",
+          "date": "2024-03-31",
           "median_expense_minor": 279205,
-          "runway_months": 13.5805949033864
+          "runway_months": 26.402714851095073
         },
         {
-          "balance_minor": 4038695,
+          "balance_minor": 7618695,
           "burn_rate_minor": 279205,
-          "date": "2024-04-01",
+          "date": "2024-04-30",
           "median_expense_minor": 279205,
-          "runway_months": 14.464980927991975
+          "runway_months": 27.28710087570065
         },
         {
-          "balance_minor": 4278910,
+          "balance_minor": 7858910,
           "burn_rate_minor": 279205,
-          "date": "2024-05-01",
+          "date": "2024-05-31",
           "median_expense_minor": 279205,
-          "runway_months": 15.325334431689978
+          "runway_months": 28.14745437939865
         },
         {
-          "balance_minor": 4506435,
+          "balance_minor": 8086435,
           "burn_rate_minor": 279205,
-          "date": "2024-06-01",
+          "date": "2024-06-30",
           "median_expense_minor": 279205,
-          "runway_months": 16.140237459930876
+          "runway_months": 28.962357407639548
         },
         {
-          "balance_minor": 4793230,
+          "balance_minor": 8373230,
           "burn_rate_minor": 279205,
-          "date": "2024-07-01",
+          "date": "2024-07-31",
           "median_expense_minor": 279205,
-          "runway_months": 17.16742178685912
+          "runway_months": 29.98954173456779
         },
         {
-          "balance_minor": 5073315,
+          "balance_minor": 8653315,
           "burn_rate_minor": 279205,
-          "date": "2024-08-01",
+          "date": "2024-08-31",
           "median_expense_minor": 279205,
-          "runway_months": 18.170573592879784
+          "runway_months": 30.992693540588455
         },
         {
-          "balance_minor": 5346690,
+          "balance_minor": 8926690,
           "burn_rate_minor": 279205,
-          "date": "2024-09-01",
+          "date": "2024-09-30",
           "median_expense_minor": 279205,
-          "runway_months": 19.149692877992873
+          "runway_months": 31.971812825701544
         },
         {
-          "balance_minor": 5613355,
+          "balance_minor": 9193355,
           "burn_rate_minor": 279205,
-          "date": "2024-10-01",
+          "date": "2024-10-31",
           "median_expense_minor": 279205,
-          "runway_months": 20.104779642198384
+          "runway_months": 32.92689958990706
         },
         {
-          "balance_minor": 5879289,
+          "balance_minor": 9459289,
           "burn_rate_minor": 279205,
-          "date": "2024-11-01",
+          "date": "2024-11-30",
           "median_expense_minor": 279205,
-          "runway_months": 21.057248258448094
+          "runway_months": 33.87936820615677
         },
         {
-          "balance_minor": 6138514,
+          "balance_minor": 9718514,
           "burn_rate_minor": 279205,
-          "date": "2024-12-01",
+          "date": "2024-12-31",
           "median_expense_minor": 279205,
-          "runway_months": 21.985687935387976
+          "runway_months": 34.80780788309665
         },
         {
-          "balance_minor": 6377549,
+          "balance_minor": 9957549,
           "burn_rate_minor": 279205,
-          "date": "2025-01-01",
+          "date": "2025-01-31",
           "median_expense_minor": 279205,
-          "runway_months": 22.84181515374008
+          "runway_months": 35.66393510144876
         },
         {
-          "balance_minor": 6615854,
+          "balance_minor": 10195854,
           "burn_rate_minor": 279205,
-          "date": "2025-02-01",
+          "date": "2025-02-28",
           "median_expense_minor": 279205,
-          "runway_months": 23.695327805734134
+          "runway_months": 36.51744775344281
         },
         {
-          "balance_minor": 6847449,
+          "balance_minor": 10427449,
           "burn_rate_minor": 279205,
-          "date": "2025-03-01",
+          "date": "2025-03-31",
           "median_expense_minor": 279205,
-          "runway_months": 24.524807936820615
+          "runway_months": 37.346927884529286
         },
         {
-          "balance_minor": 7133854,
+          "balance_minor": 10713854,
           "burn_rate_minor": 279205,
-          "date": "2025-04-01",
+          "date": "2025-04-30",
           "median_expense_minor": 279205,
-          "runway_months": 25.550595440626065
+          "runway_months": 38.37271538833473
         },
         {
-          "balance_minor": 7413549,
+          "balance_minor": 10993549,
           "burn_rate_minor": 279205,
-          "date": "2025-05-01",
+          "date": "2025-05-31",
           "median_expense_minor": 279205,
-          "runway_months": 26.552350423523933
+          "runway_months": 39.37447037123261
         },
         {
-          "balance_minor": 7692514,
+          "balance_minor": 11272514,
           "burn_rate_minor": 279205,
-          "date": "2025-06-01",
+          "date": "2025-06-30",
           "median_expense_minor": 279205,
-          "runway_months": 27.551490840063753
+          "runway_months": 40.37361078777243
         },
         {
-          "balance_minor": 7957268,
+          "balance_minor": 11537268,
           "burn_rate_minor": 279205,
-          "date": "2025-07-01",
+          "date": "2025-07-31",
           "median_expense_minor": 279205,
-          "runway_months": 28.49973317096757
+          "runway_months": 41.321853118676245
         },
         {
-          "balance_minor": 8215313,
+          "balance_minor": 11795313,
           "burn_rate_minor": 279205,
-          "date": "2025-08-01",
+          "date": "2025-08-31",
           "median_expense_minor": 279205,
-          "runway_months": 29.423946562561557
+          "runway_months": 42.24606651027023
         },
         {
-          "balance_minor": 8472627,
+          "balance_minor": 12052627,
           "burn_rate_minor": 279205,
-          "date": "2025-09-01",
+          "date": "2025-09-30",
           "median_expense_minor": 279205,
-          "runway_months": 30.345541806199744
+          "runway_months": 43.16766175390842
         },
         {
-          "balance_minor": 8578231,
+          "balance_minor": 12158231,
           "burn_rate_minor": 279205,
-          "date": "2025-10-01",
+          "date": "2025-10-31",
           "median_expense_minor": 279205,
-          "runway_months": 30.72377285507065
+          "runway_months": 43.54589280277932
         },
         {
-          "balance_minor": 8816146,
+          "balance_minor": 12396146,
           "burn_rate_minor": 279205,
-          "date": "2025-11-01",
+          "date": "2025-11-30",
           "median_expense_minor": 279205,
-          "runway_months": 31.575888683941905
+          "runway_months": 44.398008631650576
         },
         {
-          "balance_minor": 9047351,
+          "balance_minor": 12627351,
           "burn_rate_minor": 279205,
-          "date": "2025-12-01",
+          "date": "2025-12-31",
           "median_expense_minor": 279205,
-          "runway_months": 32.40397199190559
+          "runway_months": 45.226091939614264
         },
         {
-          "balance_minor": 9337826,
+          "balance_minor": 12917826,
           "burn_rate_minor": 279205,
-          "date": "2026-01-01",
+          "date": "2026-01-31",
           "median_expense_minor": 279205,
-          "runway_months": 33.44433659855662
+          "runway_months": 46.26645654626529
         },
         {
-          "balance_minor": 9615611,
+          "balance_minor": 13195611,
           "burn_rate_minor": 279205,
-          "date": "2026-02-01",
+          "date": "2026-02-28",
           "median_expense_minor": 279205,
-          "runway_months": 34.43925072975054
+          "runway_months": 47.26137067745921
         },
         {
-          "balance_minor": 9886686,
+          "balance_minor": 13466686,
           "burn_rate_minor": 279205,
-          "date": "2026-03-01",
+          "date": "2026-03-31",
           "median_expense_minor": 279205,
-          "runway_months": 35.41013234003689
+          "runway_months": 48.23225228774557
         },
         {
-          "balance_minor": 10157031,
+          "balance_minor": 13737031,
           "burn_rate_minor": 279205,
-          "date": "2026-04-01",
+          "date": "2026-04-30",
           "median_expense_minor": 279205,
-          "runway_months": 36.37839938396519
+          "runway_months": 49.20051933167386
         },
         {
-          "balance_minor": 10420665,
+          "balance_minor": 14000665,
           "burn_rate_minor": 279205,
-          "date": "2026-05-01",
+          "date": "2026-05-31",
           "median_expense_minor": 279205,
-          "runway_months": 37.322630325388154
+          "runway_months": 50.144750273096825
         },
         {
-          "balance_minor": 10677590,
+          "balance_minor": 14257590,
           "burn_rate_minor": 279205,
-          "date": "2026-06-01",
+          "date": "2026-06-30",
           "median_expense_minor": 279205,
-          "runway_months": 38.2428323275013
+          "runway_months": 51.06495227520997
         },
         {
-          "balance_minor": 10920305,
+          "balance_minor": 14500305,
           "burn_rate_minor": 279205,
-          "date": "2026-07-01",
+          "date": "2026-07-31",
           "median_expense_minor": 279205,
-          "runway_months": 39.112139825576186
+          "runway_months": 51.934259773284865
         },
         {
-          "balance_minor": 11162289,
+          "balance_minor": 14742289,
           "burn_rate_minor": 279205,
-          "date": "2026-08-01",
+          "date": "2026-08-31",
           "median_expense_minor": 279205,
-          "runway_months": 39.978829175695275
+          "runway_months": 52.80094912340395
         },
         {
-          "balance_minor": 11391584,
+          "balance_minor": 14971584,
           "burn_rate_minor": 279205,
-          "date": "2026-09-01",
+          "date": "2026-09-30",
           "median_expense_minor": 279205,
-          "runway_months": 40.800071631955014
+          "runway_months": 53.622191579663685
         },
         {
-          "balance_minor": 11681669,
+          "balance_minor": 15261669,
           "burn_rate_minor": 279205,
-          "date": "2026-10-01",
+          "date": "2026-10-31",
           "median_expense_minor": 279205,
-          "runway_months": 41.83903941548325
+          "runway_months": 54.66115936319192
         },
         {
-          "balance_minor": 11965044,
+          "balance_minor": 15545044,
           "burn_rate_minor": 279205,
-          "date": "2026-11-01",
+          "date": "2026-11-30",
           "median_expense_minor": 279205,
-          "runway_months": 42.8539746781039
+          "runway_months": 55.676094625812574
         },
         {
-          "balance_minor": 12241709,
+          "balance_minor": 15821709,
           "burn_rate_minor": 279205,
-          "date": "2026-12-01",
+          "date": "2026-12-31",
           "median_expense_minor": 279205,
-          "runway_months": 43.84487741981698
+          "runway_months": 56.66699736752565
         }
       ]
     },
@@ -2251,9 +2227,9 @@
           "anomaly_count_last_12_months": 1,
           "label": "Business",
           "last_full_month_net_minor": 682725,
-          "latest_available_minor": 17809521,
-          "latest_health_minor": 24158092,
-          "latest_runway_months": 41.084755579643904,
+          "latest_available_minor": 24275298,
+          "latest_health_minor": 26208092,
+          "latest_runway_months": 44.401397843373594,
           "median_spend_minor": 618095,
           "net_worth_minor": 27444282,
           "short_term_trend": "positive",
@@ -2263,9 +2239,9 @@
           "anomaly_count_last_12_months": 0,
           "label": "Joint",
           "last_full_month_net_minor": 73040,
-          "latest_available_minor": 1836160,
-          "latest_health_minor": 1836160,
-          "latest_runway_months": 11.638572260587404,
+          "latest_available_minor": 3166160,
+          "latest_health_minor": 3166160,
+          "latest_runway_months": 17.171478492387052,
           "median_spend_minor": 240380,
           "net_worth_minor": 4127680,
           "short_term_trend": "positive",
@@ -2275,9 +2251,9 @@
           "anomaly_count_last_12_months": 1,
           "label": "Personal",
           "last_full_month_net_minor": 277785,
-          "latest_available_minor": 7071734,
-          "latest_health_minor": 9049071,
-          "latest_runway_months": 35.41013234003689,
+          "latest_available_minor": 12021224,
+          "latest_health_minor": 12629071,
+          "latest_runway_months": 48.23225228774557,
           "median_spend_minor": 279895,
           "net_worth_minor": 13466686,
           "short_term_trend": "positive",
@@ -7834,6 +7810,75 @@
         },
         {
           "category": "report",
+          "command": "fin report burn",
+          "description": "Burn-safe outflow classification across selected groups",
+          "example": "fin report burn --include=business,personal,joint --months=6 --ownership-mode=user-share",
+          "idempotent": true,
+          "interactiveOnly": false,
+          "name": "report.burn",
+          "outputFields": [
+            "fromDate",
+            "toDate",
+            "requestedToDate",
+            "windowMode",
+            "includesPartialMonth",
+            "ownershipMode",
+            "groups",
+            "groupTotals",
+            "recurringBaseline",
+            "periodicObligations",
+            "nonRecurring",
+            "vatPassThrough",
+            "transfersExcluded",
+            "periodicItems",
+            "nonRecurringItems",
+            "monthlySeries",
+            "confidence"
+          ],
+          "parameters": [
+            {
+              "description": "Groups csv; defaults to all configured groups",
+              "name": "--include",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Months window",
+              "name": "--months",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Start date YYYY-MM-DD",
+              "name": "--from",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "End date YYYY-MM-DD",
+              "name": "--to",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Include the current partial month in trailing month windows",
+              "name": "--include-partial-month",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "gross|user-share",
+              "name": "--ownership-mode",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "rateLimit": null,
+          "readOnly": true,
+          "supportsJson": true
+        },
+        {
+          "category": "report",
           "command": "fin report cashflow",
           "description": "Monthly cashflow series",
           "example": "fin report cashflow --group=personal --months=6",
@@ -7998,15 +8043,18 @@
         {
           "category": "report",
           "command": "fin report runway",
-          "description": "Runway projection series",
-          "example": "fin report runway --group=personal",
+          "description": "Historical or two-pool runway report",
+          "example": "fin report runway --mode=two-pool --months=12 --ownership-mode=user-share",
           "idempotent": true,
           "interactiveOnly": false,
           "name": "report.runway",
           "outputFields": [
+            "mode",
+            "ownershipMode",
+            "groups",
             "series",
             "latest",
-            "groups"
+            "twoPool"
           ],
           "parameters": [
             {
@@ -8024,6 +8072,48 @@
             {
               "description": "Groups csv for consolidated",
               "name": "--include",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Trailing months for two-pool burn baseline",
+              "name": "--months",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "historical|two-pool",
+              "name": "--mode",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "config|tax-efficient|custom",
+              "name": "--scenario",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "gross|user-share for two-pool mode",
+              "name": "--ownership-mode",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Override salary draw for two-pool mode",
+              "name": "--salary-monthly-minor",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Override dividend draw for two-pool mode",
+              "name": "--dividends-monthly-minor",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "true|false override for whether joint recurring burn is counted in two-pool mode",
+              "name": "--include-joint-expenses",
               "required": false,
               "type": "string"
             },
@@ -8513,7 +8603,7 @@
       "version": "0.1.0"
     },
     "meta": {
-      "count": 26,
+      "count": 27,
       "elapsed": 0,
       "tool": "tools"
     },

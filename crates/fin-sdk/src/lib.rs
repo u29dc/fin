@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod allocation;
+pub mod burn;
 pub mod categories;
 pub mod compat;
 pub mod config;
@@ -27,6 +28,12 @@ pub mod units;
 pub use allocation::{
     AllocationBucket, AllocationSegment, DashboardAllocationBasis, DashboardAllocationSummary,
     GroupAllocationSnapshot, report_group_allocation, report_group_allocation_for_month,
+};
+pub use burn::{
+    BurnBucketKind, BurnBucketSummary, BurnGroupSummary, BurnItemSummary, BurnMonthlyPoint,
+    BurnReport, BurnReportOptions, BurnWindowMode, ExtractionValveSummary, OwnershipMode,
+    PeriodicKind, RecurrenceKind, TwoPoolRunwayOptions, TwoPoolRunwayPool, TwoPoolRunwayReport,
+    TwoPoolScenarioKind, TwoPoolScenarioSummary, report_burn, report_two_pool_runway,
 };
 pub use compat::{
     AccountSummary, ConfigShowData, ConfigValidationResult, FinSdkError, GroupMetadata,

@@ -344,6 +344,19 @@ fn registry_metadata_matches_real_command_payloads() {
             ]],
         ),
         (
+            "report.burn",
+            vec![vec![
+                "report".into(),
+                "burn".into(),
+                "--include".into(),
+                "business,personal,joint".into(),
+                "--months".into(),
+                "6".into(),
+                "--ownership-mode".into(),
+                "user-share".into(),
+            ]],
+        ),
+        (
             "report.cashflow",
             vec![vec![
                 "report".into(),
@@ -378,6 +391,16 @@ fn registry_metadata_matches_real_command_payloads() {
                     "--consolidated".into(),
                     "--include".into(),
                     "business,personal".into(),
+                ],
+                vec![
+                    "report".into(),
+                    "runway".into(),
+                    "--mode".into(),
+                    "two-pool".into(),
+                    "--months".into(),
+                    "12".into(),
+                    "--ownership-mode".into(),
+                    "user-share".into(),
                 ],
             ],
         ),

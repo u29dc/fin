@@ -11,6 +11,7 @@ use crate::queries::{
     group_monthly_cashflow, view_accounts,
 };
 use crate::stats::{mean_i64, median_i64};
+use crate::timeseries::{BalanceSeriesQueryOptions, group_daily_balance_series};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CashflowTotals {
@@ -74,12 +75,21 @@ pub struct ConsolidatedSummary {
 #[derive(Debug, Clone)]
 struct GroupReportContext {
     cashflow: Vec<MonthlyCashflowPoint>,
+    balance_points: Vec<MonthlyBalancePoint>,
     cashflow_totals: CashflowTotals,
     expense_reserve_minor: i64,
     tax_rate: f64,
+    tax_year_start_month: u32,
     burn_rate_minor: i64,
     median_expense_minor: i64,
     fallback_balance_minor: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+struct MonthlyBalancePoint {
+    month: String,
+    date: String,
+    balance_minor: i64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -141,6 +151,98 @@ fn parse_date(month: &str) -> String {
     format!("{month}-01")
 }
 
+fn parse_year_month(month: &str) -> Option<(i32, u32)> {
+    let mut parts = month.split('-');
+    let year = parts.next()?.parse::<i32>().ok()?;
+    let month_num = parts.next()?.parse::<u32>().ok()?;
+    if !(1..=12).contains(&month_num) {
+        return None;
+    }
+    Some((year, month_num))
+}
+
+fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            let is_leap_year = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+            if is_leap_year { 29 } else { 28 }
+        }
+        _ => 30,
+    }
+}
+
+fn cutoff_date_for_month(month: &str, to: Option<&str>) -> String {
+    if let Some(to) = to
+        && to.starts_with(month)
+    {
+        return to.to_owned();
+    }
+    let (year, month_num) = parse_year_month(month).unwrap_or((1970, 1));
+    let day = days_in_month(year, month_num);
+    format!("{year:04}-{month_num:02}-{day:02}")
+}
+
+fn actual_monthly_balance_points(
+    connection: &Connection,
+    config: &FinConfig,
+    group_id: &str,
+    cashflow: &[MonthlyCashflowPoint],
+    to: Option<&str>,
+) -> Result<Vec<MonthlyBalancePoint>> {
+    if cashflow.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let balance_series = group_daily_balance_series(
+        connection,
+        config,
+        group_id,
+        &BalanceSeriesQueryOptions {
+            from: Some(parse_date(&cashflow[0].month)),
+            to: to.map(ToOwned::to_owned),
+            ..BalanceSeriesQueryOptions::default()
+        },
+    )?;
+
+    let mut cursor = 0usize;
+    let mut last_balance_minor = 0i64;
+    let mut points = Vec::with_capacity(cashflow.len());
+    for point in cashflow {
+        let cutoff_date = cutoff_date_for_month(&point.month, to);
+        while cursor < balance_series.len() && balance_series[cursor].date <= cutoff_date {
+            last_balance_minor = balance_series[cursor].balance_minor;
+            cursor += 1;
+        }
+        points.push(MonthlyBalancePoint {
+            month: point.month.clone(),
+            date: cutoff_date,
+            balance_minor: last_balance_minor,
+        });
+    }
+    Ok(points)
+}
+
+fn ytd_profit_by_month(
+    cashflow: &[MonthlyCashflowPoint],
+    tax_year_start_month: u32,
+) -> BTreeMap<String, i64> {
+    let mut values = BTreeMap::new();
+    let mut running_profit_minor = 0i64;
+
+    for (index, point) in cashflow.iter().enumerate() {
+        let month_num = parse_year_month(&point.month).map(|(_, month)| month);
+        if index == 0 || month_num == Some(tax_year_start_month) {
+            running_profit_minor = 0;
+        }
+        running_profit_minor += point.net_minor;
+        values.insert(point.month.clone(), running_profit_minor);
+    }
+
+    values
+}
+
 fn runway_months_for_balance(balance_minor: i64, burn_rate_minor: i64) -> f64 {
     if burn_rate_minor <= 0 {
         999.0
@@ -149,12 +251,8 @@ fn runway_months_for_balance(balance_minor: i64, burn_rate_minor: i64) -> f64 {
     }
 }
 
-fn cashflow_burn_method(config: &FinConfig) -> &str {
-    config
-        .financial
-        .get("burn_rate_method")
-        .and_then(toml::Value::as_str)
-        .unwrap_or("median")
+fn cashflow_burn_method(config: &FinConfig) -> String {
+    config.burn_rate_method()
 }
 
 fn tax_rate_for_group(config: &FinConfig, group_id: &str) -> f64 {
@@ -183,6 +281,9 @@ fn build_group_report_context(
     months: usize,
 ) -> Result<GroupReportContext> {
     let cashflow = group_monthly_cashflow(connection, config, group_id, from, to, months)?;
+    let balance_points =
+        actual_monthly_balance_points(connection, config, group_id, &cashflow, to)?;
+    let burn_rate_method = cashflow_burn_method(config);
     let reserve_months = i64::from(
         config
             .resolve_group_metadata(group_id)
@@ -200,6 +301,7 @@ fn build_group_report_context(
     };
 
     Ok(GroupReportContext {
+        balance_points,
         fallback_balance_minor: if cashflow.is_empty() {
             Some(group_total_balance(connection, config, group_id, to)?)
         } else {
@@ -207,7 +309,9 @@ fn build_group_report_context(
         },
         expense_reserve_minor: median_expense_minor * reserve_months,
         tax_rate: tax_rate_for_group(config, group_id),
-        burn_rate_minor: burn_rate(&expenses, cashflow_burn_method(config)),
+        tax_year_start_month: config
+            .tax_year_start_month(config.resolve_group_metadata(group_id).tax_type.as_str()),
+        burn_rate_minor: burn_rate(&expenses, &burn_rate_method),
         median_expense_minor,
         cashflow,
         cashflow_totals,
@@ -215,27 +319,23 @@ fn build_group_report_context(
 }
 
 fn derive_health_points(context: &GroupReportContext) -> Vec<HealthPoint> {
-    let mut balance = 0i64;
-    let mut points = Vec::with_capacity(context.cashflow.len());
-    for point in &context.cashflow {
-        balance += point.net_minor;
+    let mut points = Vec::with_capacity(context.balance_points.len());
+    for point in &context.balance_points {
         points.push(HealthPoint {
-            date: parse_date(&point.month),
-            health_minor: balance - context.expense_reserve_minor,
+            date: point.date.clone(),
+            health_minor: point.balance_minor - context.expense_reserve_minor,
         });
     }
     points
 }
 
 fn derive_runway_points(context: &GroupReportContext) -> Vec<RunwayPoint> {
-    let mut balance = 0i64;
-    let mut points = Vec::with_capacity(context.cashflow.len().max(1));
-    for point in &context.cashflow {
-        balance += point.net_minor;
+    let mut points = Vec::with_capacity(context.balance_points.len().max(1));
+    for point in &context.balance_points {
         points.push(RunwayPoint {
-            date: parse_date(&point.month),
-            runway_months: runway_months_for_balance(balance, context.burn_rate_minor),
-            balance_minor: balance,
+            date: point.date.clone(),
+            runway_months: runway_months_for_balance(point.balance_minor, context.burn_rate_minor),
+            balance_minor: point.balance_minor,
             burn_rate_minor: context.burn_rate_minor,
             median_expense_minor: context.median_expense_minor,
         });
@@ -254,40 +354,40 @@ fn derive_runway_points(context: &GroupReportContext) -> Vec<RunwayPoint> {
 }
 
 fn derive_reserve_points(context: &GroupReportContext) -> Vec<ReserveBreakdownPoint> {
-    let mut balance = 0i64;
-    let mut ytd_profit = 0i64;
-    let mut points = Vec::with_capacity(context.cashflow.len());
-    for point in &context.cashflow {
-        balance += point.net_minor;
-        ytd_profit += point.net_minor;
-        let tax_reserve_minor =
-            ((i64::max(ytd_profit, 0) as f64) * context.tax_rate).round() as i64;
+    let ytd_profit = ytd_profit_by_month(&context.cashflow, context.tax_year_start_month);
+    let mut points = Vec::with_capacity(context.balance_points.len());
+    for point in &context.balance_points {
+        let tax_reserve_minor = ((i64::max(*ytd_profit.get(&point.month).unwrap_or(&0), 0) as f64)
+            * context.tax_rate)
+            .round() as i64;
         points.push(ReserveBreakdownPoint {
-            date: parse_date(&point.month),
-            balance_minor: balance,
+            date: point.date.clone(),
+            balance_minor: point.balance_minor,
             tax_reserve_minor,
             expense_reserve_minor: context.expense_reserve_minor,
-            available_minor: balance - context.expense_reserve_minor - tax_reserve_minor,
+            available_minor: point.balance_minor
+                - context.expense_reserve_minor
+                - tax_reserve_minor,
         });
     }
     points
 }
 
 fn summarize_latest_group_metrics(context: &GroupReportContext) -> GroupSummaryLatestMetrics {
-    let mut balance = 0i64;
-    let mut ytd_profit = 0i64;
     let mut latest = GroupSummaryLatestMetrics::default();
+    let ytd_profit = ytd_profit_by_month(&context.cashflow, context.tax_year_start_month);
 
-    for point in &context.cashflow {
-        balance += point.net_minor;
-        ytd_profit += point.net_minor;
-        let tax_reserve_minor =
-            ((i64::max(ytd_profit, 0) as f64) * context.tax_rate).round() as i64;
-        latest.latest_health_minor = Some(balance - context.expense_reserve_minor);
+    for point in &context.balance_points {
+        let tax_reserve_minor = ((i64::max(*ytd_profit.get(&point.month).unwrap_or(&0), 0) as f64)
+            * context.tax_rate)
+            .round() as i64;
+        latest.latest_health_minor = Some(point.balance_minor - context.expense_reserve_minor);
         latest.latest_available_minor =
-            Some(balance - context.expense_reserve_minor - tax_reserve_minor);
-        latest.latest_runway_months =
-            Some(runway_months_for_balance(balance, context.burn_rate_minor));
+            Some(point.balance_minor - context.expense_reserve_minor - tax_reserve_minor);
+        latest.latest_runway_months = Some(runway_months_for_balance(
+            point.balance_minor,
+            context.burn_rate_minor,
+        ));
     }
 
     if latest.latest_runway_months.is_none() {

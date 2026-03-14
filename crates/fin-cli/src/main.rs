@@ -253,6 +253,7 @@ struct ReportArgs {
 
 #[derive(Subcommand, Debug)]
 enum ReportCommand {
+    Burn(ReportBurnArgs),
     Cashflow(ReportCashflowArgs),
     Health(ReportHealthArgs),
     Runway(ReportRunwayArgs),
@@ -260,6 +261,22 @@ enum ReportCommand {
     Categories(ReportCategoriesArgs),
     Audit(ReportAuditArgs),
     Summary(ReportSummaryArgs),
+}
+
+#[derive(Args, Debug)]
+struct ReportBurnArgs {
+    #[arg(long)]
+    include: Option<String>,
+    #[arg(long, default_value_t = 12)]
+    months: usize,
+    #[arg(long)]
+    from: Option<String>,
+    #[arg(long)]
+    to: Option<String>,
+    #[arg(long, default_value_t = false)]
+    include_partial_month: bool,
+    #[arg(long, default_value = "gross")]
+    ownership_mode: String,
 }
 
 #[derive(Args, Debug)]
@@ -292,6 +309,20 @@ struct ReportRunwayArgs {
     consolidated: bool,
     #[arg(long)]
     include: Option<String>,
+    #[arg(long, default_value_t = 12)]
+    months: usize,
+    #[arg(long, default_value = "historical")]
+    mode: String,
+    #[arg(long, default_value = "tax-efficient")]
+    scenario: String,
+    #[arg(long, default_value = "gross")]
+    ownership_mode: String,
+    #[arg(long)]
+    salary_monthly_minor: Option<i64>,
+    #[arg(long)]
+    dividends_monthly_minor: Option<i64>,
+    #[arg(long)]
+    include_joint_expenses: Option<bool>,
     #[arg(long)]
     from: Option<String>,
     #[arg(long)]
@@ -416,6 +447,15 @@ fn execute(
             ),
         },
         Some(Command::Report(report)) => match report.command {
+            ReportCommand::Burn(args) => commands::report::run_burn(
+                options.db.as_deref(),
+                args.include.as_deref(),
+                args.months,
+                args.from.as_deref(),
+                args.to.as_deref(),
+                args.include_partial_month,
+                &args.ownership_mode,
+            ),
             ReportCommand::Cashflow(args) => commands::report::run_cashflow(
                 options.db.as_deref(),
                 &args.group,
@@ -429,14 +469,23 @@ fn execute(
                 args.from.as_deref(),
                 args.to.as_deref(),
             ),
-            ReportCommand::Runway(args) => commands::report::run_runway(
-                options.db.as_deref(),
-                args.group.as_deref(),
-                args.consolidated,
-                args.include.as_deref(),
-                args.from.as_deref(),
-                args.to.as_deref(),
-            ),
+            ReportCommand::Runway(args) => {
+                commands::report::run_runway(commands::report::RunwayCommandArgs {
+                    db: options.db.as_deref(),
+                    group: args.group.as_deref(),
+                    consolidated: args.consolidated,
+                    include: args.include.as_deref(),
+                    months: args.months,
+                    mode: &args.mode,
+                    scenario: &args.scenario,
+                    ownership_mode: &args.ownership_mode,
+                    salary_monthly_minor: args.salary_monthly_minor,
+                    dividends_monthly_minor: args.dividends_monthly_minor,
+                    include_joint_expenses: args.include_joint_expenses,
+                    from: args.from.as_deref(),
+                    to: args.to.as_deref(),
+                })
+            }
             ReportCommand::Reserves(args) => commands::report::run_reserves(
                 options.db.as_deref(),
                 &args.group,

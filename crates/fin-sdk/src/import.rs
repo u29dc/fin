@@ -972,6 +972,7 @@ fn insert_non_transfer(connection: &Connection, transaction: &CanonicalTransacti
         transaction.category.as_deref(),
         &description,
         transaction.amount_minor > 0,
+        Some(&transaction.chart_account_id),
     );
 
     connection.execute(
