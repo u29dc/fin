@@ -318,6 +318,8 @@ struct ReportCategoriesArgs {
     months: usize,
     #[arg(long, default_value_t = 10)]
     limit: usize,
+    #[arg(long)]
+    to: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -328,12 +330,16 @@ struct ReportAuditArgs {
     months: usize,
     #[arg(long, default_value_t = 50)]
     limit: usize,
+    #[arg(long)]
+    to: Option<String>,
 }
 
 #[derive(Args, Debug)]
 struct ReportSummaryArgs {
     #[arg(long, default_value_t = 12)]
     months: usize,
+    #[arg(long)]
+    to: Option<String>,
 }
 
 fn execute(
@@ -443,16 +449,20 @@ fn execute(
                 &args.mode,
                 args.months,
                 args.limit,
+                args.to.as_deref(),
             ),
             ReportCommand::Audit(args) => commands::report::run_audit(
                 options.db.as_deref(),
                 &args.account,
                 args.months,
                 args.limit,
+                args.to.as_deref(),
             ),
-            ReportCommand::Summary(args) => {
-                commands::report::run_summary(options.db.as_deref(), args.months)
-            }
+            ReportCommand::Summary(args) => commands::report::run_summary(
+                options.db.as_deref(),
+                args.months,
+                args.to.as_deref(),
+            ),
         },
         None => unreachable!("root help path should return before dispatch"),
     }

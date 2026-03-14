@@ -250,7 +250,7 @@ fn snapshot_document(address: SocketAddr, home: &Path) -> Result<Value> {
 
     let (categories_status, categories_body) = request_json(
         address,
-        "/v1/report/categories?group=business&mode=breakdown&months=6&limit=5",
+        "/v1/report/categories?group=business&mode=breakdown&months=6&limit=5&to=2026-03-31",
     )?;
     snapshot.insert(
         "report_categories_status".to_owned(),
@@ -260,12 +260,13 @@ fn snapshot_document(address: SocketAddr, home: &Path) -> Result<Value> {
 
     let (audit_status, audit_body) = request_json(
         address,
-        "/v1/report/audit?account=Expenses%3ABusiness%3ASoftware&months=6&limit=5",
+        "/v1/report/audit?account=Expenses%3ABusiness%3ASoftware&months=6&limit=5&to=2026-03-31",
     )?;
     snapshot.insert("report_audit_status".to_owned(), Value::from(audit_status));
     snapshot.insert("report_audit".to_owned(), audit_body);
 
-    let (summary_status, summary_body) = request_json(address, "/v1/report/summary?months=12")?;
+    let (summary_status, summary_body) =
+        request_json(address, "/v1/report/summary?months=12&to=2026-03-31")?;
     snapshot.insert(
         "report_summary_status".to_owned(),
         Value::from(summary_status),
@@ -284,7 +285,7 @@ fn snapshot_document(address: SocketAddr, home: &Path) -> Result<Value> {
 
     let (hierarchy_status, hierarchy_body) = request_json(
         address,
-        "/v1/dashboard/hierarchy?group=business&months=6&mode=monthly_average",
+        "/v1/dashboard/hierarchy?group=business&months=6&mode=monthly_average&to=2026-03-31",
     )?;
     snapshot.insert(
         "dashboard_hierarchy_status".to_owned(),
@@ -294,7 +295,7 @@ fn snapshot_document(address: SocketAddr, home: &Path) -> Result<Value> {
 
     let (flow_status, flow_body) = request_json(
         address,
-        "/v1/dashboard/flow?group=business&months=6&mode=monthly_average",
+        "/v1/dashboard/flow?group=business&months=6&mode=monthly_average&to=2026-03-31",
     )?;
     snapshot.insert("dashboard_flow_status".to_owned(), Value::from(flow_status));
     snapshot.insert("dashboard_flow".to_owned(), flow_body);

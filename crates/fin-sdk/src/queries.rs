@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, params_from_iter};
 use serde::{Deserialize, Serialize};
 
 use crate::config::FinConfig;
@@ -124,6 +124,24 @@ fn placeholders(count: usize) -> String {
     std::iter::repeat_n("?", count)
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn apply_relative_window_clause(
+    clauses: &mut Vec<String>,
+    params: &mut Vec<String>,
+    months: usize,
+    to: Option<&str>,
+) {
+    if let Some(to) = to {
+        clauses.push("je.posted_date <= ?".to_owned());
+        params.push(to.to_owned());
+        clauses.push("je.posted_date >= date(?, '-' || ? || ' months')".to_owned());
+        params.push(to.to_owned());
+        params.push(months.to_string());
+    } else {
+        clauses.push("je.posted_at >= date('now', '-' || ? || ' months')".to_owned());
+        params.push(months.to_string());
+    }
 }
 
 fn collect_group_account_ids(config: &FinConfig, group_id: &str) -> Vec<String> {
@@ -493,6 +511,7 @@ pub fn group_category_breakdown(
     group_id: &str,
     months: usize,
     limit: usize,
+    to: Option<&str>,
 ) -> Result<Vec<CategoryBreakdownPoint>> {
     let account_ids = collect_group_account_ids(config, group_id);
     if account_ids.is_empty() {
@@ -500,14 +519,17 @@ pub fn group_category_breakdown(
     }
     let months = if months == 0 { 3 } else { months };
     let placeholders_sql = placeholders(account_ids.len());
+    let mut clauses = vec!["coa.account_type = 'expense'".to_owned()];
+    let mut params = Vec::new();
+    apply_relative_window_clause(&mut clauses, &mut params, months, to);
     let sql = format!(
-        "SELECT coa.name,\n                COALESCE(SUM(p.amount_minor), 0) AS total_minor,\n                COUNT(*) AS transaction_count\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON coa.id = p.account_id\n         WHERE coa.account_type = 'expense'\n           AND je.posted_at >= date('now', '-' || ? || ' months')\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND asset.account_id IN ({placeholders_sql})\n           )\n         GROUP BY coa.id, coa.name\n         ORDER BY total_minor DESC\n         LIMIT ?"
+        "SELECT coa.name,\n                COALESCE(SUM(p.amount_minor), 0) AS total_minor,\n                COUNT(*) AS transaction_count\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON coa.id = p.account_id\n         WHERE {}\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND asset.account_id IN ({placeholders_sql})\n           )\n         GROUP BY coa.id, coa.name\n         ORDER BY total_minor DESC\n         LIMIT ?",
+        clauses.join(" AND ")
     );
-    let mut params = vec![months.to_string()];
     params.extend(account_ids);
     params.push(if limit == 0 { 100 } else { limit }.to_string());
     let mut statement = connection.prepare(&sql)?;
-    let mut rows = statement.query(rusqlite::params_from_iter(params.iter()))?;
+    let mut rows = statement.query(params_from_iter(params.iter()))?;
     let mut points = Vec::new();
     while let Some(row) = rows.next()? {
         points.push(CategoryBreakdownPoint {
@@ -525,6 +547,7 @@ pub fn group_category_monthly_median(
     group_id: &str,
     months: usize,
     limit: usize,
+    to: Option<&str>,
 ) -> Result<Vec<CategoryMedianPoint>> {
     let account_ids = collect_group_account_ids(config, group_id);
     if account_ids.is_empty() {
@@ -532,15 +555,18 @@ pub fn group_category_monthly_median(
     }
     let months = if months == 0 { 6 } else { months };
     let placeholders_sql = placeholders(account_ids.len());
+    let mut clauses = vec!["coa.account_type = 'expense'".to_owned()];
+    let mut params = Vec::new();
+    apply_relative_window_clause(&mut clauses, &mut params, months, to);
     let sql = format!(
-        "SELECT p.account_id,\n                coa.name,\n                strftime('%Y-%m', je.posted_at) AS month,\n                COALESCE(SUM(p.amount_minor), 0) AS month_total\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         WHERE coa.account_type = 'expense'\n           AND je.posted_at >= date('now', '-' || ? || ' months')\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND asset.account_id IN ({placeholders_sql})\n           )\n         GROUP BY p.account_id, coa.name, month\n         ORDER BY p.account_id, month"
+        "SELECT p.account_id,\n                coa.name,\n                strftime('%Y-%m', je.posted_at) AS month,\n                COALESCE(SUM(p.amount_minor), 0) AS month_total\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         WHERE {}\n           AND EXISTS (\n             SELECT 1\n             FROM postings asset\n             WHERE asset.journal_entry_id = p.journal_entry_id\n               AND asset.account_id IN ({placeholders_sql})\n           )\n         GROUP BY p.account_id, coa.name, month\n         ORDER BY p.account_id, month",
+        clauses.join(" AND ")
     );
-    let mut params = vec![months.to_string()];
     params.extend(account_ids);
 
     let mut by_account = HashMap::<String, (String, Vec<i64>)>::new();
     let mut statement = connection.prepare(&sql)?;
-    let mut rows = statement.query(rusqlite::params_from_iter(params.iter()))?;
+    let mut rows = statement.query(params_from_iter(params.iter()))?;
     while let Some(row) = rows.next()? {
         let account_id: String = row.get(0)?;
         let category_name: String = row.get(1)?;
@@ -589,17 +615,20 @@ pub fn audit_payees(
     account_id: &str,
     months: usize,
     limit: usize,
+    to: Option<&str>,
 ) -> Result<Vec<AuditPayeePoint>> {
     let months = if months == 0 { 6 } else { months };
     let cap = if limit == 0 { 50 } else { limit };
-    let mut statement = connection.prepare(
-        "SELECT COALESCE(je.clean_description, je.raw_description, je.description) AS description,\n                COUNT(*) AS transaction_count,\n                COALESCE(SUM(p.amount_minor), 0) AS total_minor,\n                MAX(je.posted_at) AS latest_posted_at\n         FROM postings p\n         JOIN journal_entries je ON je.id = p.journal_entry_id\n         WHERE p.account_id = ?1\n           AND je.posted_at >= date('now', '-' || ?2 || ' months')\n         GROUP BY description\n         ORDER BY ABS(total_minor) DESC\n         LIMIT ?3",
-    )?;
-    let mut rows = statement.query(params![
-        account_id,
-        i64::try_from(months).unwrap_or(6),
-        i64::try_from(cap).unwrap_or(50)
-    ])?;
+    let mut clauses = vec!["p.account_id = ?".to_owned()];
+    let mut params = vec![account_id.to_owned()];
+    apply_relative_window_clause(&mut clauses, &mut params, months, to);
+    params.push(cap.to_string());
+    let sql = format!(
+        "SELECT COALESCE(je.clean_description, je.raw_description, je.description) AS description,\n                COUNT(*) AS transaction_count,\n                COALESCE(SUM(p.amount_minor), 0) AS total_minor,\n                MAX(je.posted_at) AS latest_posted_at\n         FROM postings p\n         JOIN journal_entries je ON je.id = p.journal_entry_id\n         WHERE {}\n         GROUP BY description\n         ORDER BY ABS(total_minor) DESC\n         LIMIT ?",
+        clauses.join(" AND ")
+    );
+    let mut statement = connection.prepare(&sql)?;
+    let mut rows = statement.query(params_from_iter(params.iter()))?;
     let mut points = Vec::new();
     while let Some(row) = rows.next()? {
         points.push(AuditPayeePoint {

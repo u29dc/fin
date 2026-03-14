@@ -624,53 +624,53 @@
       "graph": {
         "edges": [
           {
-            "amount_minor": 3218750,
+            "amount_minor": 1287500,
             "share_of_source_pct": 100.0,
-            "share_of_total_pct": 60.45,
+            "share_of_total_pct": 61.44,
             "source_id": "Income:Other",
             "target_id": "Assets:Business:Operating"
           },
           {
-            "amount_minor": 274800,
-            "share_of_source_pct": 13.05,
-            "share_of_total_pct": 5.16,
-            "source_id": "Assets:Business:Operating",
-            "target_id": "Expenses:Transport:Travel"
-          },
-          {
-            "amount_minor": 271858,
-            "share_of_source_pct": 12.91,
-            "share_of_total_pct": 5.11,
-            "source_id": "Assets:Business:Operating",
-            "target_id": "Expenses:Business:Equipment"
-          },
-          {
-            "amount_minor": 268563,
-            "share_of_source_pct": 12.75,
-            "share_of_total_pct": 5.04,
+            "amount_minor": 107605,
+            "share_of_source_pct": 13.32,
+            "share_of_total_pct": 5.13,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Insurance"
           },
           {
-            "amount_minor": 263894,
-            "share_of_source_pct": 12.53,
-            "share_of_total_pct": 4.96,
+            "amount_minor": 106272,
+            "share_of_source_pct": 13.15,
+            "share_of_total_pct": 5.07,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Contractors"
           },
           {
-            "amount_minor": 261698,
-            "share_of_source_pct": 12.43,
-            "share_of_total_pct": 4.91,
+            "amount_minor": 104349,
+            "share_of_source_pct": 12.91,
+            "share_of_total_pct": 4.98,
             "source_id": "Assets:Business:Operating",
-            "target_id": "Expenses:Business:Software"
+            "target_id": "Expenses:Transport:Travel"
           },
           {
-            "amount_minor": 258324,
-            "share_of_source_pct": 12.27,
-            "share_of_total_pct": 4.85,
+            "amount_minor": 100819,
+            "share_of_source_pct": 12.48,
+            "share_of_total_pct": 4.81,
             "source_id": "Assets:Business:Operating",
             "target_id": "Expenses:Business:Services"
+          },
+          {
+            "amount_minor": 100623,
+            "share_of_source_pct": 12.45,
+            "share_of_total_pct": 4.8,
+            "source_id": "Assets:Business:Operating",
+            "target_id": "Expenses:Business:Equipment"
+          },
+          {
+            "amount_minor": 98426,
+            "share_of_source_pct": 12.18,
+            "share_of_total_pct": 4.7,
+            "source_id": "Assets:Business:Operating",
+            "target_id": "Expenses:Business:Software"
           }
         ],
         "nodes": [
@@ -715,7 +715,7 @@
             "label": "Other"
           }
         ],
-        "total_minor": 4817887
+        "total_minor": 1905594
       },
       "groupId": "business",
       "mode": "monthly_average",
@@ -742,56 +742,56 @@
               "account_id": "Expenses:Business",
               "children": [
                 {
-                  "account_id": "Expenses:Business:Equipment",
-                  "children": [],
-                  "kind": "expense",
-                  "name": "Equipment",
-                  "share_of_parent_pct": 20.53,
-                  "share_of_root_pct": 12.91,
-                  "total_minor": 271858
-                },
-                {
                   "account_id": "Expenses:Business:Insurance",
                   "children": [],
                   "kind": "expense",
                   "name": "Insurance",
-                  "share_of_parent_pct": 20.28,
-                  "share_of_root_pct": 12.75,
-                  "total_minor": 268563
+                  "share_of_parent_pct": 20.95,
+                  "share_of_root_pct": 13.32,
+                  "total_minor": 107605
                 },
                 {
                   "account_id": "Expenses:Business:Contractors",
                   "children": [],
                   "kind": "expense",
                   "name": "Contractors",
-                  "share_of_parent_pct": 19.93,
-                  "share_of_root_pct": 12.53,
-                  "total_minor": 263894
-                },
-                {
-                  "account_id": "Expenses:Business:Software",
-                  "children": [],
-                  "kind": "expense",
-                  "name": "Software",
-                  "share_of_parent_pct": 19.76,
-                  "share_of_root_pct": 12.43,
-                  "total_minor": 261698
+                  "share_of_parent_pct": 20.69,
+                  "share_of_root_pct": 13.15,
+                  "total_minor": 106272
                 },
                 {
                   "account_id": "Expenses:Business:Services",
                   "children": [],
                   "kind": "expense",
                   "name": "Services",
-                  "share_of_parent_pct": 19.51,
-                  "share_of_root_pct": 12.27,
-                  "total_minor": 258324
+                  "share_of_parent_pct": 19.62,
+                  "share_of_root_pct": 12.48,
+                  "total_minor": 100819
+                },
+                {
+                  "account_id": "Expenses:Business:Equipment",
+                  "children": [],
+                  "kind": "expense",
+                  "name": "Equipment",
+                  "share_of_parent_pct": 19.59,
+                  "share_of_root_pct": 12.45,
+                  "total_minor": 100623
+                },
+                {
+                  "account_id": "Expenses:Business:Software",
+                  "children": [],
+                  "kind": "expense",
+                  "name": "Software",
+                  "share_of_parent_pct": 19.16,
+                  "share_of_root_pct": 12.18,
+                  "total_minor": 98426
                 }
               ],
               "kind": "expense",
               "name": "Business",
-              "share_of_parent_pct": 82.82,
-              "share_of_root_pct": 62.89,
-              "total_minor": 1324337
+              "share_of_parent_pct": 83.12,
+              "share_of_root_pct": 63.57,
+              "total_minor": 513745
             },
             {
               "account_id": "Expenses:Transport",
@@ -802,25 +802,25 @@
                   "kind": "expense",
                   "name": "Travel",
                   "share_of_parent_pct": 100.0,
-                  "share_of_root_pct": 13.05,
-                  "total_minor": 274800
+                  "share_of_root_pct": 12.91,
+                  "total_minor": 104349
                 }
               ],
               "kind": "expense",
               "name": "Transport",
-              "share_of_parent_pct": 17.18,
-              "share_of_root_pct": 13.05,
-              "total_minor": 274800
+              "share_of_parent_pct": 16.88,
+              "share_of_root_pct": 12.91,
+              "total_minor": 104349
             }
           ],
           "kind": "expense",
           "name": "Expenses",
-          "share_of_parent_pct": 75.94,
-          "share_of_root_pct": 75.94,
-          "total_minor": 1599137
+          "share_of_parent_pct": 76.49,
+          "share_of_root_pct": 76.49,
+          "total_minor": 618094
         }
       ],
-      "totalMinor": 1599137
+      "totalMinor": 618094
     },
     "meta": {
       "count": 9,
@@ -1090,36 +1090,36 @@
       "payees": [
         {
           "description": "SaaS tooling 03/11",
-          "latest_posted_at": "2026-11-06T12:00:00",
-          "total_minor": 50371,
-          "transaction_count": 2
+          "latest_posted_at": "2025-11-06T12:00:00",
+          "total_minor": 28010,
+          "transaction_count": 1
         },
         {
           "description": "SaaS tooling 10/10",
-          "latest_posted_at": "2026-10-13T12:00:00",
-          "total_minor": 49899,
-          "transaction_count": 2
-        },
-        {
-          "description": "SaaS tooling 17/09",
-          "latest_posted_at": "2026-09-20T12:00:00",
-          "total_minor": 49429,
-          "transaction_count": 2
-        },
-        {
-          "description": "SaaS tooling 26/12",
-          "latest_posted_at": "2026-12-07T12:00:00",
-          "total_minor": 48723,
-          "transaction_count": 2
+          "latest_posted_at": "2025-10-13T12:00:00",
+          "total_minor": 27774,
+          "transaction_count": 1
         },
         {
           "description": "SaaS tooling 04/10",
-          "latest_posted_at": "2026-10-07T12:00:00",
-          "total_minor": 48487,
-          "transaction_count": 2
+          "latest_posted_at": "2025-10-07T12:00:00",
+          "total_minor": 27068,
+          "transaction_count": 1
+        },
+        {
+          "description": "SaaS tooling 23/03",
+          "latest_posted_at": "2026-03-04T12:00:00",
+          "total_minor": 25421,
+          "transaction_count": 1
+        },
+        {
+          "description": "SaaS tooling 17/03",
+          "latest_posted_at": "2026-03-20T12:00:00",
+          "total_minor": 24714,
+          "transaction_count": 1
         }
       ],
-      "total": 246909
+      "total": 132987
     },
     "meta": {
       "count": 5,
@@ -1271,33 +1271,33 @@
     "data": {
       "categories": [
         {
-          "category": "Travel",
-          "total_minor": 1648804,
-          "transaction_count": 69
-        },
-        {
-          "category": "Equipment",
-          "total_minor": 1631150,
-          "transaction_count": 69
-        },
-        {
           "category": "Insurance",
-          "total_minor": 1611380,
-          "transaction_count": 67
+          "total_minor": 645635,
+          "transaction_count": 26
         },
         {
           "category": "Contractors",
-          "total_minor": 1583369,
-          "transaction_count": 66
+          "total_minor": 637632,
+          "transaction_count": 26
         },
         {
-          "category": "Software",
-          "total_minor": 1570188,
-          "transaction_count": 67
+          "category": "Travel",
+          "total_minor": 626098,
+          "transaction_count": 26
+        },
+        {
+          "category": "Services",
+          "total_minor": 604914,
+          "transaction_count": 26
+        },
+        {
+          "category": "Equipment",
+          "total_minor": 603738,
+          "transaction_count": 26
         }
       ],
       "mode": "breakdown",
-      "total": 8044891
+      "total": 3118017
     },
     "meta": {
       "count": 5,
@@ -2235,15 +2235,15 @@
     "data": {
       "consolidated": {
         "balance_sheet": {
-          "assets": 54129732,
+          "assets": 45038648,
           "equity": -6960000,
-          "expenses": 55883268,
-          "income": 103053000,
+          "expenses": 45671602,
+          "income": 83750250,
           "liabilities": 0,
-          "net_income": 47169732,
-          "net_worth": 54129732
+          "net_income": 38078648,
+          "net_worth": 45038648
         },
-        "net_worth_minor": 54129732
+        "net_worth_minor": 45038648
       },
       "generated_at": "<SYSTEM_TIME>",
       "groups": {
@@ -2251,11 +2251,11 @@
           "anomaly_count_last_12_months": 1,
           "label": "Business",
           "last_full_month_net_minor": 682725,
-          "latest_available_minor": 22334887,
-          "latest_health_minor": 30191913,
-          "latest_runway_months": 50.846719355438886,
+          "latest_available_minor": 17809521,
+          "latest_health_minor": 24158092,
+          "latest_runway_months": 41.084755579643904,
           "median_spend_minor": 618095,
-          "net_worth_minor": 33478103,
+          "net_worth_minor": 27444282,
           "short_term_trend": "positive",
           "trailing_average_net_minor": 676904
         },
@@ -2263,11 +2263,11 @@
           "anomaly_count_last_12_months": 0,
           "label": "Joint",
           "last_full_month_net_minor": 73040,
-          "latest_available_minor": 2538060,
-          "latest_health_minor": 2538060,
-          "latest_runway_months": 14.554800074854969,
+          "latest_available_minor": 1836160,
+          "latest_health_minor": 1836160,
+          "latest_runway_months": 11.638572260587404,
           "median_spend_minor": 240380,
-          "net_worth_minor": 4829920,
+          "net_worth_minor": 4127680,
           "short_term_trend": "positive",
           "trailing_average_net_minor": 84620
         },
@@ -2275,11 +2275,11 @@
           "anomaly_count_last_12_months": 1,
           "label": "Personal",
           "last_full_month_net_minor": 277785,
-          "latest_available_minor": 8955752,
-          "latest_health_minor": 11404094,
-          "latest_runway_months": 43.84487741981698,
+          "latest_available_minor": 7071734,
+          "latest_health_minor": 9049071,
+          "latest_runway_months": 35.41013234003689,
           "median_spend_minor": 279895,
-          "net_worth_minor": 15821709,
+          "net_worth_minor": 13466686,
           "short_term_trend": "positive",
           "trailing_average_net_minor": 266488
         }
@@ -7820,6 +7820,12 @@
               "name": "--limit",
               "required": false,
               "type": "string"
+            },
+            {
+              "description": "End date YYYY-MM-DD",
+              "name": "--to",
+              "required": false,
+              "type": "string"
             }
           ],
           "rateLimit": null,
@@ -7903,6 +7909,12 @@
             {
               "description": "Max rows",
               "name": "--limit",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "End date YYYY-MM-DD",
+              "name": "--to",
               "required": false,
               "type": "string"
             }
@@ -8052,6 +8064,12 @@
             {
               "description": "Months window",
               "name": "--months",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "End date YYYY-MM-DD",
+              "name": "--to",
               "required": false,
               "type": "string"
             }

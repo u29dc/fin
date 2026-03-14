@@ -1,15 +1,13 @@
 use std::collections::BTreeMap;
 
-use rusqlite::Connection;
+use rusqlite::{Connection, params_from_iter};
 use serde::{Deserialize, Serialize};
 
 use crate::config::FinConfig;
-use crate::dashboard::{
-    CashflowKpis, ShortTermTrend, current_reporting_month, summarize_cashflow_kpis,
-};
+use crate::dashboard::{CashflowKpis, ShortTermTrend, reporting_month, summarize_cashflow_kpis};
 use crate::error::Result;
 use crate::queries::{
-    MonthlyCashflowPoint, all_group_ids, consolidated_net_worth_by_group, get_balance_sheet,
+    MonthlyCashflowPoint, all_group_ids, get_balance_sheet, group_asset_account_ids,
     group_monthly_cashflow, view_accounts,
 };
 use crate::stats::{mean_i64, median_i64};
@@ -98,12 +96,45 @@ fn burn_rate(values: &[i64], method: &str) -> i64 {
     median_i64(values).unwrap_or(0)
 }
 
-fn group_total_balance(connection: &Connection, config: &FinConfig, group_id: &str) -> Result<i64> {
-    let accounts = view_accounts(connection, config, Some(group_id))?;
-    Ok(accounts
-        .iter()
-        .map(|account| account.balance_minor.unwrap_or(0))
-        .sum())
+fn group_total_balance(
+    connection: &Connection,
+    config: &FinConfig,
+    group_id: &str,
+    as_of: Option<&str>,
+) -> Result<i64> {
+    if as_of.is_none() {
+        let accounts = view_accounts(connection, config, Some(group_id))?;
+        return Ok(accounts
+            .iter()
+            .map(|account| account.balance_minor.unwrap_or(0))
+            .sum());
+    }
+
+    let account_ids = group_asset_account_ids(config, group_id);
+    if account_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let mut account_match_clauses = Vec::new();
+    let mut params = Vec::new();
+    for account_id in &account_ids {
+        account_match_clauses.push("(p.account_id = ? OR p.account_id LIKE ?)".to_owned());
+        params.push(account_id.clone());
+        params.push(format!("{account_id}:%"));
+    }
+    params.push(format!(
+        "{}T23:59:59.999",
+        as_of.expect("as_of already validated")
+    ));
+
+    let sql = format!(
+        "SELECT COALESCE(SUM(p.amount_minor), 0)\n         FROM postings p\n         JOIN journal_entries je ON p.journal_entry_id = je.id\n         JOIN chart_of_accounts coa ON p.account_id = coa.id\n         WHERE coa.account_type = 'asset'\n           AND ({})\n           AND je.posted_at <= ?",
+        account_match_clauses.join(" OR ")
+    );
+
+    connection
+        .query_row(&sql, params_from_iter(params.iter()), |row| row.get(0))
+        .map_err(Into::into)
 }
 
 fn parse_date(month: &str) -> String {
@@ -170,7 +201,7 @@ fn build_group_report_context(
 
     Ok(GroupReportContext {
         fallback_balance_minor: if cashflow.is_empty() {
-            Some(group_total_balance(connection, config, group_id)?)
+            Some(group_total_balance(connection, config, group_id, to)?)
         } else {
             None
         },
@@ -318,13 +349,13 @@ pub fn report_summary(
     connection: &Connection,
     config: &FinConfig,
     period_months: usize,
+    to: Option<&str>,
 ) -> Result<SummaryReport> {
     let mut groups = BTreeMap::new();
-    let by_group_net_worth = consolidated_net_worth_by_group(connection, config)?;
-    let current_month = current_reporting_month(connection)?;
+    let current_month = reporting_month(connection, to)?;
     for group_id in all_group_ids(config) {
         let group_label = config.resolve_group_metadata(&group_id).label;
-        let context = build_group_report_context(connection, config, &group_id, None, None, 120)?;
+        let context = build_group_report_context(connection, config, &group_id, None, to, 120)?;
         let latest_metrics = summarize_latest_group_metrics(&context);
         let cashflow_kpis: CashflowKpis =
             summarize_cashflow_kpis(&context.cashflow, &current_month);
@@ -332,7 +363,7 @@ pub fn report_summary(
             group_id.clone(),
             GroupSummary {
                 label: group_label,
-                net_worth_minor: by_group_net_worth.get(&group_id).copied().unwrap_or(0),
+                net_worth_minor: group_total_balance(connection, config, &group_id, to)?,
                 latest_runway_months: latest_metrics.latest_runway_months,
                 latest_health_minor: latest_metrics.latest_health_minor,
                 latest_available_minor: latest_metrics.latest_available_minor,
@@ -348,7 +379,7 @@ pub fn report_summary(
         );
     }
 
-    let balance_sheet = get_balance_sheet(connection, None)?;
+    let balance_sheet = get_balance_sheet(connection, to)?;
     let net_worth_minor = groups.values().map(|group| group.net_worth_minor).sum();
     Ok(SummaryReport {
         generated_at: format!("{:?}", std::time::SystemTime::now()),
@@ -414,8 +445,8 @@ mod tests {
     #[test]
     fn summary_matches_individual_group_reports() {
         let runtime = open_fixture_runtime();
-        let summary =
-            report_summary(runtime.connection(), runtime.config(), 12).expect("report summary");
+        let summary = report_summary(runtime.connection(), runtime.config(), 12, None)
+            .expect("report summary");
         let current_month = current_reporting_month(runtime.connection()).expect("current month");
 
         for group_id in runtime.config().group_ids() {

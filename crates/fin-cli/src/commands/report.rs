@@ -243,6 +243,7 @@ pub fn run_categories(
     mode: &str,
     months: usize,
     limit: usize,
+    to: Option<&str>,
 ) -> Result<CommandResult, CommandFailure> {
     let runtime = open_runtime("report.categories", db, true)?;
     if mode == "median" {
@@ -252,6 +253,7 @@ pub fn run_categories(
             group,
             months,
             limit,
+            to,
         )
         .map_err(|error| map_fin_error("report.categories", error))?;
         let categories = points
@@ -284,9 +286,15 @@ pub fn run_categories(
         });
     }
 
-    let points =
-        group_category_breakdown(runtime.connection(), runtime.config(), group, months, limit)
-            .map_err(|error| map_fin_error("report.categories", error))?;
+    let points = group_category_breakdown(
+        runtime.connection(),
+        runtime.config(),
+        group,
+        months,
+        limit,
+        to,
+    )
+    .map_err(|error| map_fin_error("report.categories", error))?;
     let categories = points
         .iter()
         .map(|point| {
@@ -319,9 +327,10 @@ pub fn run_audit(
     account: &str,
     months: usize,
     limit: usize,
+    to: Option<&str>,
 ) -> Result<CommandResult, CommandFailure> {
     let runtime = open_runtime("report.audit", db, true)?;
-    let points = audit_payees(runtime.connection(), account, months, limit)
+    let points = audit_payees(runtime.connection(), account, months, limit, to)
         .map_err(|error| map_fin_error("report.audit", error))?;
     let total_minor = points.iter().map(|point| point.total_minor).sum::<i64>();
     Ok(CommandResult {
@@ -340,9 +349,13 @@ pub fn run_audit(
     })
 }
 
-pub fn run_summary(db: Option<&str>, months: usize) -> Result<CommandResult, CommandFailure> {
+pub fn run_summary(
+    db: Option<&str>,
+    months: usize,
+    to: Option<&str>,
+) -> Result<CommandResult, CommandFailure> {
     let runtime = open_runtime("report.summary", db, true)?;
-    let report = report_summary(runtime.connection(), runtime.config(), months)
+    let report = report_summary(runtime.connection(), runtime.config(), months, to)
         .map_err(|error| map_fin_error("report.summary", error))?;
 
     let mut groups = Vec::new();

@@ -43,6 +43,13 @@ pub fn current_reporting_month(connection: &Connection) -> Result<String> {
         .map_err(Into::into)
 }
 
+pub(crate) fn reporting_month(connection: &Connection, as_of: Option<&str>) -> Result<String> {
+    if let Some(as_of) = as_of {
+        return Ok(as_of.chars().take(7).collect());
+    }
+    current_reporting_month(connection)
+}
+
 #[must_use]
 pub fn summarize_cashflow_kpis(
     series: &[MonthlyCashflowPoint],
@@ -114,7 +121,7 @@ pub fn report_cashflow_kpis(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<CashflowKpis> {
-    let current_month = current_reporting_month(connection)?;
+    let current_month = reporting_month(connection, to)?;
     let series = group_monthly_cashflow(connection, config, group_id, from, to, months)?;
     Ok(summarize_cashflow_kpis(&series, &current_month))
 }

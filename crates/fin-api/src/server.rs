@@ -796,7 +796,7 @@ mod tests {
         );
 
         let (summary_status, summary_body) =
-            request_json(address, "/v1/report/summary?months=12").await?;
+            request_json(address, "/v1/report/summary?months=12&to=2026-03-31").await?;
         assert_eq!(summary_status, 200);
         assert_eq!(summary_body["ok"], true);
         assert_eq!(summary_body["meta"]["tool"], "report.summary");
@@ -835,7 +835,7 @@ mod tests {
 
         let (breakdown_status, breakdown_body) = request_json(
             address,
-            "/v1/report/categories?group=business&mode=breakdown",
+            "/v1/report/categories?group=business&mode=breakdown&to=2026-03-31",
         )
         .await?;
         assert_eq!(breakdown_status, 200);
@@ -847,8 +847,11 @@ mod tests {
                 .is_some_and(|items| !items.is_empty())
         );
 
-        let (median_status, median_body) =
-            request_json(address, "/v1/report/categories?group=business&mode=median").await?;
+        let (median_status, median_body) = request_json(
+            address,
+            "/v1/report/categories?group=business&mode=median&to=2026-03-31",
+        )
+        .await?;
         assert_eq!(median_status, 200);
         assert_eq!(median_body["ok"], true);
         assert_eq!(median_body["data"]["mode"], "median");
@@ -856,7 +859,7 @@ mod tests {
 
         let (audit_status, audit_body) = request_json(
             address,
-            "/v1/report/audit?account=Expenses%3ABusiness%3ASoftware&months=6&limit=10",
+            "/v1/report/audit?account=Expenses%3ABusiness%3ASoftware&months=6&limit=10&to=2026-03-31",
         )
         .await?;
         assert_eq!(audit_status, 200);
@@ -898,8 +901,11 @@ mod tests {
         })
         .await?;
 
-        let (kpis_status, kpis_body) =
-            request_json(address, "/v1/dashboard/kpis?group=business&months=18").await?;
+        let (kpis_status, kpis_body) = request_json(
+            address,
+            "/v1/dashboard/kpis?group=business&months=18&to=2026-03-31",
+        )
+        .await?;
         assert_eq!(kpis_status, 200);
         assert_eq!(kpis_body["ok"], true);
         assert_eq!(kpis_body["meta"]["tool"], "dashboard.kpis");
@@ -932,7 +938,7 @@ mod tests {
 
         let (hierarchy_status, hierarchy_body) = request_json(
             address,
-            "/v1/dashboard/hierarchy?group=personal&months=6&mode=monthly_average",
+            "/v1/dashboard/hierarchy?group=personal&months=6&mode=monthly_average&to=2026-03-31",
         )
         .await?;
         assert_eq!(hierarchy_status, 200);
@@ -948,7 +954,7 @@ mod tests {
 
         let (flow_status, flow_body) = request_json(
             address,
-            "/v1/dashboard/flow?group=personal&months=6&mode=monthly_average",
+            "/v1/dashboard/flow?group=personal&months=6&mode=monthly_average&to=2026-03-31",
         )
         .await?;
         assert_eq!(flow_status, 200);

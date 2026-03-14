@@ -612,6 +612,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
                 flag("--mode", "breakdown|median", false),
                 flag("--months", "Months window", false),
                 flag("--limit", "Max rows", false),
+                flag("--to", "End date YYYY-MM-DD", false),
             ],
             &["categories", "estimatedMonthly", "total"],
         ),
@@ -626,6 +627,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
                 flag("--account", "Expense account id", true),
                 flag("--months", "Months window", false),
                 flag("--limit", "Max rows", false),
+                flag("--to", "End date YYYY-MM-DD", false),
             ],
             &["payees", "total"],
         ),
@@ -636,7 +638,10 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "Comprehensive summary payload",
             ToolTraits::read_only(),
             "fin report summary",
-            vec![flag("--months", "Months window", false)],
+            vec![
+                flag("--months", "Months window", false),
+                flag("--to", "End date YYYY-MM-DD", false),
+            ],
             &[
                 "generatedAt",
                 "periodMonths",

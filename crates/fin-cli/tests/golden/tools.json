@@ -160,6 +160,12 @@
             "name": "--limit",
             "required": false,
             "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
+            "required": false,
+            "type": "string"
           }
         ],
         "rateLimit": null,
@@ -243,6 +249,12 @@
           {
             "description": "Max rows",
             "name": "--limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
             "required": false,
             "type": "string"
           }
@@ -392,6 +404,12 @@
           {
             "description": "Months window",
             "name": "--months",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "End date YYYY-MM-DD",
+            "name": "--to",
             "required": false,
             "type": "string"
           }

@@ -445,6 +445,7 @@ struct ReportCategoriesQuery {
     months: usize,
     #[serde(default = "default_categories_limit")]
     limit: usize,
+    to: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -455,6 +456,7 @@ struct ReportAuditQuery {
     months: usize,
     #[serde(default = "default_audit_limit")]
     limit: usize,
+    to: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -462,6 +464,7 @@ struct ReportAuditQuery {
 struct ReportSummaryQuery {
     #[serde(default = "default_report_months")]
     months: usize,
+    to: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1385,6 +1388,7 @@ async fn report_categories_handler(
                 &query.group,
                 query.months,
                 query.limit,
+                query.to.as_deref(),
             )
             .map_err(|error| ApiError::from_fin_error("report.categories", error, started))?;
             let total = categories
@@ -1408,6 +1412,7 @@ async fn report_categories_handler(
                 &query.group,
                 query.months,
                 query.limit,
+                query.to.as_deref(),
             )
             .map_err(|error| ApiError::from_fin_error("report.categories", error, started))?;
             let estimated_monthly = categories
@@ -1458,6 +1463,7 @@ async fn report_audit_handler(
         &query.account,
         query.months,
         query.limit,
+        query.to.as_deref(),
     )
     .map_err(|error| ApiError::from_fin_error("report.audit", error, started))?;
     let total = payees.iter().map(|point| point.total_minor).sum::<i64>();
@@ -1481,8 +1487,13 @@ async fn report_summary_handler(
     let started = Instant::now();
     let query = parse_query(query, "report.summary", started)?;
     let runtime = open_read_runtime(&state, "report.summary", started)?;
-    let report = report_summary(runtime.connection(), runtime.config(), query.months)
-        .map_err(|error| ApiError::from_fin_error("report.summary", error, started))?;
+    let report = report_summary(
+        runtime.connection(),
+        runtime.config(),
+        query.months,
+        query.to.as_deref(),
+    )
+    .map_err(|error| ApiError::from_fin_error("report.summary", error, started))?;
     let count = report.groups.len();
 
     Ok(success(

@@ -89,6 +89,7 @@ fn fetch_summary_dashboard(
         runtime.connection(),
         runtime.config(),
         context.trailing_months,
+        None,
     )
     .map_err(|error| error.to_string())?;
     let mut groups = Vec::new();
@@ -544,6 +545,7 @@ fn fetch_categories_dashboard(
         &group_id,
         context.months,
         context.pareto_limit,
+        None,
     )
     .map_err(|error| error.to_string())?;
     if breakdown.is_empty() {

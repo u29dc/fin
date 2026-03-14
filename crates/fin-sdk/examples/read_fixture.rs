@@ -81,7 +81,7 @@ fn main() {
         "summary-dashboard" => {
             let payload = run_iterations(iterations, || {
                 let summary =
-                    report_summary(&connection, &loaded.config, 12).expect("summary report");
+                    report_summary(&connection, &loaded.config, 12, None).expect("summary report");
                 let mut groups = Vec::new();
                 for group_id in loaded.config.group_ids() {
                     let runway = report_runway(&connection, &loaded.config, &group_id, None, None)
@@ -111,7 +111,7 @@ fn main() {
         }
         "summary-report" => {
             let payload = run_iterations(iterations, || {
-                report_summary(&connection, &loaded.config, 12).expect("summary report")
+                report_summary(&connection, &loaded.config, 12, None).expect("summary report")
             });
             serde_json::to_writer(std::io::stdout(), &payload).expect("write summary report");
         }

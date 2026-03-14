@@ -993,7 +993,7 @@ mod tests {
         assert_eq!(cashflow.len(), 24);
         assert!(totals.income_minor > totals.expense_minor);
 
-        let summary = report_summary(&connection, &loaded.config, 12).expect("summary");
+        let summary = report_summary(&connection, &loaded.config, 12, None).expect("summary");
         assert_eq!(summary.groups.len(), 3);
         assert!(summary.consolidated.net_worth_minor > 0);
     }
