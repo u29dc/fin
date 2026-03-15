@@ -39,6 +39,10 @@ pub use compat::{
     AccountSummary, ConfigShowData, ConfigValidationResult, FinSdkError, GroupMetadata,
     ValidationError, build_config_show, resolve_config_path, run_health, validate_config,
 };
+pub use config::{
+    ExpenseReserveBasis, ReserveConfig, ReserveGroupConfig, ReserveMode, ReserveModeConfig,
+    ReserveModesConfig, ResolvedReserveConfig, ResolvedReserveGroupConfig, ResolvedReservePolicy,
+};
 pub use contracts::{
     Envelope, EnvelopeMeta, ErrorEnvelope, ErrorPayload, GlobalFlag, OutputFieldSchema,
     OutputSchema, ParameterMeta, SuccessEnvelope, ToolMeta, global_flags, tool_registry,
@@ -71,7 +75,8 @@ pub use queries::{
 };
 pub use reports::{
     CashflowTotals, ConsolidatedSummary, GroupSummary, HealthPoint, ReserveBreakdownPoint,
-    RunwayPoint, SummaryReport, report_cashflow, report_health, report_reserves, report_runway,
+    RunwayPoint, SummaryReport, TaxReserveBasisKind, report_cashflow, report_health,
+    report_health_with_mode, report_reserves, report_reserves_with_mode, report_runway,
     report_summary,
 };
 pub use runtime::{RuntimeContext, RuntimeContextOptions};

@@ -152,14 +152,15 @@ describe("loadTransactionsPageData", () => {
 	test("returns shell state and initial URL selections without loading list data", async () => {
 		const configShow: ConfigShowData = {
 			groups: [
-				{ id: "business", label: "Business", icon: "briefcase", taxType: "corp", expenseReserveMonths: 12 },
-				{ id: "personal", label: "Personal", icon: "user", taxType: "income", expenseReserveMonths: 6 },
+				{ id: "business", label: "Business", icon: "briefcase", taxType: "corp", expenseReserveMonths: 12, defaultReserveMode: "recurring" },
+				{ id: "personal", label: "Personal", icon: "user", taxType: "income", expenseReserveMonths: 6, defaultReserveMode: "conservative" },
 			],
 			accounts: {
 				business: [{ id: "Assets:Business:Monzo", label: "Business Monzo", provider: "monzo" }],
 				personal: [{ id: "Assets:Personal:Monzo", label: "Personal Monzo", provider: "monzo" }],
 			},
 			financial: {},
+			reserves: { defaultMode: "recurring", modes: {}, groups: {} },
 			configPath: "/tmp/fin.config.toml",
 		};
 		const health: HealthReport = {

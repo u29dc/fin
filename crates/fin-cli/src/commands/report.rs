@@ -3,10 +3,10 @@ use std::collections::BTreeMap;
 use serde_json::json;
 
 use fin_sdk::{
-    BurnReportOptions, OwnershipMode, TwoPoolRunwayOptions, TwoPoolScenarioKind, audit_payees,
-    group_category_breakdown, group_category_monthly_median, report_burn, report_cashflow,
-    report_health, report_reserves, report_runway, report_summary, report_two_pool_runway,
-    view_accounts,
+    BurnReportOptions, OwnershipMode, ReserveMode, TwoPoolRunwayOptions, TwoPoolScenarioKind,
+    audit_payees, group_category_breakdown, group_category_monthly_median, report_burn,
+    report_cashflow, report_health_with_mode, report_reserves_with_mode, report_runway,
+    report_summary, report_two_pool_runway, view_accounts,
 };
 
 use crate::commands::{CommandFailure, CommandResult, map_fin_error, open_runtime};
@@ -22,11 +22,31 @@ pub struct RunwayCommandArgs<'a> {
     pub mode: &'a str,
     pub scenario: &'a str,
     pub ownership_mode: &'a str,
+    pub reserve_mode: Option<&'a str>,
     pub salary_monthly_minor: Option<i64>,
     pub dividends_monthly_minor: Option<i64>,
     pub include_joint_expenses: Option<bool>,
     pub from: Option<&'a str>,
     pub to: Option<&'a str>,
+}
+
+fn parse_reserve_mode(
+    tool: &'static str,
+    reserve_mode: Option<&str>,
+) -> Result<Option<ReserveMode>, CommandFailure> {
+    reserve_mode
+        .map(|value| {
+            value.parse::<ReserveMode>().map_err(|message| {
+                map_fin_error(
+                    tool,
+                    fin_sdk::FinError::InvalidInput {
+                        code: "INVALID_RESERVE_MODE",
+                        message,
+                    },
+                )
+            })
+        })
+        .transpose()
 }
 
 pub fn run_cashflow(
@@ -155,16 +175,44 @@ pub fn run_burn(
 pub fn run_health(
     db: Option<&str>,
     group: &str,
+    reserve_mode: Option<&str>,
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<CommandResult, CommandFailure> {
     let runtime = open_runtime("report.health", db, true)?;
-    let series = report_health(runtime.connection(), runtime.config(), group, from, to)
-        .map_err(|error| map_fin_error("report.health", error))?;
+    let reserve_mode = parse_reserve_mode("report.health", reserve_mode)?;
+    let series = report_health_with_mode(
+        runtime.connection(),
+        runtime.config(),
+        group,
+        from,
+        to,
+        reserve_mode,
+    )
+    .map_err(|error| map_fin_error("report.health", error))?;
+    let reserve_series = report_reserves_with_mode(
+        runtime.connection(),
+        runtime.config(),
+        group,
+        from,
+        to,
+        reserve_mode,
+    )
+    .map_err(|error| map_fin_error("report.health", error))?;
     let latest = series.last().cloned();
+    let reserve_latest = reserve_series.last().cloned();
     Ok(CommandResult {
         tool: "report.health",
         data: json!({
+            "reserveMode": latest.as_ref().map(|value| value.reserve_mode),
+            "expenseReserveBasisKind": latest.as_ref().map(|value| value.expense_reserve_basis_kind),
+            "expenseReserveMonthlyBasisMinor": latest.as_ref().map(|value| value.expense_reserve_monthly_basis_minor),
+            "expenseReserveMonths": latest.as_ref().map(|value| value.expense_reserve_months),
+            "expenseReserveFactor": latest.as_ref().map(|value| value.expense_reserve_factor),
+            "expenseReserveLookbackMonths": latest.as_ref().map(|value| value.expense_reserve_lookback_months),
+            "taxReserveBasisKind": reserve_latest.as_ref().map(|value| value.tax_reserve_basis_kind),
+            "taxReserveBasisDescription": reserve_latest.as_ref().map(|value| value.tax_reserve_basis_description.clone()),
+            "reserveLatest": reserve_latest,
             "series": series,
             "latest": latest,
         }),
@@ -188,6 +236,7 @@ pub fn run_runway(args: RunwayCommandArgs<'_>) -> Result<CommandResult, CommandF
         mode,
         scenario,
         ownership_mode,
+        reserve_mode,
         salary_monthly_minor,
         dividends_monthly_minor,
         include_joint_expenses,
@@ -226,12 +275,14 @@ pub fn run_runway(args: RunwayCommandArgs<'_>) -> Result<CommandResult, CommandF
                 },
             )
         })?;
+        let reserve_mode = parse_reserve_mode("report.runway", reserve_mode)?;
         let report = report_two_pool_runway(
             runtime.connection(),
             runtime.config(),
             &TwoPoolRunwayOptions {
                 months,
                 to,
+                reserve_mode,
                 ownership_mode,
                 scenario,
                 salary_monthly_minor,
@@ -250,6 +301,7 @@ pub fn run_runway(args: RunwayCommandArgs<'_>) -> Result<CommandResult, CommandF
             tool: "report.runway",
             data: json!({
                 "mode": "two_pool",
+                "reserveMode": report.reserve_mode,
                 "ownershipMode": report.ownership_mode,
                 "groups": ["business", "personal", "joint"],
                 "series": [],
@@ -282,7 +334,8 @@ pub fn run_runway(args: RunwayCommandArgs<'_>) -> Result<CommandResult, CommandF
         ));
     }
 
-    if salary_monthly_minor.is_some()
+    if reserve_mode.is_some()
+        || salary_monthly_minor.is_some()
         || dividends_monthly_minor.is_some()
         || include_joint_expenses.is_some()
         || scenario != "tax-efficient"
@@ -291,8 +344,9 @@ pub fn run_runway(args: RunwayCommandArgs<'_>) -> Result<CommandResult, CommandF
             "report.runway",
             fin_sdk::FinError::InvalidInput {
                 code: "INVALID_INPUT",
-                message: "historical runway does not accept scenario or two-pool override flags"
-                    .to_owned(),
+                message:
+                    "historical runway does not accept reserve-mode, scenario, or two-pool override flags"
+                        .to_owned(),
             },
         ));
     }
@@ -351,6 +405,7 @@ pub fn run_runway(args: RunwayCommandArgs<'_>) -> Result<CommandResult, CommandF
             tool: "report.runway",
             data: json!({
                 "mode": "historical",
+                "reserveMode": null,
                 "ownershipMode": null,
                 "series": series,
                 "latest": latest,
@@ -407,6 +462,7 @@ pub fn run_runway(args: RunwayCommandArgs<'_>) -> Result<CommandResult, CommandF
         tool: "report.runway",
         data: json!({
             "mode": "historical",
+            "reserveMode": null,
             "ownershipMode": null,
             "series": series,
             "latest": latest,
@@ -426,20 +482,47 @@ pub fn run_runway(args: RunwayCommandArgs<'_>) -> Result<CommandResult, CommandF
 pub fn run_reserves(
     db: Option<&str>,
     group: &str,
+    reserve_mode: Option<&str>,
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<CommandResult, CommandFailure> {
     let runtime = open_runtime("report.reserves", db, true)?;
-    let series = report_reserves(runtime.connection(), runtime.config(), group, from, to)
-        .map_err(|error| map_fin_error("report.reserves", error))?;
+    let reserve_mode = parse_reserve_mode("report.reserves", reserve_mode)?;
+    let series = report_reserves_with_mode(
+        runtime.connection(),
+        runtime.config(),
+        group,
+        from,
+        to,
+        reserve_mode,
+    )
+    .map_err(|error| map_fin_error("report.reserves", error))?;
     let latest = series.last().cloned();
     Ok(CommandResult {
         tool: "report.reserves",
         data: json!({
+            "reserveMode": latest.as_ref().map(|value| value.reserve_mode),
+            "expenseReserveBasisKind": latest.as_ref().map(|value| value.expense_reserve_basis_kind),
+            "expenseReserveMonthlyBasisMinor": latest.as_ref().map(|value| value.expense_reserve_monthly_basis_minor),
+            "expenseReserveMonths": latest.as_ref().map(|value| value.expense_reserve_months),
+            "expenseReserveFactor": latest.as_ref().map(|value| value.expense_reserve_factor),
+            "expenseReserveLookbackMonths": latest.as_ref().map(|value| value.expense_reserve_lookback_months),
+            "taxReserveBasisKind": latest.as_ref().map(|value| value.tax_reserve_basis_kind),
+            "taxReserveBasisDescription": latest.as_ref().map(|value| value.tax_reserve_basis_description.clone()),
             "series": series,
             "latest": latest,
         }),
-        text: format!("{} points", series.len()),
+        text: latest
+            .as_ref()
+            .map(|point| {
+                format!(
+                    "{} points | mode={} available={}",
+                    series.len(),
+                    point.reserve_mode.as_str(),
+                    point.available_minor,
+                )
+            })
+            .unwrap_or_else(|| format!("{} points", series.len())),
         meta: MetaExtras {
             count: Some(series.len()),
             total: None,

@@ -58,6 +58,41 @@ burn_rate_exclude_accounts = ["Expenses:Taxes:VAT", "Expenses:Taxes:HMRC", "Expe
 burn_rate_method = "median"
 
 # =============================================================================
+# RESERVES
+# Reserve-aware outputs use the selected mode. Conservative preserves the old
+# historical-median reserve style; recurring/aggressive use the shared burn
+# recurring baseline.
+# =============================================================================
+
+[reserves]
+default_mode = "conservative"
+
+[reserves.modes.conservative]
+expense_basis = "historical_median_expense"
+factor = 1.0
+
+[reserves.modes.recurring]
+expense_basis = "recurring_baseline"
+expense_months = 6
+factor = 1.0
+lookback_months = 6
+
+[reserves.modes.aggressive]
+expense_basis = "recurring_baseline"
+expense_months = 3
+factor = 1.0
+lookback_months = 6
+
+[reserves.groups.business]
+default_mode = "conservative"
+
+[reserves.groups.personal]
+default_mode = "conservative"
+
+[reserves.groups.joint]
+default_mode = "conservative"
+
+# =============================================================================
 # GROUPS
 # =============================================================================
 

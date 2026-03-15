@@ -42,6 +42,29 @@ export type ConfigGroup = {
 	icon?: string | null;
 	taxType: string;
 	expenseReserveMonths: number;
+	defaultReserveMode: ReserveMode;
+};
+
+export type ReserveMode = "conservative" | "recurring" | "aggressive";
+
+export type ExpenseReserveBasis = "historical_median_expense" | "recurring_baseline";
+
+export type ConfigReserveMode = {
+	expenseBasis: ExpenseReserveBasis;
+	expenseMonths: number;
+	factor: number;
+	lookbackMonths?: number | null;
+};
+
+export type ConfigReserveGroup = {
+	defaultMode: ReserveMode;
+	modes: Record<string, ConfigReserveMode>;
+};
+
+export type ConfigReserves = {
+	defaultMode: ReserveMode;
+	modes: Record<string, ConfigReserveMode>;
+	groups: Record<string, ConfigReserveGroup>;
 };
 
 export type ConfigAccount = {
@@ -55,6 +78,7 @@ export type ConfigShowData = {
 	groups: ConfigGroup[];
 	accounts: Record<string, ConfigAccount[]>;
 	financial: Record<string, unknown>;
+	reserves: ConfigReserves;
 	configPath: string;
 };
 

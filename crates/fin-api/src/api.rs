@@ -16,19 +16,19 @@ use fin_sdk::{
     ErrorEnvelope, ErrorPayload, ExpenseHierarchyNode, ExpenseHierarchyNodeKind, FinError,
     FinSdkError, FlowGraph, FlowNodeKind, FlowQueryOptions, GlobalFlag, GroupAllocationSnapshot,
     HealthCheckOptions, HealthPoint, HealthReport, HierarchyQueryOptions, JournalEntryRow,
-    LedgerQueryOptions, ReserveBreakdownPoint, RollupMode, RuntimeContext, RuntimeContextOptions,
-    RunwayPoint, RunwayProjectionOptions, RunwayProjectionReport, SDK_VERSION, SortDirection,
-    SuccessEnvelope, SummaryReport, ToolMeta, TransactionCursor, TransactionDetail,
-    TransactionListRow, TransactionPageQuery, TransactionSortField, ValidationError,
-    account_daily_balance_series, audit_payees, build_config_show, cumulative_contribution_series,
-    discover_descriptions, discover_unmapped_descriptions, get_balance_sheet, global_flags,
-    group_category_breakdown, group_category_monthly_median, group_daily_balance_series,
-    group_expense_hierarchy, group_flow_graph, ledger_entry_count, load_transaction_detail,
-    merged_accounts_daily_balance_series, project_consolidated_runway, project_group_runway,
-    query_transactions_page, report_cashflow, report_cashflow_kpis,
-    report_group_allocation_for_month, report_health, report_reserves, report_runway,
-    report_summary, run_health_checks, sdk_banner, tool_registry, validate_config, view_accounts,
-    view_ledger,
+    LedgerQueryOptions, ReserveBreakdownPoint, ReserveMode, RollupMode, RuntimeContext,
+    RuntimeContextOptions, RunwayPoint, RunwayProjectionOptions, RunwayProjectionReport,
+    SDK_VERSION, SortDirection, SuccessEnvelope, SummaryReport, ToolMeta, TransactionCursor,
+    TransactionDetail, TransactionListRow, TransactionPageQuery, TransactionSortField,
+    ValidationError, account_daily_balance_series, audit_payees, build_config_show,
+    cumulative_contribution_series, discover_descriptions, discover_unmapped_descriptions,
+    get_balance_sheet, global_flags, group_category_breakdown, group_category_monthly_median,
+    group_daily_balance_series, group_expense_hierarchy, group_flow_graph, ledger_entry_count,
+    load_transaction_detail, merged_accounts_daily_balance_series, project_consolidated_runway,
+    project_group_runway, query_transactions_page, report_cashflow, report_cashflow_kpis,
+    report_group_allocation_for_month, report_health_with_mode, report_reserves_with_mode,
+    report_runway, report_summary, run_health_checks, sdk_banner, tool_registry, validate_config,
+    view_accounts, view_ledger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -412,6 +412,7 @@ struct ReportCashflowQuery {
 #[serde(rename_all = "camelCase")]
 struct ReportHealthQuery {
     group: String,
+    reserve_mode: Option<String>,
     from: Option<String>,
     to: Option<String>,
 }
@@ -431,6 +432,7 @@ struct ReportRunwayQuery {
 #[serde(rename_all = "camelCase")]
 struct ReportReservesQuery {
     group: String,
+    reserve_mode: Option<String>,
     from: Option<String>,
     to: Option<String>,
 }
@@ -667,6 +669,8 @@ struct CashflowPayload {
 
 #[derive(Debug, Serialize)]
 struct HealthSeriesPayload {
+    reserve_mode: Option<ReserveMode>,
+    reserve_latest: Option<ReserveBreakdownPoint>,
     series: Vec<HealthPoint>,
     latest: Option<HealthPoint>,
 }
@@ -680,6 +684,7 @@ struct RunwayPayload {
 
 #[derive(Debug, Serialize)]
 struct ReservesPayload {
+    reserve_mode: Option<ReserveMode>,
     series: Vec<ReserveBreakdownPoint>,
     latest: Option<ReserveBreakdownPoint>,
 }
@@ -1260,20 +1265,37 @@ async fn report_health_handler(
     let started = Instant::now();
     let query = parse_query(query, "report.health", started)?;
     let runtime = open_read_runtime(&state, "report.health", started)?;
-    let series = report_health(
+    let reserve_mode = parse_reserve_mode(query.reserve_mode.as_deref(), "report.health", started)?;
+    let series = report_health_with_mode(
         runtime.connection(),
         runtime.config(),
         &query.group,
         query.from.as_deref(),
         query.to.as_deref(),
+        reserve_mode,
+    )
+    .map_err(|error| ApiError::from_fin_error("report.health", error, started))?;
+    let reserve_series = report_reserves_with_mode(
+        runtime.connection(),
+        runtime.config(),
+        &query.group,
+        query.from.as_deref(),
+        query.to.as_deref(),
+        reserve_mode,
     )
     .map_err(|error| ApiError::from_fin_error("report.health", error, started))?;
     let latest = series.last().cloned();
+    let reserve_latest = reserve_series.last().cloned();
     let count = series.len();
 
     Ok(success(
         "report.health",
-        HealthSeriesPayload { series, latest },
+        HealthSeriesPayload {
+            reserve_mode: latest.as_ref().map(|point| point.reserve_mode),
+            reserve_latest,
+            series,
+            latest,
+        },
         started,
         MetaExtras {
             count: Some(count),
@@ -1350,12 +1372,15 @@ async fn report_reserves_handler(
     let started = Instant::now();
     let query = parse_query(query, "report.reserves", started)?;
     let runtime = open_read_runtime(&state, "report.reserves", started)?;
-    let series = report_reserves(
+    let reserve_mode =
+        parse_reserve_mode(query.reserve_mode.as_deref(), "report.reserves", started)?;
+    let series = report_reserves_with_mode(
         runtime.connection(),
         runtime.config(),
         &query.group,
         query.from.as_deref(),
         query.to.as_deref(),
+        reserve_mode,
     )
     .map_err(|error| ApiError::from_fin_error("report.reserves", error, started))?;
     let latest = series.last().cloned();
@@ -1363,7 +1388,11 @@ async fn report_reserves_handler(
 
     Ok(success(
         "report.reserves",
-        ReservesPayload { series, latest },
+        ReservesPayload {
+            reserve_mode: latest.as_ref().map(|point| point.reserve_mode),
+            series,
+            latest,
+        },
         started,
         MetaExtras {
             count: Some(count),
@@ -1872,6 +1901,26 @@ async fn fallback_handler(uri: Uri) -> ApiError {
         "Call GET /v1/tools to inspect available capabilities.",
         Instant::now(),
     )
+}
+
+fn parse_reserve_mode(
+    reserve_mode: Option<&str>,
+    tool: &'static str,
+    started: Instant,
+) -> Result<Option<ReserveMode>, ApiError> {
+    reserve_mode
+        .map(|value| {
+            value.parse::<ReserveMode>().map_err(|message| {
+                ApiError::bad_request(
+                    tool,
+                    "INVALID_RESERVE_MODE",
+                    message,
+                    "Use reserveMode=conservative, recurring, or aggressive.",
+                    started,
+                )
+            })
+        })
+        .transpose()
 }
 
 fn parse_query<T>(

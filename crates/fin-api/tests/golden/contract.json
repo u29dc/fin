@@ -65,6 +65,7 @@
       },
       "groups": [
         {
+          "defaultReserveMode": "conservative",
           "expenseReserveMonths": 3,
           "icon": "user",
           "id": "personal",
@@ -72,6 +73,7 @@
           "taxType": "income"
         },
         {
+          "defaultReserveMode": "conservative",
           "expenseReserveMonths": 4,
           "icon": "home",
           "id": "joint",
@@ -79,13 +81,104 @@
           "taxType": "none"
         },
         {
+          "defaultReserveMode": "conservative",
           "expenseReserveMonths": 2,
           "icon": "briefcase",
           "id": "business",
           "label": "Business",
           "taxType": "corp"
         }
-      ]
+      ],
+      "reserves": {
+        "defaultMode": "conservative",
+        "groups": {
+          "business": {
+            "defaultMode": "conservative",
+            "modes": {
+              "aggressive": {
+                "expenseBasis": "recurring_baseline",
+                "expenseMonths": 3.0,
+                "factor": 1.0,
+                "lookbackMonths": 6
+              },
+              "conservative": {
+                "expenseBasis": "historical_median_expense",
+                "expenseMonths": 2.0,
+                "factor": 1.0
+              },
+              "recurring": {
+                "expenseBasis": "recurring_baseline",
+                "expenseMonths": 6.0,
+                "factor": 1.0,
+                "lookbackMonths": 6
+              }
+            }
+          },
+          "joint": {
+            "defaultMode": "conservative",
+            "modes": {
+              "aggressive": {
+                "expenseBasis": "recurring_baseline",
+                "expenseMonths": 3.0,
+                "factor": 1.0,
+                "lookbackMonths": 6
+              },
+              "conservative": {
+                "expenseBasis": "historical_median_expense",
+                "expenseMonths": 4.0,
+                "factor": 1.0
+              },
+              "recurring": {
+                "expenseBasis": "recurring_baseline",
+                "expenseMonths": 6.0,
+                "factor": 1.0,
+                "lookbackMonths": 6
+              }
+            }
+          },
+          "personal": {
+            "defaultMode": "conservative",
+            "modes": {
+              "aggressive": {
+                "expenseBasis": "recurring_baseline",
+                "expenseMonths": 3.0,
+                "factor": 1.0,
+                "lookbackMonths": 6
+              },
+              "conservative": {
+                "expenseBasis": "historical_median_expense",
+                "expenseMonths": 3.0,
+                "factor": 1.0
+              },
+              "recurring": {
+                "expenseBasis": "recurring_baseline",
+                "expenseMonths": 6.0,
+                "factor": 1.0,
+                "lookbackMonths": 6
+              }
+            }
+          }
+        },
+        "modes": {
+          "aggressive": {
+            "expenseBasis": "recurring_baseline",
+            "expenseMonths": 3.0,
+            "factor": 1.0,
+            "lookbackMonths": 6
+          },
+          "conservative": {
+            "expenseBasis": "historical_median_expense",
+            "expenseMonths": 3.0,
+            "factor": 1.0
+          },
+          "recurring": {
+            "expenseBasis": "recurring_baseline",
+            "expenseMonths": 6.0,
+            "factor": 1.0,
+            "lookbackMonths": 6
+          }
+        }
+      }
     },
     "meta": {
       "elapsed": 0,
@@ -1286,201 +1379,559 @@
   "report_health": {
     "data": {
       "latest": {
+        "balance_minor": 33478103,
         "date": "2026-12-31",
-        "health_minor": 32241913
+        "expense_reserve_basis_kind": "historical_median_expense",
+        "expense_reserve_factor": 1.0,
+        "expense_reserve_minor": 1236190,
+        "expense_reserve_monthly_basis_minor": 618095,
+        "expense_reserve_months": 2.0,
+        "health_minor": 32241913,
+        "reserve_mode": "conservative"
       },
+      "reserve_latest": {
+        "available_minor": 30733458,
+        "balance_minor": 33478103,
+        "date": "2026-12-31",
+        "expense_reserve_basis_kind": "historical_median_expense",
+        "expense_reserve_factor": 1.0,
+        "expense_reserve_minor": 1236190,
+        "expense_reserve_monthly_basis_minor": 618095,
+        "expense_reserve_months": 2.0,
+        "reserve_mode": "conservative",
+        "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+        "tax_reserve_basis_kind": "ytd_profit",
+        "tax_reserve_minor": 1508455
+      },
+      "reserve_mode": "conservative",
       "series": [
         {
+          "balance_minor": 2752465,
           "date": "2023-01-31",
-          "health_minor": 1516275
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 1516275,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 3444370,
           "date": "2023-02-28",
-          "health_minor": 2208180
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 2208180,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 4125715,
           "date": "2023-03-31",
-          "health_minor": 2889525
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 2889525,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 4805680,
           "date": "2023-04-30",
-          "health_minor": 3569490
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 3569490,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 5484264,
           "date": "2023-05-31",
-          "health_minor": 4248074
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 4248074,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 6143108,
           "date": "2023-06-30",
-          "health_minor": 4906918
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 4906918,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 6800572,
           "date": "2023-07-31",
-          "health_minor": 5564382
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 5564382,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 7447476,
           "date": "2023-08-31",
-          "health_minor": 6211286
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 6211286,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 8083821,
           "date": "2023-09-30",
-          "health_minor": 6847631
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 6847631,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 8777106,
           "date": "2023-10-31",
-          "health_minor": 7540916
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 7540916,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 9469011,
           "date": "2023-11-30",
-          "health_minor": 8232821
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 8232821,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 9739536,
           "date": "2023-12-31",
-          "health_minor": 8503346
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 8503346,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 10410321,
           "date": "2024-01-31",
-          "health_minor": 9174131
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 9174131,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 11079726,
           "date": "2024-02-29",
-          "health_minor": 9843536
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 9843536,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 11747750,
           "date": "2024-03-31",
-          "health_minor": 10511560
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 10511560,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 12405214,
           "date": "2024-04-30",
-          "health_minor": 11169024
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 11169024,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 13052118,
           "date": "2024-05-31",
-          "health_minor": 11815928
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 11815928,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 13688463,
           "date": "2024-06-30",
-          "health_minor": 12452273
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 12452273,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 14390928,
           "date": "2024-07-31",
-          "health_minor": 13154738
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 13154738,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 15073653,
           "date": "2024-08-31",
-          "health_minor": 13837463
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 13837463,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 15754998,
           "date": "2024-09-30",
-          "health_minor": 14518808
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 14518808,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 16434963,
           "date": "2024-10-31",
-          "health_minor": 15198773
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 15198773,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 17104368,
           "date": "2024-11-30",
-          "health_minor": 15868178
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 15868178,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 17763213,
           "date": "2024-12-31",
-          "health_minor": 16527023
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 16527023,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 18420677,
           "date": "2025-01-31",
-          "health_minor": 17184487
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 17184487,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 19076761,
           "date": "2025-02-28",
-          "health_minor": 17840571
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 17840571,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 19713105,
           "date": "2025-03-31",
-          "health_minor": 18476915
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 18476915,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 20046390,
           "date": "2025-04-30",
-          "health_minor": 18810200
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 18810200,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 20738295,
           "date": "2025-05-31",
-          "health_minor": 19502105
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 19502105,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 21419640,
           "date": "2025-06-30",
-          "health_minor": 20183450
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 20183450,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 22090425,
           "date": "2025-07-31",
-          "health_minor": 20854235
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 20854235,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 22759830,
           "date": "2025-08-31",
-          "health_minor": 21523640
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 21523640,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 23427855,
           "date": "2025-09-30",
-          "health_minor": 22191665
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 22191665,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 24085320,
           "date": "2025-10-31",
-          "health_minor": 22849130
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 22849130,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 24732224,
           "date": "2025-11-30",
-          "health_minor": 23496034
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 23496034,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 25377748,
           "date": "2025-12-31",
-          "health_minor": 24141558
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 24141558,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 26080212,
           "date": "2026-01-31",
-          "health_minor": 24844022
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 24844022,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 26762937,
           "date": "2026-02-28",
-          "health_minor": 25526747
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 25526747,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 27444282,
           "date": "2026-03-31",
-          "health_minor": 26208092
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 26208092,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 28124247,
           "date": "2026-04-30",
-          "health_minor": 26888057
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 26888057,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 28793652,
           "date": "2026-05-31",
-          "health_minor": 27557462
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 27557462,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 29452497,
           "date": "2026-06-30",
-          "health_minor": 28216307
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 28216307,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 30109962,
           "date": "2026-07-31",
-          "health_minor": 28873772
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 28873772,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 30766046,
           "date": "2026-08-31",
-          "health_minor": 29529856
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 29529856,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 31402390,
           "date": "2026-09-30",
-          "health_minor": 30166200
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 30166200,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 32104854,
           "date": "2026-10-31",
-          "health_minor": 30868664
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 30868664,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 32796758,
           "date": "2026-11-30",
-          "health_minor": 31560568
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 31560568,
+          "reserve_mode": "conservative"
         },
         {
+          "balance_minor": 33478103,
           "date": "2026-12-31",
-          "health_minor": 32241913
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
+          "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "health_minor": 32241913,
+          "reserve_mode": "conservative"
         }
       ]
     },
@@ -1498,344 +1949,688 @@
         "available_minor": 30733458,
         "balance_minor": 33478103,
         "date": "2026-12-31",
+        "expense_reserve_basis_kind": "historical_median_expense",
+        "expense_reserve_factor": 1.0,
         "expense_reserve_minor": 1236190,
+        "expense_reserve_monthly_basis_minor": 618095,
+        "expense_reserve_months": 2.0,
+        "reserve_mode": "conservative",
+        "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+        "tax_reserve_basis_kind": "ytd_profit",
         "tax_reserve_minor": 1508455
       },
+      "reserve_mode": "conservative",
       "series": [
         {
           "available_minor": 1340659,
           "balance_minor": 2752465,
           "date": "2023-01-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 175616
         },
         {
           "available_minor": 1859587,
           "balance_minor": 3444370,
           "date": "2023-02-28",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 348593
         },
         {
           "available_minor": 2370596,
           "balance_minor": 4125715,
           "date": "2023-03-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 518929
         },
         {
           "available_minor": 3399499,
           "balance_minor": 4805680,
           "date": "2023-04-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 169991
         },
         {
           "available_minor": 3908437,
           "balance_minor": 5484264,
           "date": "2023-05-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 339637
         },
         {
           "available_minor": 4402570,
           "balance_minor": 6143108,
           "date": "2023-06-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 504348
         },
         {
           "available_minor": 4895668,
           "balance_minor": 6800572,
           "date": "2023-07-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 668714
         },
         {
           "available_minor": 5380846,
           "balance_minor": 7447476,
           "date": "2023-08-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 830440
         },
         {
           "available_minor": 5858104,
           "balance_minor": 8083821,
           "date": "2023-09-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 989527
         },
         {
           "available_minor": 6378068,
           "balance_minor": 8777106,
           "date": "2023-10-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1162848
         },
         {
           "available_minor": 6896997,
           "balance_minor": 9469011,
           "date": "2023-11-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1335824
         },
         {
           "available_minor": 7099891,
           "balance_minor": 9739536,
           "date": "2023-12-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1403455
         },
         {
           "available_minor": 7602979,
           "balance_minor": 10410321,
           "date": "2024-01-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1571152
         },
         {
           "available_minor": 8105033,
           "balance_minor": 11079726,
           "date": "2024-02-29",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1738503
         },
         {
           "available_minor": 8606051,
           "balance_minor": 11747750,
           "date": "2024-03-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1905509
         },
         {
           "available_minor": 11004658,
           "balance_minor": 12405214,
           "date": "2024-04-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 164366
         },
         {
           "available_minor": 11489836,
           "balance_minor": 13052118,
           "date": "2024-05-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 326092
         },
         {
           "available_minor": 11967095,
           "balance_minor": 13688463,
           "date": "2024-06-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 485178
         },
         {
           "available_minor": 12493943,
           "balance_minor": 14390928,
           "date": "2024-07-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 660795
         },
         {
           "available_minor": 13005987,
           "balance_minor": 15073653,
           "date": "2024-08-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 831476
         },
         {
           "available_minor": 13516996,
           "balance_minor": 15754998,
           "date": "2024-09-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1001812
         },
         {
           "available_minor": 14026970,
           "balance_minor": 16434963,
           "date": "2024-10-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1171803
         },
         {
           "available_minor": 14529023,
           "balance_minor": 17104368,
           "date": "2024-11-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1339155
         },
         {
           "available_minor": 15023157,
           "balance_minor": 17763213,
           "date": "2024-12-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1503866
         },
         {
           "available_minor": 15516255,
           "balance_minor": 18420677,
           "date": "2025-01-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1668232
         },
         {
           "available_minor": 16008318,
           "balance_minor": 19076761,
           "date": "2025-02-28",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1832253
         },
         {
           "available_minor": 16485576,
           "balance_minor": 19713105,
           "date": "2025-03-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1991339
         },
         {
           "available_minor": 18726879,
           "balance_minor": 20046390,
           "date": "2025-04-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 83321
         },
         {
           "available_minor": 19245807,
           "balance_minor": 20738295,
           "date": "2025-05-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 256298
         },
         {
           "available_minor": 19756816,
           "balance_minor": 21419640,
           "date": "2025-06-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 426634
         },
         {
           "available_minor": 20259905,
           "balance_minor": 22090425,
           "date": "2025-07-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 594330
         },
         {
           "available_minor": 20761959,
           "balance_minor": 22759830,
           "date": "2025-08-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 761681
         },
         {
           "available_minor": 21262977,
           "balance_minor": 23427855,
           "date": "2025-09-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 928688
         },
         {
           "available_minor": 21756076,
           "balance_minor": 24085320,
           "date": "2025-10-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1093054
         },
         {
           "available_minor": 22241254,
           "balance_minor": 24732224,
           "date": "2025-11-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1254780
         },
         {
           "available_minor": 22725397,
           "balance_minor": 25377748,
           "date": "2025-12-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1416161
         },
         {
           "available_minor": 23252245,
           "balance_minor": 26080212,
           "date": "2026-01-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1591777
         },
         {
           "available_minor": 23764289,
           "balance_minor": 26762937,
           "date": "2026-02-28",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1762458
         },
         {
           "available_minor": 24275298,
           "balance_minor": 27444282,
           "date": "2026-03-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1932794
         },
         {
           "available_minor": 26718066,
           "balance_minor": 28124247,
           "date": "2026-04-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 169991
         },
         {
           "available_minor": 27220119,
           "balance_minor": 28793652,
           "date": "2026-05-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 337343
         },
         {
           "available_minor": 27714253,
           "balance_minor": 29452497,
           "date": "2026-06-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 502054
         },
         {
           "available_minor": 28207352,
           "balance_minor": 30109962,
           "date": "2026-07-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 666420
         },
         {
           "available_minor": 28699415,
           "balance_minor": 30766046,
           "date": "2026-08-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 830441
         },
         {
           "available_minor": 29176673,
           "balance_minor": 31402390,
           "date": "2026-09-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 989527
         },
         {
           "available_minor": 29703521,
           "balance_minor": 32104854,
           "date": "2026-10-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1165143
         },
         {
           "available_minor": 30222449,
           "balance_minor": 32796758,
           "date": "2026-11-30",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1338119
         },
         {
           "available_minor": 30733458,
           "balance_minor": 33478103,
           "date": "2026-12-31",
+          "expense_reserve_basis_kind": "historical_median_expense",
+          "expense_reserve_factor": 1.0,
           "expense_reserve_minor": 1236190,
+          "expense_reserve_monthly_basis_minor": 618095,
+          "expense_reserve_months": 2.0,
+          "reserve_mode": "conservative",
+          "tax_reserve_basis_description": "max(ytd_profit_minor, 0) x corp_tax_rate=0.2500",
+          "tax_reserve_basis_kind": "ytd_profit",
           "tax_reserve_minor": 1508455
         }
       ]
@@ -7663,6 +8458,7 @@
             "groups",
             "accounts",
             "financial",
+            "reserves",
             "configPath"
           ],
           "parameters": [],
@@ -7977,6 +8773,15 @@
           "interactiveOnly": false,
           "name": "report.health",
           "outputFields": [
+            "reserveMode",
+            "expenseReserveBasisKind",
+            "expenseReserveMonthlyBasisMinor",
+            "expenseReserveMonths",
+            "expenseReserveFactor",
+            "expenseReserveLookbackMonths",
+            "taxReserveBasisKind",
+            "taxReserveBasisDescription",
+            "reserveLatest",
             "series",
             "latest"
           ],
@@ -7985,6 +8790,12 @@
               "description": "Group id",
               "name": "--group",
               "required": true,
+              "type": "string"
+            },
+            {
+              "description": "conservative|recurring|aggressive",
+              "name": "--reserve-mode",
+              "required": false,
               "type": "string"
             },
             {
@@ -8013,6 +8824,14 @@
           "interactiveOnly": false,
           "name": "report.reserves",
           "outputFields": [
+            "reserveMode",
+            "expenseReserveBasisKind",
+            "expenseReserveMonthlyBasisMinor",
+            "expenseReserveMonths",
+            "expenseReserveFactor",
+            "expenseReserveLookbackMonths",
+            "taxReserveBasisKind",
+            "taxReserveBasisDescription",
             "series",
             "latest"
           ],
@@ -8021,6 +8840,12 @@
               "description": "Group id",
               "name": "--group",
               "required": true,
+              "type": "string"
+            },
+            {
+              "description": "conservative|recurring|aggressive",
+              "name": "--reserve-mode",
+              "required": false,
               "type": "string"
             },
             {
@@ -8050,6 +8875,7 @@
           "name": "report.runway",
           "outputFields": [
             "mode",
+            "reserveMode",
             "ownershipMode",
             "groups",
             "series",
@@ -8096,6 +8922,12 @@
             {
               "description": "gross|user-share for two-pool mode",
               "name": "--ownership-mode",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "conservative|recurring|aggressive for reserve-aware runway modes",
+              "name": "--reserve-mode",
               "required": false,
               "type": "string"
             },

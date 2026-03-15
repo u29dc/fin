@@ -1,25 +1,15 @@
-use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 use serde::Serialize;
 use serde_json::json;
 
-use fin_sdk::config::{GroupMetadata, load_config, parse_fin_config, resolve_config_path};
+use fin_sdk::config::{parse_fin_config, resolve_config_path};
 use fin_sdk::error::FinError;
+use fin_sdk::{ConfigShowData, FinSdkError, ReserveMode, build_config_show};
 
 use crate::commands::{CommandFailure, CommandResult};
 use crate::envelope::MetaExtras;
 use crate::error::{CliError, ErrorCode, ExitCode};
-
-#[derive(Debug, Clone, Serialize)]
-struct AccountSummary {
-    id: String,
-    provider: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    label: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    subtype: Option<String>,
-}
 
 #[derive(Debug, Clone, Serialize)]
 struct ValidationError {
@@ -47,81 +37,53 @@ fn map_fin_error(error: FinError) -> CliError {
     }
 }
 
-fn build_account_map(config: &fin_sdk::config::FinConfig) -> BTreeMap<String, Vec<AccountSummary>> {
-    let mut grouped: BTreeMap<String, Vec<AccountSummary>> = BTreeMap::new();
-    for account in &config.accounts {
-        grouped
-            .entry(account.group.clone())
-            .or_default()
-            .push(AccountSummary {
-                id: account.id.clone(),
-                provider: account.provider.clone(),
-                label: account.label.clone(),
-                subtype: account.subtype.clone(),
-            });
-    }
-    grouped
-}
-
-fn derive_groups(
-    config: &fin_sdk::config::FinConfig,
-    configured_groups: Option<Vec<GroupMetadata>>,
-    _account_map: &BTreeMap<String, Vec<AccountSummary>>,
-) -> Vec<GroupMetadata> {
-    if let Some(groups) = configured_groups {
-        let existing = groups
-            .iter()
-            .map(|group| group.id.clone())
-            .collect::<BTreeSet<_>>();
-        let mut ordered = groups;
-        for group_id in config.group_ids() {
-            if existing.contains(&group_id) {
-                continue;
-            }
-            ordered.push(GroupMetadata {
-                label: group_id.clone(),
-                id: group_id,
-                icon: None,
-                tax_type: None,
-                expense_reserve_months: None,
-            });
+fn map_sdk_error(error: FinSdkError) -> CliError {
+    match error {
+        FinSdkError::ConfigNotFound { path } => CliError::new(
+            ErrorCode::NoConfig,
+            format!("Config file not found: {path}"),
+            "Copy fin.config.template.toml to data/fin.config.toml (or set FIN_CONFIG_PATH)",
+        ),
+        FinSdkError::ConfigRead { path, message } | FinSdkError::ConfigParse { path, message } => {
+            CliError::new(
+                ErrorCode::InvalidConfig,
+                format!("Invalid config at {path}: {message}"),
+                "Run `fin config validate` for JSON output or `fin config validate --text` for a readable summary",
+            )
         }
-        return ordered;
+        other => CliError::new(
+            ErrorCode::Runtime,
+            format!("Failed to read config: {other}"),
+            "Verify config path and file permissions, then retry",
+        ),
     }
-
-    config
-        .group_ids()
-        .into_iter()
-        .map(|id| GroupMetadata {
-            label: id.clone(),
-            id,
-            icon: None,
-            tax_type: None,
-            expense_reserve_months: None,
-        })
-        .collect()
 }
 
-fn render_config_show_text(
-    config_path: &str,
-    groups: &[GroupMetadata],
-    accounts: &BTreeMap<String, Vec<AccountSummary>>,
-    financial: &serde_json::Value,
-) -> String {
+fn reserve_mode_label(mode: ReserveMode) -> &'static str {
+    match mode {
+        ReserveMode::Conservative => "conservative",
+        ReserveMode::Recurring => "recurring",
+        ReserveMode::Aggressive => "aggressive",
+    }
+}
+
+fn render_config_show_text(data: &ConfigShowData) -> String {
     let mut lines = vec![
-        format!("Config: {config_path}"),
+        format!("Config: {}", data.config_path),
         String::new(),
         "Groups:".to_string(),
     ];
 
-    for group in groups {
-        let tax_type = group.tax_type.as_deref().unwrap_or("none");
-        let reserve = group.expense_reserve_months.unwrap_or(0);
+    for group in &data.groups {
         lines.push(format!(
-            "  {} ({}) -- tax: {}, reserve: {}mo",
-            group.id, group.label, tax_type, reserve
+            "  {} ({}) -- tax: {}, conservative_reserve: {}mo, default_mode: {}",
+            group.id,
+            group.label,
+            group.tax_type,
+            group.expense_reserve_months,
+            reserve_mode_label(group.default_reserve_mode),
         ));
-        if let Some(group_accounts) = accounts.get(group.id.as_str()) {
+        if let Some(group_accounts) = data.accounts.get(group.id.as_str()) {
             for account in group_accounts {
                 let label = account
                     .label
@@ -137,8 +99,48 @@ fn render_config_show_text(
     }
 
     lines.push(String::new());
+    lines.push(format!(
+        "Reserves: default_mode={}",
+        reserve_mode_label(data.reserves.default_mode)
+    ));
+    for (mode, settings) in &data.reserves.modes {
+        lines.push(format!(
+            "  {mode}: basis={}, months={}, factor={}, lookback_months={}",
+            serde_json::to_string(&settings.expense_basis)
+                .unwrap_or_else(|_| "\"unknown\"".to_owned())
+                .trim_matches('"'),
+            settings.expense_months,
+            settings.factor,
+            settings
+                .lookback_months
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".to_owned()),
+        ));
+    }
+    for (group_id, group) in &data.reserves.groups {
+        lines.push(format!(
+            "  {group_id}: default_mode={}",
+            reserve_mode_label(group.default_mode)
+        ));
+        for (mode, settings) in &group.modes {
+            lines.push(format!(
+                "    {mode}: basis={}, months={}, factor={}, lookback_months={}",
+                serde_json::to_string(&settings.expense_basis)
+                    .unwrap_or_else(|_| "\"unknown\"".to_owned())
+                    .trim_matches('"'),
+                settings.expense_months,
+                settings.factor,
+                settings
+                    .lookback_months
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "-".to_owned()),
+            ));
+        }
+    }
+
+    lines.push(String::new());
     lines.push("Financial:".to_string());
-    if let Some(financial_table) = financial.as_object() {
+    if let Some(financial_table) = data.financial.as_object() {
         for (key, value) in financial_table {
             lines.push(format!("  {key}: {value}"));
         }
@@ -150,26 +152,15 @@ fn render_config_show_text(
 }
 
 pub fn run_show() -> Result<CommandResult, CommandFailure> {
-    let loaded = load_config(None).map_err(|error| CommandFailure {
+    let data = build_config_show(None).map_err(|error| CommandFailure {
         tool: "config.show",
-        error: map_fin_error(error),
+        error: map_sdk_error(error),
     })?;
-
-    let account_map = build_account_map(&loaded.config);
-    let groups = derive_groups(&loaded.config, loaded.config.groups.clone(), &account_map);
-    let financial =
-        serde_json::to_value(&loaded.config.financial).unwrap_or(serde_json::Value::Null);
-    let config_path = loaded.path.display().to_string();
-    let text = render_config_show_text(&config_path, &groups, &account_map, &financial);
+    let text = render_config_show_text(&data);
 
     Ok(CommandResult {
         tool: "config.show",
-        data: json!({
-            "groups": groups,
-            "accounts": account_map,
-            "financial": financial,
-            "configPath": config_path,
-        }),
+        data: json!(data),
         text,
         meta: MetaExtras::default(),
         exit_code: ExitCode::Success,

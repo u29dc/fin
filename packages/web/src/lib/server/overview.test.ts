@@ -146,9 +146,9 @@ describe("loadOverviewPageData", () => {
 	test("maps all-assets balance history and projection data from fin-api", async () => {
 		const configShow: ConfigShowData = {
 			groups: [
-				{ id: "joint", label: "Joint", icon: "heart", taxType: "none", expenseReserveMonths: 3 },
-				{ id: "business", label: "Business", icon: "briefcase", taxType: "corp", expenseReserveMonths: 12 },
-				{ id: "personal", label: "Personal", icon: "user", taxType: "income", expenseReserveMonths: 6 },
+				{ id: "joint", label: "Joint", icon: "heart", taxType: "none", expenseReserveMonths: 3, defaultReserveMode: "conservative" },
+				{ id: "business", label: "Business", icon: "briefcase", taxType: "corp", expenseReserveMonths: 12, defaultReserveMode: "recurring" },
+				{ id: "personal", label: "Personal", icon: "user", taxType: "income", expenseReserveMonths: 6, defaultReserveMode: "conservative" },
 			],
 			accounts: {
 				personal: [
@@ -159,6 +159,7 @@ describe("loadOverviewPageData", () => {
 				business: [{ id: "Assets:Business:Monzo", label: "Business Monzo", provider: "monzo" }],
 			},
 			financial: {},
+			reserves: { defaultMode: "recurring", modes: {}, groups: {} },
 			configPath: "/tmp/fin.config.toml",
 		};
 		const health: HealthReport = {

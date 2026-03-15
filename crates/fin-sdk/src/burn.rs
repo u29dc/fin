@@ -4,9 +4,9 @@ use std::str::FromStr;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-use crate::config::FinConfig;
+use crate::config::{FinConfig, ReserveMode};
 use crate::error::Result;
-use crate::reports::{ReserveBreakdownPoint, report_reserves};
+use crate::reports::{ReserveBreakdownPoint, report_reserves_with_mode};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -169,10 +169,12 @@ pub struct TwoPoolRunwayPool {
 pub struct TwoPoolRunwayReport {
     pub as_of_date: String,
     pub ownership_mode: OwnershipMode,
+    pub reserve_mode: ReserveMode,
     pub scenario: TwoPoolScenarioKind,
     pub scenario_source: String,
     pub assumptions_applied: TwoPoolScenarioSummary,
     pub warnings: Vec<String>,
+    pub business_reserve: ReserveBreakdownPoint,
     pub business_pool: TwoPoolRunwayPool,
     pub personal_pool: TwoPoolRunwayPool,
     pub extraction_valve: ExtractionValveSummary,
@@ -205,6 +207,7 @@ impl Default for BurnReportOptions<'_> {
 pub struct TwoPoolRunwayOptions<'a> {
     pub months: usize,
     pub to: Option<&'a str>,
+    pub reserve_mode: Option<ReserveMode>,
     pub ownership_mode: OwnershipMode,
     pub scenario: TwoPoolScenarioKind,
     pub salary_monthly_minor: Option<i64>,
@@ -217,6 +220,7 @@ impl Default for TwoPoolRunwayOptions<'_> {
         Self {
             months: 12,
             to: None,
+            reserve_mode: None,
             ownership_mode: OwnershipMode::Gross,
             scenario: TwoPoolScenarioKind::TaxEfficient,
             salary_monthly_minor: None,
@@ -591,9 +595,21 @@ pub fn report_two_pool_runway(
 ) -> Result<TwoPoolRunwayReport> {
     let as_of_date = resolved_as_of_date(connection, options.to)?;
     let scenario = resolve_two_pool_scenario(config, options)?;
-    let business_reserves =
-        report_reserves(connection, config, "business", None, Some(&as_of_date))?;
-    let business_available_minor = latest_available_minor(&business_reserves);
+    let reserve_mode = config.resolve_reserve_mode("business", options.reserve_mode);
+    let reserve_policy = config.resolve_reserve_policy("business", options.reserve_mode);
+    let business_reserves = report_reserves_with_mode(
+        connection,
+        config,
+        "business",
+        None,
+        Some(&as_of_date),
+        options.reserve_mode,
+    )?;
+    let business_reserve = latest_reserve_point(&business_reserves);
+    let business_available_minor = business_reserve
+        .as_ref()
+        .map(|point| point.available_minor)
+        .unwrap_or_default();
 
     let business_burn = report_burn(
         connection,
@@ -669,12 +685,28 @@ pub fn report_two_pool_runway(
     };
 
     Ok(TwoPoolRunwayReport {
-        as_of_date,
+        as_of_date: as_of_date.clone(),
         ownership_mode: options.ownership_mode,
+        reserve_mode,
         scenario: scenario.summary.scenario,
         scenario_source: scenario.summary.scenario_source.clone(),
         assumptions_applied: scenario.summary.clone(),
         warnings: scenario.warnings,
+        business_reserve: business_reserve.unwrap_or(ReserveBreakdownPoint {
+            date: as_of_date.clone(),
+            reserve_mode,
+            expense_reserve_basis_kind: reserve_policy.expense_basis,
+            expense_reserve_monthly_basis_minor: 0,
+            expense_reserve_months: reserve_policy.expense_months,
+            expense_reserve_factor: reserve_policy.factor,
+            expense_reserve_lookback_months: reserve_policy.lookback_months,
+            tax_reserve_basis_kind: crate::reports::TaxReserveBasisKind::None,
+            tax_reserve_basis_description: "no reserve data".to_owned(),
+            balance_minor: 0,
+            tax_reserve_minor: 0,
+            expense_reserve_minor: 0,
+            available_minor: 0,
+        }),
         business_pool: TwoPoolRunwayPool {
             balance_minor: business_available_minor,
             recurring_burn_minor: business_recurring_burn_minor,
@@ -776,11 +808,8 @@ fn load_entries_in_window(
     Ok(entries)
 }
 
-fn latest_available_minor(points: &[ReserveBreakdownPoint]) -> i64 {
-    points
-        .last()
-        .map(|point| point.available_minor)
-        .unwrap_or_default()
+fn latest_reserve_point(points: &[ReserveBreakdownPoint]) -> Option<ReserveBreakdownPoint> {
+    points.last().cloned()
 }
 
 fn liquid_balance_for_group(
@@ -1457,7 +1486,7 @@ mod tests {
         RecurrenceObservation, TwoPoolRunwayOptions, TwoPoolScenarioKind, infer_recurrence,
         report_burn, report_two_pool_runway,
     };
-    use crate::config::parse_fin_config;
+    use crate::config::{ReserveMode, parse_fin_config};
     use crate::db::{ensure_chart_of_accounts_seeded, migrate_to_latest};
 
     #[test]
@@ -1801,6 +1830,25 @@ INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency) 
 [financial]
 joint_share_you = 0.5
 
+[reserves]
+default_mode = "conservative"
+
+[reserves.modes.conservative]
+expense_basis = "historical_median_expense"
+factor = 1.0
+
+[reserves.modes.recurring]
+expense_basis = "recurring_baseline"
+expense_months = 6
+factor = 1.0
+lookback_months = 3
+
+[reserves.modes.aggressive]
+expense_basis = "recurring_baseline"
+expense_months = 3
+factor = 1.0
+lookback_months = 3
+
 [financial.scenario]
 salary_monthly_minor = 300000
 dividends_monthly_minor = 600000
@@ -1866,10 +1914,13 @@ INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, descriptio
     ('je-open-joint', '2026-01-01T08:02:00', '2026-01-01', 0, 'Open', 'Open', 'Open', 'Fixture', 'fixture.csv'),
     ('je-business-jan', '2026-01-10T08:00:00', '2026-01-10', 0, 'Software', 'Software', 'Software', 'Vendor', 'fixture.csv'),
     ('je-business-feb', '2026-02-10T08:00:00', '2026-02-10', 0, 'Software', 'Software', 'Software', 'Vendor', 'fixture.csv'),
+    ('je-business-mar', '2026-03-10T08:00:00', '2026-03-10', 0, 'Software', 'Software', 'Software', 'Vendor', 'fixture.csv'),
     ('je-personal-jan', '2026-01-11T08:00:00', '2026-01-11', 0, 'Groceries', 'Groceries', 'Groceries', 'Asda', 'fixture.csv'),
     ('je-personal-feb', '2026-02-11T08:00:00', '2026-02-11', 0, 'Groceries', 'Groceries', 'Groceries', 'Tesco', 'fixture.csv'),
+    ('je-personal-mar', '2026-03-11T08:00:00', '2026-03-11', 0, 'Groceries', 'Groceries', 'Groceries', 'Morrisons', 'fixture.csv'),
     ('je-joint-jan', '2026-01-12T08:00:00', '2026-01-12', 0, 'Rent', 'Rent', 'Rent', 'Landlord', 'fixture.csv'),
-    ('je-joint-feb', '2026-02-12T08:00:00', '2026-02-12', 0, 'Rent', 'Rent', 'Rent', 'Landlord', 'fixture.csv');
+    ('je-joint-feb', '2026-02-12T08:00:00', '2026-02-12', 0, 'Rent', 'Rent', 'Rent', 'Landlord', 'fixture.csv'),
+    ('je-joint-mar', '2026-03-12T08:00:00', '2026-03-12', 0, 'Rent', 'Rent', 'Rent', 'Landlord', 'fixture.csv');
 
 INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency) VALUES
     ('po-open-business-asset', 'je-open-business', 'Assets:Business:Monzo', 500000, 'GBP'),
@@ -1882,14 +1933,20 @@ INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency) 
     ('po-business-jan-expense', 'je-business-jan', 'Expenses:Business:Software', 1000, 'GBP'),
     ('po-business-feb-asset', 'je-business-feb', 'Assets:Business:Monzo', -1000, 'GBP'),
     ('po-business-feb-expense', 'je-business-feb', 'Expenses:Business:Software', 1000, 'GBP'),
+    ('po-business-mar-asset', 'je-business-mar', 'Assets:Business:Monzo', -1000, 'GBP'),
+    ('po-business-mar-expense', 'je-business-mar', 'Expenses:Business:Software', 1000, 'GBP'),
     ('po-personal-jan-asset', 'je-personal-jan', 'Assets:Personal:Monzo', -1200, 'GBP'),
     ('po-personal-jan-expense', 'je-personal-jan', 'Expenses:Food:Groceries', 1200, 'GBP'),
     ('po-personal-feb-asset', 'je-personal-feb', 'Assets:Personal:Monzo', -1200, 'GBP'),
     ('po-personal-feb-expense', 'je-personal-feb', 'Expenses:Food:Groceries', 1200, 'GBP'),
+    ('po-personal-mar-asset', 'je-personal-mar', 'Assets:Personal:Monzo', -1200, 'GBP'),
+    ('po-personal-mar-expense', 'je-personal-mar', 'Expenses:Food:Groceries', 1200, 'GBP'),
     ('po-joint-jan-asset', 'je-joint-jan', 'Assets:Joint:Monzo', -2000, 'GBP'),
     ('po-joint-jan-expense', 'je-joint-jan', 'Expenses:Housing:Rent', 2000, 'GBP'),
     ('po-joint-feb-asset', 'je-joint-feb', 'Assets:Joint:Monzo', -2000, 'GBP'),
-    ('po-joint-feb-expense', 'je-joint-feb', 'Expenses:Housing:Rent', 2000, 'GBP');
+    ('po-joint-feb-expense', 'je-joint-feb', 'Expenses:Housing:Rent', 2000, 'GBP'),
+    ('po-joint-mar-asset', 'je-joint-mar', 'Assets:Joint:Monzo', -2000, 'GBP'),
+    ('po-joint-mar-expense', 'je-joint-mar', 'Expenses:Housing:Rent', 2000, 'GBP');
 "#,
             )
             .expect("seed runway ledger");
@@ -1900,6 +1957,7 @@ INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency) 
             &TwoPoolRunwayOptions {
                 months: 2,
                 to: Some("2026-03-14"),
+                reserve_mode: None,
                 ownership_mode: OwnershipMode::UserShare,
                 scenario: TwoPoolScenarioKind::TaxEfficient,
                 salary_monthly_minor: None,
@@ -1914,6 +1972,7 @@ INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency) 
             &TwoPoolRunwayOptions {
                 months: 2,
                 to: Some("2026-03-14"),
+                reserve_mode: None,
                 ownership_mode: OwnershipMode::UserShare,
                 scenario: TwoPoolScenarioKind::Config,
                 salary_monthly_minor: None,
@@ -1928,6 +1987,7 @@ INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency) 
             &TwoPoolRunwayOptions {
                 months: 2,
                 to: Some("2026-03-14"),
+                reserve_mode: None,
                 ownership_mode: OwnershipMode::UserShare,
                 scenario: TwoPoolScenarioKind::Custom,
                 salary_monthly_minor: Some(104_750),
@@ -1966,6 +2026,187 @@ INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency) 
         assert_eq!(custom.assumptions_applied.dividends_monthly_minor, 200_000);
         assert!(!custom.extraction_valve.include_joint_expenses);
         assert!(custom.warnings.is_empty());
+    }
+
+    #[test]
+    fn two_pool_runway_respects_selected_reserve_mode() {
+        let mut connection = Connection::open_in_memory().expect("open sqlite");
+        migrate_to_latest(&mut connection).expect("migrate schema");
+        let config = parse_fin_config(
+            r#"
+[financial]
+joint_share_you = 0.5
+
+[financial.scenario]
+salary_monthly_minor = 300000
+dividends_monthly_minor = 600000
+tax_efficient_salary_monthly_minor = 104750
+tax_efficient_dividends_monthly_minor = 314167
+tax_efficient_include_joint_expenses = true
+
+[financial.scenario.toggles]
+include_salary = true
+include_dividends = true
+include_joint_expenses = true
+
+[[groups]]
+id = "business"
+label = "Business"
+tax_type = "corp"
+expense_reserve_months = 12
+
+[[groups]]
+id = "personal"
+label = "Personal"
+tax_type = "income"
+
+[[groups]]
+id = "joint"
+label = "Joint"
+tax_type = "none"
+
+[[accounts]]
+id = "Assets:Business:Monzo"
+group = "business"
+type = "asset"
+provider = "monzo"
+
+[[accounts]]
+id = "Assets:Personal:Monzo"
+group = "personal"
+type = "asset"
+provider = "monzo"
+
+[[accounts]]
+id = "Assets:Joint:Monzo"
+group = "joint"
+type = "asset"
+provider = "monzo"
+
+[[banks]]
+name = "monzo"
+[banks.columns]
+date = "Date"
+description = "Description"
+amount = "Amount"
+"#,
+        )
+        .expect("config parses");
+        ensure_chart_of_accounts_seeded(&connection, &config).expect("seed chart of accounts");
+
+        connection
+            .execute_batch(
+                r#"
+INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, description, raw_description, clean_description, counterparty, source_file) VALUES
+    ('je-open-business', '2026-01-01T08:00:00', '2026-01-01', 0, 'Open', 'Open', 'Open', 'Fixture', 'fixture.csv'),
+    ('je-open-personal', '2026-01-01T08:01:00', '2026-01-01', 0, 'Open', 'Open', 'Open', 'Fixture', 'fixture.csv'),
+    ('je-open-joint', '2026-01-01T08:02:00', '2026-01-01', 0, 'Open', 'Open', 'Open', 'Fixture', 'fixture.csv'),
+    ('je-business-dec', '2025-12-10T08:00:00', '2025-12-10', 0, 'Software', 'Software', 'Software', 'Vendor', 'fixture.csv'),
+    ('je-business-jan', '2026-01-10T08:00:00', '2026-01-10', 0, 'Software', 'Software', 'Software', 'Vendor', 'fixture.csv'),
+    ('je-business-feb', '2026-02-10T08:00:00', '2026-02-10', 0, 'Software', 'Software', 'Software', 'Vendor', 'fixture.csv'),
+    ('je-personal-dec', '2025-12-11T08:00:00', '2025-12-11', 0, 'Groceries', 'Groceries', 'Groceries', 'Asda', 'fixture.csv'),
+    ('je-personal-jan', '2026-01-11T08:00:00', '2026-01-11', 0, 'Groceries', 'Groceries', 'Groceries', 'Asda', 'fixture.csv'),
+    ('je-personal-feb', '2026-02-11T08:00:00', '2026-02-11', 0, 'Groceries', 'Groceries', 'Groceries', 'Tesco', 'fixture.csv'),
+    ('je-joint-dec', '2025-12-12T08:00:00', '2025-12-12', 0, 'Rent', 'Rent', 'Rent', 'Landlord', 'fixture.csv'),
+    ('je-joint-jan', '2026-01-12T08:00:00', '2026-01-12', 0, 'Rent', 'Rent', 'Rent', 'Landlord', 'fixture.csv'),
+    ('je-joint-feb', '2026-02-12T08:00:00', '2026-02-12', 0, 'Rent', 'Rent', 'Rent', 'Landlord', 'fixture.csv');
+
+INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, currency) VALUES
+    ('po-open-business-asset', 'je-open-business', 'Assets:Business:Monzo', 500000, 'GBP'),
+    ('po-open-business-equity', 'je-open-business', 'Equity:OpeningBalances', -500000, 'GBP'),
+    ('po-open-personal-asset', 'je-open-personal', 'Assets:Personal:Monzo', 200000, 'GBP'),
+    ('po-open-personal-equity', 'je-open-personal', 'Equity:OpeningBalances', -200000, 'GBP'),
+    ('po-open-joint-asset', 'je-open-joint', 'Assets:Joint:Monzo', 160000, 'GBP'),
+    ('po-open-joint-equity', 'je-open-joint', 'Equity:OpeningBalances', -160000, 'GBP'),
+    ('po-business-dec-asset', 'je-business-dec', 'Assets:Business:Monzo', -1000, 'GBP'),
+    ('po-business-dec-expense', 'je-business-dec', 'Expenses:Business:Software', 1000, 'GBP'),
+    ('po-business-jan-asset', 'je-business-jan', 'Assets:Business:Monzo', -1000, 'GBP'),
+    ('po-business-jan-expense', 'je-business-jan', 'Expenses:Business:Software', 1000, 'GBP'),
+    ('po-business-feb-asset', 'je-business-feb', 'Assets:Business:Monzo', -1000, 'GBP'),
+    ('po-business-feb-expense', 'je-business-feb', 'Expenses:Business:Software', 1000, 'GBP'),
+    ('po-personal-dec-asset', 'je-personal-dec', 'Assets:Personal:Monzo', -1200, 'GBP'),
+    ('po-personal-dec-expense', 'je-personal-dec', 'Expenses:Food:Groceries', 1200, 'GBP'),
+    ('po-personal-jan-asset', 'je-personal-jan', 'Assets:Personal:Monzo', -1200, 'GBP'),
+    ('po-personal-jan-expense', 'je-personal-jan', 'Expenses:Food:Groceries', 1200, 'GBP'),
+    ('po-personal-feb-asset', 'je-personal-feb', 'Assets:Personal:Monzo', -1200, 'GBP'),
+    ('po-personal-feb-expense', 'je-personal-feb', 'Expenses:Food:Groceries', 1200, 'GBP'),
+    ('po-joint-dec-asset', 'je-joint-dec', 'Assets:Joint:Monzo', -2000, 'GBP'),
+    ('po-joint-dec-expense', 'je-joint-dec', 'Expenses:Housing:Rent', 2000, 'GBP'),
+    ('po-joint-jan-asset', 'je-joint-jan', 'Assets:Joint:Monzo', -2000, 'GBP'),
+    ('po-joint-jan-expense', 'je-joint-jan', 'Expenses:Housing:Rent', 2000, 'GBP'),
+    ('po-joint-feb-asset', 'je-joint-feb', 'Assets:Joint:Monzo', -2000, 'GBP'),
+    ('po-joint-feb-expense', 'je-joint-feb', 'Expenses:Housing:Rent', 2000, 'GBP');
+"#,
+            )
+            .expect("seed reserve-mode runway ledger");
+
+        let conservative = report_two_pool_runway(
+            &connection,
+            &config,
+            &TwoPoolRunwayOptions {
+                months: 2,
+                to: Some("2026-04-14"),
+                reserve_mode: Some(ReserveMode::Conservative),
+                ownership_mode: OwnershipMode::UserShare,
+                scenario: TwoPoolScenarioKind::TaxEfficient,
+                salary_monthly_minor: None,
+                dividends_monthly_minor: None,
+                include_joint_expenses: None,
+            },
+        )
+        .expect("conservative runway");
+        let recurring = report_two_pool_runway(
+            &connection,
+            &config,
+            &TwoPoolRunwayOptions {
+                months: 2,
+                to: Some("2026-04-14"),
+                reserve_mode: Some(ReserveMode::Recurring),
+                ownership_mode: OwnershipMode::UserShare,
+                scenario: TwoPoolScenarioKind::TaxEfficient,
+                salary_monthly_minor: None,
+                dividends_monthly_minor: None,
+                include_joint_expenses: None,
+            },
+        )
+        .expect("recurring runway");
+        let aggressive = report_two_pool_runway(
+            &connection,
+            &config,
+            &TwoPoolRunwayOptions {
+                months: 2,
+                to: Some("2026-04-14"),
+                reserve_mode: Some(ReserveMode::Aggressive),
+                ownership_mode: OwnershipMode::UserShare,
+                scenario: TwoPoolScenarioKind::TaxEfficient,
+                salary_monthly_minor: None,
+                dividends_monthly_minor: None,
+                include_joint_expenses: None,
+            },
+        )
+        .expect("aggressive runway");
+
+        assert_eq!(conservative.reserve_mode, ReserveMode::Conservative);
+        assert_eq!(recurring.reserve_mode, ReserveMode::Recurring);
+        assert_eq!(aggressive.reserve_mode, ReserveMode::Aggressive);
+        assert_eq!(
+            conservative.business_reserve.reserve_mode,
+            ReserveMode::Conservative
+        );
+        assert_eq!(
+            recurring.business_reserve.reserve_mode,
+            ReserveMode::Recurring
+        );
+        assert_eq!(
+            aggressive.business_reserve.reserve_mode,
+            ReserveMode::Aggressive
+        );
+        assert!(
+            conservative.business_reserve.expense_reserve_minor
+                > recurring.business_reserve.expense_reserve_minor
+        );
+        assert!(conservative.business_pool.balance_minor < recurring.business_pool.balance_minor);
+        assert!(recurring.business_pool.balance_minor <= aggressive.business_pool.balance_minor);
     }
 
     fn classified_bucket(report: &super::BurnReport, kind: BurnBucketKind) -> i64 {

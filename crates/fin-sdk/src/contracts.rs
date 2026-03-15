@@ -318,7 +318,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             ToolTraits::read_only(),
             "fin config show",
             vec![],
-            &["groups", "accounts", "financial", "configPath"],
+            &["groups", "accounts", "financial", "reserves", "configPath"],
         ),
         tool(
             "config.validate",
@@ -608,10 +608,23 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "fin report health --group=personal",
             vec![
                 flag("--group", "Group id", true),
+                flag("--reserve-mode", "conservative|recurring|aggressive", false),
                 flag("--from", "Start date YYYY-MM-DD", false),
                 flag("--to", "End date YYYY-MM-DD", false),
             ],
-            &["series", "latest"],
+            &[
+                "reserveMode",
+                "expenseReserveBasisKind",
+                "expenseReserveMonthlyBasisMinor",
+                "expenseReserveMonths",
+                "expenseReserveFactor",
+                "expenseReserveLookbackMonths",
+                "taxReserveBasisKind",
+                "taxReserveBasisDescription",
+                "reserveLatest",
+                "series",
+                "latest",
+            ],
         ),
         tool(
             "report.runway",
@@ -637,6 +650,11 @@ pub fn tool_registry() -> Vec<ToolMeta> {
                     false,
                 ),
                 flag(
+                    "--reserve-mode",
+                    "conservative|recurring|aggressive for reserve-aware runway modes",
+                    false,
+                ),
+                flag(
                     "--salary-monthly-minor",
                     "Override salary draw for two-pool mode",
                     false,
@@ -656,6 +674,7 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             ],
             &[
                 "mode",
+                "reserveMode",
                 "ownershipMode",
                 "groups",
                 "series",
@@ -672,10 +691,22 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "fin report reserves --group=business",
             vec![
                 flag("--group", "Group id", true),
+                flag("--reserve-mode", "conservative|recurring|aggressive", false),
                 flag("--from", "Start date YYYY-MM-DD", false),
                 flag("--to", "End date YYYY-MM-DD", false),
             ],
-            &["series", "latest"],
+            &[
+                "reserveMode",
+                "expenseReserveBasisKind",
+                "expenseReserveMonthlyBasisMinor",
+                "expenseReserveMonths",
+                "expenseReserveFactor",
+                "expenseReserveLookbackMonths",
+                "taxReserveBasisKind",
+                "taxReserveBasisDescription",
+                "series",
+                "latest",
+            ],
         ),
         tool(
             "report.categories",

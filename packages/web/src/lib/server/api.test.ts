@@ -52,7 +52,13 @@ describe("createFinApiClient", () => {
 				calls.push({ url: String(url), init: init ?? {} });
 				return jsonResponse<ConfigShowData>({
 					ok: true,
-					data: { groups: [], accounts: {}, financial: {}, configPath: "/tmp/fin-home/data/fin.config.toml" },
+					data: {
+						groups: [],
+						accounts: {},
+						financial: {},
+						reserves: { defaultMode: "conservative", modes: {}, groups: {} },
+						configPath: "/tmp/fin-home/data/fin.config.toml",
+					},
 					meta: { tool: "config.show", elapsed: 1 },
 				});
 			},
@@ -235,11 +241,12 @@ describe("createFinApiClient", () => {
 describe("loadShellState", () => {
 	const configShow: ConfigShowData = {
 		groups: [
-			{ id: "business", label: "Business", icon: "briefcase", taxType: "corp", expenseReserveMonths: 2 },
-			{ id: "personal", label: "Personal", icon: "user", taxType: "income", expenseReserveMonths: 3 },
+			{ id: "business", label: "Business", icon: "briefcase", taxType: "corp", expenseReserveMonths: 2, defaultReserveMode: "recurring" },
+			{ id: "personal", label: "Personal", icon: "user", taxType: "income", expenseReserveMonths: 3, defaultReserveMode: "conservative" },
 		],
 		accounts: {},
 		financial: {},
+		reserves: { defaultMode: "recurring", modes: {}, groups: {} },
 		configPath: "/tmp/fin.config.toml",
 	};
 	const blockedHealth: HealthReport = {

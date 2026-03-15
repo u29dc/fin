@@ -7,7 +7,8 @@ use serde_json::Value as JsonValue;
 use thiserror::Error;
 
 use crate::config::{
-    load_config, parse_fin_config, resolve_config_path as resolve_config_path_impl,
+    ExpenseReserveBasis, ReserveMode, load_config, parse_fin_config,
+    resolve_config_path as resolve_config_path_impl,
 };
 use crate::error::FinError;
 use crate::health::{HealthCheckOptions, HealthReport, run_health_checks};
@@ -53,6 +54,7 @@ pub struct GroupMetadata {
     pub icon: Option<String>,
     pub tax_type: String,
     pub expense_reserve_months: i64,
+    pub default_reserve_mode: ReserveMode,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -72,7 +74,33 @@ pub struct ConfigShowData {
     pub groups: Vec<GroupMetadata>,
     pub accounts: BTreeMap<String, Vec<AccountSummary>>,
     pub financial: JsonValue,
+    pub reserves: ConfigReserveData,
     pub config_path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigReserveData {
+    pub default_mode: ReserveMode,
+    pub modes: BTreeMap<String, ReserveModeSummary>,
+    pub groups: BTreeMap<String, ReserveGroupSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReserveGroupSummary {
+    pub default_mode: ReserveMode,
+    pub modes: BTreeMap<String, ReserveModeSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReserveModeSummary {
+    pub expense_basis: ExpenseReserveBasis,
+    pub expense_months: f64,
+    pub factor: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lookback_months: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -164,7 +192,8 @@ pub fn build_config_show(explicit_path: Option<&Path>) -> Result<ConfigShowData,
         .unwrap_or_default()
         .into_iter()
         .map(|group| GroupMetadata {
-            id: group.id,
+            default_reserve_mode: loaded.config.group_default_reserve_mode(&group.id),
+            id: group.id.clone(),
             label: group.label,
             icon: group.icon,
             tax_type: group.tax_type.unwrap_or_else(|| "none".to_owned()),
@@ -186,16 +215,72 @@ pub fn build_config_show(explicit_path: Option<&Path>) -> Result<ConfigShowData,
             icon: None,
             tax_type: "none".to_owned(),
             expense_reserve_months: 3,
+            default_reserve_mode: loaded.config.group_default_reserve_mode(&group_id),
         });
     }
 
     let financial = serde_json::to_value(&loaded.config.financial).unwrap_or(JsonValue::Null);
+    let reserves = build_reserve_show(&loaded.config);
     Ok(ConfigShowData {
         groups,
         accounts,
         financial,
+        reserves,
         config_path: loaded.path.display().to_string(),
     })
+}
+
+fn build_reserve_show(config: &crate::config::FinConfig) -> ConfigReserveData {
+    let resolved = config.resolved_reserve_config();
+    let modes = resolved
+        .modes
+        .into_iter()
+        .map(|(mode, policy)| {
+            (
+                mode,
+                ReserveModeSummary {
+                    expense_basis: policy.expense_basis,
+                    expense_months: policy.expense_months,
+                    factor: policy.factor,
+                    lookback_months: policy.lookback_months,
+                },
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let groups = resolved
+        .groups
+        .into_iter()
+        .map(|(group_id, group)| {
+            let modes = group
+                .modes
+                .into_iter()
+                .map(|(mode, policy)| {
+                    (
+                        mode,
+                        ReserveModeSummary {
+                            expense_basis: policy.expense_basis,
+                            expense_months: policy.expense_months,
+                            factor: policy.factor,
+                            lookback_months: policy.lookback_months,
+                        },
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+            (
+                group_id,
+                ReserveGroupSummary {
+                    default_mode: group.default_mode,
+                    modes,
+                },
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    ConfigReserveData {
+        default_mode: resolved.default_mode,
+        modes,
+        groups,
+    }
 }
 
 pub fn run_health(

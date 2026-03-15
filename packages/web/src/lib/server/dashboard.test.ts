@@ -153,8 +153,8 @@ describe("loadDashboardPageData", () => {
 	test("maps fin-api payloads into dashboard page data", async () => {
 		const configShow: ConfigShowData = {
 			groups: [
-				{ id: "business", label: "Business", icon: "briefcase", taxType: "corp", expenseReserveMonths: 12 },
-				{ id: "personal", label: "Personal", icon: "user", taxType: "income", expenseReserveMonths: 6 },
+				{ id: "business", label: "Business", icon: "briefcase", taxType: "corp", expenseReserveMonths: 12, defaultReserveMode: "recurring" },
+				{ id: "personal", label: "Personal", icon: "user", taxType: "income", expenseReserveMonths: 6, defaultReserveMode: "conservative" },
 			],
 			accounts: {
 				personal: [
@@ -171,6 +171,7 @@ describe("loadDashboardPageData", () => {
 			financial: {
 				investment_projection_annual_returns: { low: 0.04, mid: 0.06, high: 0.08 },
 			},
+			reserves: { defaultMode: "recurring", modes: {}, groups: {} },
 			configPath: "/tmp/fin.config.toml",
 		};
 		const health: HealthReport = {

@@ -296,6 +296,8 @@ struct ReportHealthArgs {
     #[arg(long)]
     group: String,
     #[arg(long)]
+    reserve_mode: Option<String>,
+    #[arg(long)]
     from: Option<String>,
     #[arg(long)]
     to: Option<String>,
@@ -318,6 +320,8 @@ struct ReportRunwayArgs {
     #[arg(long, default_value = "gross")]
     ownership_mode: String,
     #[arg(long)]
+    reserve_mode: Option<String>,
+    #[arg(long)]
     salary_monthly_minor: Option<i64>,
     #[arg(long)]
     dividends_monthly_minor: Option<i64>,
@@ -333,6 +337,8 @@ struct ReportRunwayArgs {
 struct ReportReservesArgs {
     #[arg(long)]
     group: String,
+    #[arg(long)]
+    reserve_mode: Option<String>,
     #[arg(long)]
     from: Option<String>,
     #[arg(long)]
@@ -466,6 +472,7 @@ fn execute(
             ReportCommand::Health(args) => commands::report::run_health(
                 options.db.as_deref(),
                 &args.group,
+                args.reserve_mode.as_deref(),
                 args.from.as_deref(),
                 args.to.as_deref(),
             ),
@@ -479,6 +486,7 @@ fn execute(
                     mode: &args.mode,
                     scenario: &args.scenario,
                     ownership_mode: &args.ownership_mode,
+                    reserve_mode: args.reserve_mode.as_deref(),
                     salary_monthly_minor: args.salary_monthly_minor,
                     dividends_monthly_minor: args.dividends_monthly_minor,
                     include_joint_expenses: args.include_joint_expenses,
@@ -489,6 +497,7 @@ fn execute(
             ReportCommand::Reserves(args) => commands::report::run_reserves(
                 options.db.as_deref(),
                 &args.group,
+                args.reserve_mode.as_deref(),
                 args.from.as_deref(),
                 args.to.as_deref(),
             ),

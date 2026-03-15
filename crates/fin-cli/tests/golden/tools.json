@@ -27,6 +27,7 @@
           "groups",
           "accounts",
           "financial",
+          "reserves",
           "configPath"
         ],
         "parameters": [],
@@ -341,6 +342,15 @@
         "interactiveOnly": false,
         "name": "report.health",
         "outputFields": [
+          "reserveMode",
+          "expenseReserveBasisKind",
+          "expenseReserveMonthlyBasisMinor",
+          "expenseReserveMonths",
+          "expenseReserveFactor",
+          "expenseReserveLookbackMonths",
+          "taxReserveBasisKind",
+          "taxReserveBasisDescription",
+          "reserveLatest",
           "series",
           "latest"
         ],
@@ -349,6 +359,12 @@
             "description": "Group id",
             "name": "--group",
             "required": true,
+            "type": "string"
+          },
+          {
+            "description": "conservative|recurring|aggressive",
+            "name": "--reserve-mode",
+            "required": false,
             "type": "string"
           },
           {
@@ -377,6 +393,14 @@
         "interactiveOnly": false,
         "name": "report.reserves",
         "outputFields": [
+          "reserveMode",
+          "expenseReserveBasisKind",
+          "expenseReserveMonthlyBasisMinor",
+          "expenseReserveMonths",
+          "expenseReserveFactor",
+          "expenseReserveLookbackMonths",
+          "taxReserveBasisKind",
+          "taxReserveBasisDescription",
           "series",
           "latest"
         ],
@@ -385,6 +409,12 @@
             "description": "Group id",
             "name": "--group",
             "required": true,
+            "type": "string"
+          },
+          {
+            "description": "conservative|recurring|aggressive",
+            "name": "--reserve-mode",
+            "required": false,
             "type": "string"
           },
           {
@@ -414,6 +444,7 @@
         "name": "report.runway",
         "outputFields": [
           "mode",
+          "reserveMode",
           "ownershipMode",
           "groups",
           "series",
@@ -460,6 +491,12 @@
           {
             "description": "gross|user-share for two-pool mode",
             "name": "--ownership-mode",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "conservative|recurring|aggressive for reserve-aware runway modes",
+            "name": "--reserve-mode",
             "required": false,
             "type": "string"
           },

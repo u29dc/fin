@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use rusqlite::{Connection, params_from_iter};
 use serde::{Deserialize, Serialize};
 
-use crate::config::FinConfig;
+use crate::burn::{BurnReportOptions, OwnershipMode, report_burn};
+use crate::config::{ExpenseReserveBasis, FinConfig, ReserveMode, ResolvedReservePolicy};
 use crate::dashboard::{CashflowKpis, ShortTermTrend, reporting_month, summarize_cashflow_kpis};
 use crate::error::Result;
 use crate::queries::{
@@ -20,10 +21,19 @@ pub struct CashflowTotals {
     pub net_minor: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HealthPoint {
     pub date: String,
+    pub balance_minor: i64,
     pub health_minor: i64,
+    pub reserve_mode: ReserveMode,
+    pub expense_reserve_basis_kind: ExpenseReserveBasis,
+    pub expense_reserve_monthly_basis_minor: i64,
+    pub expense_reserve_months: f64,
+    pub expense_reserve_factor: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expense_reserve_lookback_months: Option<usize>,
+    pub expense_reserve_minor: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,13 +45,29 @@ pub struct RunwayPoint {
     pub median_expense_minor: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReserveBreakdownPoint {
     pub date: String,
+    pub reserve_mode: ReserveMode,
+    pub expense_reserve_basis_kind: ExpenseReserveBasis,
+    pub expense_reserve_monthly_basis_minor: i64,
+    pub expense_reserve_months: f64,
+    pub expense_reserve_factor: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expense_reserve_lookback_months: Option<usize>,
+    pub tax_reserve_basis_kind: TaxReserveBasisKind,
+    pub tax_reserve_basis_description: String,
     pub balance_minor: i64,
     pub tax_reserve_minor: i64,
     pub expense_reserve_minor: i64,
     pub available_minor: i64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaxReserveBasisKind {
+    None,
+    YtdProfit,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,7 +103,11 @@ struct GroupReportContext {
     cashflow: Vec<MonthlyCashflowPoint>,
     balance_points: Vec<MonthlyBalancePoint>,
     cashflow_totals: CashflowTotals,
+    reserve_policy: ResolvedReservePolicy,
+    expense_reserve_monthly_basis_minor: i64,
     expense_reserve_minor: i64,
+    tax_reserve_basis_kind: TaxReserveBasisKind,
+    tax_reserve_basis_description: String,
     tax_rate: f64,
     tax_year_start_month: u32,
     burn_rate_minor: i64,
@@ -272,6 +302,69 @@ fn tax_rate_for_group(config: &FinConfig, group_id: &str) -> f64 {
     }
 }
 
+fn tax_reserve_basis_kind_for_rate(tax_rate: f64) -> TaxReserveBasisKind {
+    if tax_rate > 0.0 {
+        TaxReserveBasisKind::YtdProfit
+    } else {
+        TaxReserveBasisKind::None
+    }
+}
+
+fn tax_reserve_basis_description(config: &FinConfig, group_id: &str, tax_rate: f64) -> String {
+    let tax_type = config.resolve_group_metadata(group_id).tax_type;
+    if tax_rate <= 0.0 {
+        return "no tax reserve".to_owned();
+    }
+    let rate_label = match tax_type.as_str() {
+        "corp" => "corp_tax_rate",
+        "income" => "personal_income_tax_rate",
+        _ => "tax_rate",
+    };
+    format!("max(ytd_profit_minor, 0) x {rate_label}={tax_rate:.4}")
+}
+
+fn recurring_baseline_minor(
+    connection: &Connection,
+    config: &FinConfig,
+    group_id: &str,
+    to: Option<&str>,
+    lookback_months: usize,
+) -> Result<i64> {
+    let report = report_burn(
+        connection,
+        config,
+        &[group_id.to_owned()],
+        &BurnReportOptions {
+            months: lookback_months,
+            from: None,
+            to,
+            ownership_mode: OwnershipMode::Gross,
+            include_partial_month: false,
+        },
+    )?;
+    Ok(report.recurring_baseline.monthly_equivalent_minor.max(0))
+}
+
+fn expense_reserve_monthly_basis_minor(
+    connection: &Connection,
+    config: &FinConfig,
+    group_id: &str,
+    to: Option<&str>,
+    policy: &ResolvedReservePolicy,
+    median_expense_minor: i64,
+) -> Result<i64> {
+    match policy.expense_basis {
+        ExpenseReserveBasis::HistoricalMedianExpense => Ok(median_expense_minor.max(0)),
+        ExpenseReserveBasis::RecurringBaseline => recurring_baseline_minor(
+            connection,
+            config,
+            group_id,
+            to,
+            policy.lookback_months.unwrap_or(6),
+        ),
+    }
+}
+
 fn build_group_report_context(
     connection: &Connection,
     config: &FinConfig,
@@ -279,21 +372,31 @@ fn build_group_report_context(
     from: Option<&str>,
     to: Option<&str>,
     months: usize,
+    reserve_mode: Option<ReserveMode>,
 ) -> Result<GroupReportContext> {
     let cashflow = group_monthly_cashflow(connection, config, group_id, from, to, months)?;
     let balance_points =
         actual_monthly_balance_points(connection, config, group_id, &cashflow, to)?;
     let burn_rate_method = cashflow_burn_method(config);
-    let reserve_months = i64::from(
-        config
-            .resolve_group_metadata(group_id)
-            .expense_reserve_months,
-    );
     let expenses = cashflow
         .iter()
         .map(|point| point.expense_minor)
         .collect::<Vec<_>>();
     let median_expense_minor = median_i64(&expenses).unwrap_or(0);
+    let reserve_policy = config.resolve_reserve_policy(group_id, reserve_mode);
+    let expense_reserve_monthly_basis_minor = expense_reserve_monthly_basis_minor(
+        connection,
+        config,
+        group_id,
+        to,
+        &reserve_policy,
+        median_expense_minor,
+    )?;
+    let expense_reserve_minor = ((expense_reserve_monthly_basis_minor as f64)
+        * reserve_policy.expense_months
+        * reserve_policy.factor)
+        .round() as i64;
+    let tax_rate = tax_rate_for_group(config, group_id);
     let cashflow_totals = CashflowTotals {
         income_minor: cashflow.iter().map(|point| point.income_minor).sum(),
         expense_minor: cashflow.iter().map(|point| point.expense_minor).sum(),
@@ -307,8 +410,12 @@ fn build_group_report_context(
         } else {
             None
         },
-        expense_reserve_minor: median_expense_minor * reserve_months,
-        tax_rate: tax_rate_for_group(config, group_id),
+        reserve_policy,
+        expense_reserve_monthly_basis_minor,
+        expense_reserve_minor: expense_reserve_minor.max(0),
+        tax_reserve_basis_kind: tax_reserve_basis_kind_for_rate(tax_rate),
+        tax_reserve_basis_description: tax_reserve_basis_description(config, group_id, tax_rate),
+        tax_rate,
         tax_year_start_month: config
             .tax_year_start_month(config.resolve_group_metadata(group_id).tax_type.as_str()),
         burn_rate_minor: burn_rate(&expenses, &burn_rate_method),
@@ -323,7 +430,15 @@ fn derive_health_points(context: &GroupReportContext) -> Vec<HealthPoint> {
     for point in &context.balance_points {
         points.push(HealthPoint {
             date: point.date.clone(),
+            balance_minor: point.balance_minor,
             health_minor: point.balance_minor - context.expense_reserve_minor,
+            reserve_mode: context.reserve_policy.reserve_mode,
+            expense_reserve_basis_kind: context.reserve_policy.expense_basis,
+            expense_reserve_monthly_basis_minor: context.expense_reserve_monthly_basis_minor,
+            expense_reserve_months: context.reserve_policy.expense_months,
+            expense_reserve_factor: context.reserve_policy.factor,
+            expense_reserve_lookback_months: context.reserve_policy.lookback_months,
+            expense_reserve_minor: context.expense_reserve_minor,
         });
     }
     points
@@ -362,6 +477,14 @@ fn derive_reserve_points(context: &GroupReportContext) -> Vec<ReserveBreakdownPo
             .round() as i64;
         points.push(ReserveBreakdownPoint {
             date: point.date.clone(),
+            reserve_mode: context.reserve_policy.reserve_mode,
+            expense_reserve_basis_kind: context.reserve_policy.expense_basis,
+            expense_reserve_monthly_basis_minor: context.expense_reserve_monthly_basis_minor,
+            expense_reserve_months: context.reserve_policy.expense_months,
+            expense_reserve_factor: context.reserve_policy.factor,
+            expense_reserve_lookback_months: context.reserve_policy.lookback_months,
+            tax_reserve_basis_kind: context.tax_reserve_basis_kind,
+            tax_reserve_basis_description: context.tax_reserve_basis_description.clone(),
             balance_minor: point.balance_minor,
             tax_reserve_minor,
             expense_reserve_minor: context.expense_reserve_minor,
@@ -408,7 +531,7 @@ pub fn report_cashflow(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<(Vec<MonthlyCashflowPoint>, CashflowTotals)> {
-    let context = build_group_report_context(connection, config, group_id, from, to, months)?;
+    let context = build_group_report_context(connection, config, group_id, from, to, months, None)?;
     Ok((context.cashflow, context.cashflow_totals))
 }
 
@@ -419,7 +542,19 @@ pub fn report_health(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<Vec<HealthPoint>> {
-    let context = build_group_report_context(connection, config, group_id, from, to, 120)?;
+    report_health_with_mode(connection, config, group_id, from, to, None)
+}
+
+pub fn report_health_with_mode(
+    connection: &Connection,
+    config: &FinConfig,
+    group_id: &str,
+    from: Option<&str>,
+    to: Option<&str>,
+    reserve_mode: Option<ReserveMode>,
+) -> Result<Vec<HealthPoint>> {
+    let context =
+        build_group_report_context(connection, config, group_id, from, to, 120, reserve_mode)?;
     Ok(derive_health_points(&context))
 }
 
@@ -430,7 +565,7 @@ pub fn report_runway(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<Vec<RunwayPoint>> {
-    let context = build_group_report_context(connection, config, group_id, from, to, 120)?;
+    let context = build_group_report_context(connection, config, group_id, from, to, 120, None)?;
     Ok(derive_runway_points(&context))
 }
 
@@ -441,7 +576,19 @@ pub fn report_reserves(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<Vec<ReserveBreakdownPoint>> {
-    let context = build_group_report_context(connection, config, group_id, from, to, 120)?;
+    report_reserves_with_mode(connection, config, group_id, from, to, None)
+}
+
+pub fn report_reserves_with_mode(
+    connection: &Connection,
+    config: &FinConfig,
+    group_id: &str,
+    from: Option<&str>,
+    to: Option<&str>,
+    reserve_mode: Option<ReserveMode>,
+) -> Result<Vec<ReserveBreakdownPoint>> {
+    let context =
+        build_group_report_context(connection, config, group_id, from, to, 120, reserve_mode)?;
     Ok(derive_reserve_points(&context))
 }
 
@@ -455,7 +602,8 @@ pub fn report_summary(
     let current_month = reporting_month(connection, to)?;
     for group_id in all_group_ids(config) {
         let group_label = config.resolve_group_metadata(&group_id).label;
-        let context = build_group_report_context(connection, config, &group_id, None, to, 120)?;
+        let context =
+            build_group_report_context(connection, config, &group_id, None, to, 120, None)?;
         let latest_metrics = summarize_latest_group_metrics(&context);
         let cashflow_kpis: CashflowKpis =
             summarize_cashflow_kpis(&context.cashflow, &current_month);
@@ -494,9 +642,16 @@ pub fn report_summary(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use tempfile::tempdir;
 
-    use super::{report_cashflow, report_health, report_reserves, report_runway, report_summary};
+    use super::{
+        report_cashflow, report_health, report_health_with_mode, report_reserves,
+        report_reserves_with_mode, report_runway, report_summary,
+    };
+    use crate::burn::{BurnReportOptions, OwnershipMode, report_burn};
+    use crate::config::{ExpenseReserveBasis, ReserveMode};
     use crate::dashboard::{current_reporting_month, summarize_cashflow_kpis};
     use crate::queries::view_accounts;
     use crate::runtime::{RuntimeContext, RuntimeContextOptions};
@@ -506,6 +661,23 @@ mod tests {
         let temp = tempdir().expect("tempdir");
         let fixture = materialize_fixture_home(temp.path(), &FixtureBuildOptions::default())
             .expect("materialize fixture");
+        RuntimeContext::open(RuntimeContextOptions {
+            config_path: Some(fixture.paths.config_path),
+            db_path: Some(fixture.paths.db_path),
+            create: false,
+            ..RuntimeContextOptions::read_only()
+        })
+        .expect("open runtime")
+    }
+
+    fn open_fixture_runtime_with_config_append(suffix: &str) -> RuntimeContext {
+        let temp = tempdir().expect("tempdir");
+        let fixture = materialize_fixture_home(temp.path(), &FixtureBuildOptions::default())
+            .expect("materialize fixture");
+        let mut raw = fs::read_to_string(&fixture.paths.config_path).expect("read config");
+        raw.push('\n');
+        raw.push_str(suffix);
+        fs::write(&fixture.paths.config_path, raw).expect("write config");
         RuntimeContext::open(RuntimeContextOptions {
             config_path: Some(fixture.paths.config_path),
             db_path: Some(fixture.paths.db_path),
@@ -622,6 +794,148 @@ mod tests {
                 cashflow_kpis.anomaly_count_last_12_months
             );
         }
+    }
+
+    #[test]
+    fn reserve_modes_switch_between_historical_and_recurring_baselines() {
+        let runtime = open_fixture_runtime_with_config_append(
+            r#"
+[reserve.modes.recurring]
+expense_basis = "recurring_baseline"
+expense_months = 6
+lookback_months = 6
+
+[reserve.modes.aggressive]
+expense_basis = "recurring_baseline"
+expense_months = 3
+lookback_months = 6
+
+[reserve.groups.business.modes.conservative]
+expense_months = 12
+"#,
+        );
+        let group_id = "business";
+
+        let conservative = report_reserves_with_mode(
+            runtime.connection(),
+            runtime.config(),
+            group_id,
+            None,
+            Some("2026-03-14"),
+            Some(ReserveMode::Conservative),
+        )
+        .expect("conservative reserves");
+        let recurring = report_reserves_with_mode(
+            runtime.connection(),
+            runtime.config(),
+            group_id,
+            None,
+            Some("2026-03-14"),
+            Some(ReserveMode::Recurring),
+        )
+        .expect("recurring reserves");
+        let aggressive = report_reserves_with_mode(
+            runtime.connection(),
+            runtime.config(),
+            group_id,
+            None,
+            Some("2026-03-14"),
+            Some(ReserveMode::Aggressive),
+        )
+        .expect("aggressive reserves");
+
+        let conservative_latest = conservative.last().expect("conservative latest");
+        let recurring_latest = recurring.last().expect("recurring latest");
+        let aggressive_latest = aggressive.last().expect("aggressive latest");
+
+        let runway = report_runway(
+            runtime.connection(),
+            runtime.config(),
+            group_id,
+            None,
+            Some("2026-03-14"),
+        )
+        .expect("runway");
+        let burn_lookback = runtime
+            .config()
+            .resolve_reserve_policy(group_id, Some(ReserveMode::Recurring))
+            .lookback_months
+            .unwrap_or(6);
+        let burn = report_burn(
+            runtime.connection(),
+            runtime.config(),
+            &[group_id.to_owned()],
+            &BurnReportOptions {
+                months: burn_lookback,
+                from: None,
+                to: Some("2026-03-14"),
+                ownership_mode: OwnershipMode::Gross,
+                include_partial_month: false,
+            },
+        )
+        .expect("burn");
+
+        assert_eq!(
+            conservative_latest.expense_reserve_basis_kind,
+            ExpenseReserveBasis::HistoricalMedianExpense
+        );
+        assert_eq!(
+            conservative_latest.expense_reserve_monthly_basis_minor,
+            runway
+                .last()
+                .map(|point| point.median_expense_minor)
+                .unwrap_or_default()
+        );
+        assert_eq!(
+            recurring_latest.expense_reserve_basis_kind,
+            ExpenseReserveBasis::RecurringBaseline
+        );
+        assert_eq!(
+            recurring_latest.expense_reserve_monthly_basis_minor,
+            burn.recurring_baseline.monthly_equivalent_minor
+        );
+        assert!(recurring_latest.expense_reserve_minor < conservative_latest.expense_reserve_minor);
+        assert!(aggressive_latest.expense_reserve_minor < recurring_latest.expense_reserve_minor);
+    }
+
+    #[test]
+    fn health_mode_changes_follow_reserve_mode() {
+        let runtime = open_fixture_runtime_with_config_append(
+            r#"
+[reserve.modes.recurring]
+expense_basis = "recurring_baseline"
+expense_months = 6
+lookback_months = 6
+
+[reserve.groups.business.modes.conservative]
+expense_months = 12
+"#,
+        );
+        let conservative = report_health_with_mode(
+            runtime.connection(),
+            runtime.config(),
+            "business",
+            None,
+            Some("2026-03-14"),
+            Some(ReserveMode::Conservative),
+        )
+        .expect("conservative health");
+        let recurring = report_health_with_mode(
+            runtime.connection(),
+            runtime.config(),
+            "business",
+            None,
+            Some("2026-03-14"),
+            Some(ReserveMode::Recurring),
+        )
+        .expect("recurring health");
+
+        let conservative_latest = conservative.last().expect("conservative latest");
+        let recurring_latest = recurring.last().expect("recurring latest");
+
+        assert_eq!(conservative_latest.reserve_mode, ReserveMode::Conservative);
+        assert_eq!(recurring_latest.reserve_mode, ReserveMode::Recurring);
+        assert!(recurring_latest.health_minor > conservative_latest.health_minor);
     }
 
     #[test]
