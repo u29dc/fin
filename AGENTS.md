@@ -4,7 +4,7 @@
 
 - Primary source files: [`crates/fin-sdk/src/lib.rs`](crates/fin-sdk/src/lib.rs), [`crates/fin-cli/src/main.rs`](crates/fin-cli/src/main.rs), [`crates/fin-api/src/api.rs`](crates/fin-api/src/api.rs), [`packages/web/src/lib/server/api.ts`](packages/web/src/lib/server/api.ts)
 - Runtime/operator docs: [`docs/fin-api.md`](docs/fin-api.md), [`docs/benchmarks/api-007-fin-api.md`](docs/benchmarks/api-007-fin-api.md), [`docs/benchmarks/qa-002-final.md`](docs/benchmarks/qa-002-final.md)
-- Roadmap context: [`PLAN.md`](PLAN.md), [`tickets.csv`](tickets.csv), [`tests/parity/archive-parity-matrix.csv`](tests/parity/archive-parity-matrix.csv)
+- Planning context: [`tickets.csv`](tickets.csv), [`tests/parity/archive-parity-matrix.csv`](tests/parity/archive-parity-matrix.csv)
 - Templates and sanitized examples: [`fin.config.template.toml`](fin.config.template.toml), [`fin.rules.example.json`](fin.rules.example.json), [`tests/fixtures/benchmark/`](tests/fixtures/benchmark/)
 - Installed-runtime skill notes: [`.claude/skills/fin/SKILL.md`](.claude/skills/fin/SKILL.md)
 
@@ -103,5 +103,4 @@
 
 ## 10. Further Reading
 
-- [`PLAN.md`](PLAN.md) - roadmap operating rules and acceptance criteria
 - [`tests/parity/archive-parity-matrix.csv`](tests/parity/archive-parity-matrix.csv) - archive-to-main surface parity checklist for dashboard, overview, and transactions work
