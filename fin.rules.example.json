@@ -1,45 +1,45 @@
 {
-  "warn_on_unmapped": true,
-  "fallback_to_raw": true,
-  "rules": [
-    {
-      "patterns": ["YOUR EMPLOYER NAME"],
-      "target": "Salary",
-      "category": "Income"
-    },
-    {
-      "patterns": ["DIVIDEND PAYMENT"],
-      "target": "Dividends",
-      "category": "Income"
-    },
-    {
-      "patterns": ["TESCO", "SAINSBURY", "WAITROSE", "LIDL", "ALDI"],
-      "target": "Groceries",
-      "category": "Groceries"
-    },
-    {
-      "patterns": ["AMAZON", "EBAY"],
-      "target": "Shopping",
-      "category": "Shopping"
-    },
-    {
-      "patterns": ["LOCAL COFFEE SHOP"],
-      "target": "Coffee Shop",
-      "category": "Food"
-    },
-    {
-      "patterns": ["YOUR BUSINESS NAME", "Sent money to Your Name"],
-      "target": "Internal Transfer"
-    },
-    {
-      "patterns": ["LOCAL COUNCIL"],
-      "target": "Council Tax",
-      "category": "CouncilTax"
-    },
-    {
-      "patterns": ["LANDLORD NAME"],
-      "target": "Rent",
-      "category": "Rent"
-    }
-  ]
+	"warn_on_unmapped": true,
+	"fallback_to_raw": true,
+	"rules": [
+		{
+			"patterns": ["YOUR EMPLOYER NAME"],
+			"target": "Salary",
+			"category": "Income"
+		},
+		{
+			"patterns": ["DIVIDEND PAYMENT"],
+			"target": "Dividends",
+			"category": "Income"
+		},
+		{
+			"patterns": ["TESCO", "SAINSBURY", "WAITROSE", "LIDL", "ALDI"],
+			"target": "Groceries",
+			"category": "Groceries"
+		},
+		{
+			"patterns": ["AMAZON", "EBAY"],
+			"target": "Shopping",
+			"category": "Shopping"
+		},
+		{
+			"patterns": ["LOCAL COFFEE SHOP"],
+			"target": "Coffee Shop",
+			"category": "Food"
+		},
+		{
+			"patterns": ["YOUR BUSINESS NAME", "Sent money to Your Name"],
+			"target": "Internal Transfer"
+		},
+		{
+			"patterns": ["LOCAL COUNCIL"],
+			"target": "Council Tax",
+			"category": "CouncilTax"
+		},
+		{
+			"patterns": ["LANDLORD NAME"],
+			"target": "Rent",
+			"category": "Rent"
+		}
+	]
 }
