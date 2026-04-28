@@ -5,7 +5,7 @@ use std::process::Command;
 
 use csv::ReaderBuilder;
 use regex::Regex;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -55,6 +55,7 @@ pub struct CanonicalTransaction {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportResult {
+    pub mode: ImportMode,
     pub processed_files: Vec<String>,
     pub archived_files: Vec<String>,
     pub skipped_files: Vec<SkippedFile>,
@@ -64,6 +65,8 @@ pub struct ImportResult {
     pub journal_entries_attempted: usize,
     pub journal_entries_created: usize,
     pub transfer_pairs_created: usize,
+    pub replaced_provider_transactions: usize,
+    pub replaced_journal_entries: usize,
     pub entry_errors: Vec<String>,
     pub accounts_touched: Vec<String>,
     pub unmapped_descriptions: Vec<String>,
@@ -75,12 +78,21 @@ pub struct SkippedFile {
     pub reason: String,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ImportMode {
+    #[default]
+    Append,
+    FullExport,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ImportInboxOptions {
     pub inbox_dir: Option<PathBuf>,
     pub archive_dir: Option<PathBuf>,
     pub db_path: Option<PathBuf>,
     pub migrate: bool,
+    pub mode: ImportMode,
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +106,12 @@ struct DetectedFile {
 struct TransferPair {
     from: CanonicalTransaction,
     to: CanonicalTransaction,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct FullExportReconciliation {
+    replaced_provider_transactions: usize,
+    replaced_journal_entries: usize,
 }
 
 fn parse_amount_minor(raw: &str) -> Result<i64> {
@@ -772,11 +790,10 @@ fn load_existing_provider_txn_pairs(connection: &Connection) -> Result<HashSet<S
     Ok(set)
 }
 
-fn filter_new_transactions(
-    connection: &Connection,
+fn filter_duplicate_transactions(
     transactions: Vec<CanonicalTransaction>,
+    existing_pairs: &HashSet<String>,
 ) -> Result<(Vec<CanonicalTransaction>, usize)> {
-    let existing_pairs = load_existing_provider_txn_pairs(connection)?;
     let mut seen_batch = HashSet::new();
     let mut new_transactions = Vec::new();
     let mut duplicates = 0usize;
@@ -792,6 +809,113 @@ fn filter_new_transactions(
         new_transactions.push(transaction);
     }
     Ok((new_transactions, duplicates))
+}
+
+fn filter_new_transactions(
+    connection: &Connection,
+    transactions: Vec<CanonicalTransaction>,
+) -> Result<(Vec<CanonicalTransaction>, usize)> {
+    let existing_pairs = load_existing_provider_txn_pairs(connection)?;
+    filter_duplicate_transactions(transactions, &existing_pairs)
+}
+
+fn placeholders(count: usize) -> String {
+    std::iter::repeat_n("?", count)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn provider_journal_entry_ids_for_accounts(
+    connection: &Connection,
+    account_ids: &[String],
+) -> Result<Vec<String>> {
+    if account_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let sql = format!(
+        "SELECT DISTINCT journal_entry_id\n         FROM postings\n         WHERE provider_txn_id IS NOT NULL\n           AND account_id IN ({})",
+        placeholders(account_ids.len())
+    );
+    let mut statement = connection.prepare(&sql)?;
+    let rows = statement.query_map(params_from_iter(account_ids.iter()), |row| row.get(0))?;
+    rows.collect::<std::result::Result<Vec<String>, _>>()
+        .map_err(Into::into)
+}
+
+fn validate_full_export_journal_scope(
+    connection: &Connection,
+    journal_entry_ids: &[String],
+    touched_accounts: &BTreeSet<String>,
+) -> Result<()> {
+    if journal_entry_ids.is_empty() {
+        return Ok(());
+    }
+    let sql = format!(
+        "SELECT DISTINCT journal_entry_id, account_id\n         FROM postings\n         WHERE provider_txn_id IS NOT NULL\n           AND journal_entry_id IN ({})",
+        placeholders(journal_entry_ids.len())
+    );
+    let mut statement = connection.prepare(&sql)?;
+    let mut rows = statement.query(params_from_iter(journal_entry_ids.iter()))?;
+    while let Some(row) = rows.next()? {
+        let journal_entry_id: String = row.get(0)?;
+        let account_id: String = row.get(1)?;
+        if !touched_accounts.contains(&account_id) {
+            return Err(FinError::InvalidInput {
+                code: "FULL_EXPORT_PARTIAL_TRANSFER",
+                message: format!(
+                    "Full export reconciliation for touched accounts would delete linked provider transaction in {account_id} from journal entry {journal_entry_id}. Include that account in the same import batch."
+                ),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn provider_transaction_count_for_journal_entries(
+    connection: &Connection,
+    journal_entry_ids: &[String],
+) -> Result<usize> {
+    if journal_entry_ids.is_empty() {
+        return Ok(0);
+    }
+    let sql = format!(
+        "SELECT COUNT(*)\n         FROM postings\n         WHERE provider_txn_id IS NOT NULL\n           AND journal_entry_id IN ({})",
+        placeholders(journal_entry_ids.len())
+    );
+    let count = connection.query_row(&sql, params_from_iter(journal_entry_ids.iter()), |row| {
+        row.get::<_, i64>(0)
+    })?;
+    Ok(count as usize)
+}
+
+fn delete_journal_entries(connection: &Connection, journal_entry_ids: &[String]) -> Result<usize> {
+    if journal_entry_ids.is_empty() {
+        return Ok(0);
+    }
+    let sql = format!(
+        "DELETE FROM journal_entries WHERE id IN ({})",
+        placeholders(journal_entry_ids.len())
+    );
+    connection
+        .execute(&sql, params_from_iter(journal_entry_ids.iter()))
+        .map_err(Into::into)
+}
+
+fn reconcile_full_export_accounts(
+    connection: &Connection,
+    accounts_touched: &[String],
+) -> Result<FullExportReconciliation> {
+    let touched_accounts = accounts_touched.iter().cloned().collect::<BTreeSet<_>>();
+    let journal_entry_ids = provider_journal_entry_ids_for_accounts(connection, accounts_touched)?;
+    validate_full_export_journal_scope(connection, &journal_entry_ids, &touched_accounts)?;
+    let replaced_provider_transactions =
+        provider_transaction_count_for_journal_entries(connection, &journal_entry_ids)?;
+    let replaced_journal_entries = delete_journal_entries(connection, &journal_entry_ids)?;
+
+    Ok(FullExportReconciliation {
+        replaced_provider_transactions,
+        replaced_journal_entries,
+    })
 }
 
 fn transfer_days_delta(a: &str, b: &str) -> Option<i64> {
@@ -1088,6 +1212,7 @@ fn process_files(
     detected: &[DetectedFile],
     config: &FinConfig,
     imported_sources: &HashSet<String>,
+    skip_imported_sources: bool,
 ) -> (
     Vec<DetectedFile>,
     Vec<SkippedFile>,
@@ -1101,7 +1226,7 @@ fn process_files(
 
     for file in detected {
         let file_path = file.path.display().to_string();
-        if imported_sources.contains(&file_path) {
+        if skip_imported_sources && imported_sources.contains(&file_path) {
             skipped.push(SkippedFile {
                 path: file_path,
                 reason: "File already imported.".to_owned(),
@@ -1182,13 +1307,48 @@ pub fn import_inbox(options: ImportInboxOptions) -> Result<ImportResult> {
     let loaded_rules = load_rules(None, Some(&loaded_config), None)?;
     let detected = scan_inbox(&inbox_dir, &loaded_config.config)?;
     let imported_sources = load_imported_source_files(&connection)?;
-    let (processed_files, mut skipped_files, parsed_transactions, accounts_touched) =
-        process_files(&detected, &loaded_config.config, &imported_sources);
+    let (processed_files, mut skipped_files, parsed_transactions, accounts_touched) = process_files(
+        &detected,
+        &loaded_config.config,
+        &imported_sources,
+        options.mode == ImportMode::Append,
+    );
     let (canonical, unmapped_descriptions) =
         canonicalize_transactions(parsed_transactions, &loaded_rules.config);
     let total_transactions = canonical.len();
-    let (new_transactions, duplicate_transactions) =
-        filter_new_transactions(&connection, canonical)?;
+
+    if options.mode == ImportMode::FullExport && !skipped_files.is_empty() {
+        let entry_errors = skipped_files
+            .iter()
+            .map(|file| format!("{}: {}", file.path, file.reason))
+            .collect::<Vec<_>>();
+        return Ok(ImportResult {
+            mode: options.mode,
+            processed_files: processed_files
+                .iter()
+                .map(|file| file.path.display().to_string())
+                .collect(),
+            archived_files: Vec::new(),
+            skipped_files,
+            total_transactions,
+            unique_transactions: 0,
+            duplicate_transactions: 0,
+            journal_entries_attempted: 0,
+            journal_entries_created: 0,
+            transfer_pairs_created: 0,
+            replaced_provider_transactions: 0,
+            replaced_journal_entries: 0,
+            entry_errors,
+            accounts_touched,
+            unmapped_descriptions,
+        });
+    }
+
+    let (new_transactions, duplicate_transactions) = if options.mode == ImportMode::FullExport {
+        filter_duplicate_transactions(canonical, &HashSet::new())?
+    } else {
+        filter_new_transactions(&connection, canonical)?
+    };
     let unique_transactions = new_transactions.len();
     let (transfer_pairs, transfer_matched) = detect_transfer_pairs(&new_transactions);
     let non_transfers = new_transactions
@@ -1200,8 +1360,12 @@ pub fn import_inbox(options: ImportInboxOptions) -> Result<ImportResult> {
     let mut transfer_pairs_created = 0usize;
     let mut entry_errors = Vec::new();
     let journal_entries_attempted = transfer_pairs.len() + non_transfers.len();
+    let mut reconciliation = FullExportReconciliation::default();
 
     let tx = connection.transaction()?;
+    if options.mode == ImportMode::FullExport {
+        reconciliation = reconcile_full_export_accounts(&tx, &accounts_touched)?;
+    }
     for pair in &transfer_pairs {
         match insert_transfer_pair(&tx, pair) {
             Ok(_) => {
@@ -1220,7 +1384,11 @@ pub fn import_inbox(options: ImportInboxOptions) -> Result<ImportResult> {
             Err(error) => entry_errors.push(format!("Transaction {}: {error}", transaction.id)),
         }
     }
-    tx.commit()?;
+    if options.mode == ImportMode::FullExport && !entry_errors.is_empty() {
+        reconciliation = FullExportReconciliation::default();
+    } else {
+        tx.commit()?;
+    }
 
     let archived_files = if entry_errors.is_empty() {
         archive_processed_files(&processed_files, &archive_dir)?
@@ -1233,6 +1401,7 @@ pub fn import_inbox(options: ImportInboxOptions) -> Result<ImportResult> {
     };
 
     Ok(ImportResult {
+        mode: options.mode,
         processed_files: processed_files
             .iter()
             .map(|file| file.path.display().to_string())
@@ -1245,8 +1414,260 @@ pub fn import_inbox(options: ImportInboxOptions) -> Result<ImportResult> {
         journal_entries_attempted,
         journal_entries_created,
         transfer_pairs_created,
+        replaced_provider_transactions: reconciliation.replaced_provider_transactions,
+        replaced_journal_entries: reconciliation.replaced_journal_entries,
         entry_errors,
         accounts_touched,
         unmapped_descriptions,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use rusqlite::{Connection, params};
+
+    use super::*;
+    use crate::db::schema::SCHEMA_SQL;
+
+    fn test_connection() -> Connection {
+        let connection = Connection::open_in_memory().expect("open in-memory db");
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON;")
+            .expect("enable foreign keys");
+        connection.execute_batch(SCHEMA_SQL).expect("create schema");
+        for (id, account_type) in [
+            ("Assets:Personal:Monzo", "asset"),
+            ("Assets:Personal:Savings", "asset"),
+            ("Assets:Business:Wise", "asset"),
+            ("Expenses:Other", "expense"),
+            ("Income:Other", "income"),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO chart_of_accounts (id, name, account_type) VALUES (?1, ?1, ?2)",
+                    params![id, account_type],
+                )
+                .expect("insert account");
+        }
+        connection
+    }
+
+    fn insert_provider_entry(
+        connection: &Connection,
+        journal_id: &str,
+        account_id: &str,
+        provider_txn_id: &str,
+        amount_minor: i64,
+    ) {
+        connection
+            .execute(
+                "INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, description, source_file)
+                 VALUES (?1, '2026-04-01T00:00:00', '2026-04-01', 0, ?2, 'test.csv')",
+                params![journal_id, provider_txn_id],
+            )
+            .expect("insert journal entry");
+        connection
+            .execute(
+                "INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, provider_txn_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    format!("p-{journal_id}-provider"),
+                    journal_id,
+                    account_id,
+                    amount_minor,
+                    provider_txn_id
+                ],
+            )
+            .expect("insert provider posting");
+        connection
+            .execute(
+                "INSERT INTO postings (id, journal_entry_id, account_id, amount_minor)
+                 VALUES (?1, ?2, 'Expenses:Other', ?3)",
+                params![format!("p-{journal_id}-counter"), journal_id, -amount_minor],
+            )
+            .expect("insert counter posting");
+    }
+
+    fn insert_manual_entry(connection: &Connection, journal_id: &str, account_id: &str) {
+        connection
+            .execute(
+                "INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, description, source_file)
+                 VALUES (?1, '2026-04-01T00:00:00', '2026-04-01', 0, 'manual', NULL)",
+                params![journal_id],
+            )
+            .expect("insert manual journal entry");
+        connection
+            .execute(
+                "INSERT INTO postings (id, journal_entry_id, account_id, amount_minor)
+                 VALUES (?1, ?2, ?3, 1000)",
+                params![format!("p-{journal_id}-asset"), journal_id, account_id],
+            )
+            .expect("insert manual asset posting");
+        connection
+            .execute(
+                "INSERT INTO postings (id, journal_entry_id, account_id, amount_minor)
+                 VALUES (?1, ?2, 'Income:Other', -1000)",
+                params![format!("p-{journal_id}-counter"), journal_id],
+            )
+            .expect("insert manual counter posting");
+    }
+
+    fn insert_transfer_entry(connection: &Connection, journal_id: &str) {
+        connection
+            .execute(
+                "INSERT INTO journal_entries (id, posted_at, posted_date, is_transfer, description, source_file)
+                 VALUES (?1, '2026-04-01T00:00:00', '2026-04-01', 1, 'transfer', 'test.csv')",
+                params![journal_id],
+            )
+            .expect("insert transfer journal entry");
+        for (posting_id, account_id, amount_minor, provider_txn_id) in [
+            (
+                "p-transfer-from",
+                "Assets:Business:Wise",
+                -5000,
+                "wise-transfer",
+            ),
+            (
+                "p-transfer-to",
+                "Assets:Personal:Monzo",
+                5000,
+                "monzo-transfer",
+            ),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO postings (id, journal_entry_id, account_id, amount_minor, provider_txn_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![
+                        posting_id,
+                        journal_id,
+                        account_id,
+                        amount_minor,
+                        provider_txn_id
+                    ],
+                )
+                .expect("insert transfer posting");
+        }
+    }
+
+    fn journal_entry_count(connection: &Connection) -> i64 {
+        connection
+            .query_row("SELECT COUNT(*) FROM journal_entries", [], |row| row.get(0))
+            .expect("count journal entries")
+    }
+
+    fn provider_posting_count(connection: &Connection, account_id: &str) -> i64 {
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM postings WHERE account_id = ?1 AND provider_txn_id IS NOT NULL",
+                params![account_id],
+                |row| row.get(0),
+            )
+            .expect("count provider postings")
+    }
+
+    #[test]
+    fn full_export_reconciliation_deletes_provider_rows_for_touched_account_only() {
+        let connection = test_connection();
+        insert_provider_entry(
+            &connection,
+            "je-provider",
+            "Assets:Personal:Monzo",
+            "txn-old",
+            1500,
+        );
+        insert_manual_entry(&connection, "je-manual", "Assets:Personal:Monzo");
+
+        let summary =
+            reconcile_full_export_accounts(&connection, &["Assets:Personal:Monzo".to_owned()])
+                .expect("reconcile");
+
+        assert_eq!(summary.replaced_provider_transactions, 1);
+        assert_eq!(summary.replaced_journal_entries, 1);
+        assert_eq!(journal_entry_count(&connection), 1);
+        assert_eq!(
+            provider_posting_count(&connection, "Assets:Personal:Monzo"),
+            0
+        );
+    }
+
+    #[test]
+    fn full_export_reconciliation_blocks_partial_linked_transfer() {
+        let connection = test_connection();
+        insert_transfer_entry(&connection, "je-transfer");
+
+        let error =
+            reconcile_full_export_accounts(&connection, &["Assets:Personal:Monzo".to_owned()])
+                .expect_err("partial linked transfer should fail");
+
+        assert!(error.to_string().contains("FULL_EXPORT_PARTIAL_TRANSFER"));
+        assert_eq!(journal_entry_count(&connection), 1);
+        assert_eq!(
+            provider_posting_count(&connection, "Assets:Business:Wise"),
+            1
+        );
+        assert_eq!(
+            provider_posting_count(&connection, "Assets:Personal:Monzo"),
+            1
+        );
+    }
+
+    #[test]
+    fn full_export_reconciliation_deletes_linked_transfer_when_all_accounts_are_touched() {
+        let connection = test_connection();
+        insert_transfer_entry(&connection, "je-transfer");
+
+        let summary = reconcile_full_export_accounts(
+            &connection,
+            &[
+                "Assets:Business:Wise".to_owned(),
+                "Assets:Personal:Monzo".to_owned(),
+            ],
+        )
+        .expect("reconcile linked transfer");
+
+        assert_eq!(summary.replaced_provider_transactions, 2);
+        assert_eq!(summary.replaced_journal_entries, 1);
+        assert_eq!(journal_entry_count(&connection), 0);
+    }
+
+    #[test]
+    fn duplicate_filter_can_ignore_existing_rows_for_full_export_reinsert() {
+        let transactions = vec![
+            CanonicalTransaction {
+                id: "a".to_owned(),
+                chart_account_id: "Assets:Personal:Monzo".to_owned(),
+                posted_at: "2026-04-01T00:00:00".to_owned(),
+                amount_minor: 100,
+                currency: "GBP".to_owned(),
+                raw_description: "one".to_owned(),
+                clean_description: "one".to_owned(),
+                counterparty: None,
+                category: None,
+                provider_txn_id: Some("txn-1".to_owned()),
+                balance_minor: None,
+                source_file: "test.csv".to_owned(),
+            },
+            CanonicalTransaction {
+                id: "b".to_owned(),
+                chart_account_id: "Assets:Personal:Monzo".to_owned(),
+                posted_at: "2026-04-01T00:00:00".to_owned(),
+                amount_minor: 100,
+                currency: "GBP".to_owned(),
+                raw_description: "one duplicate".to_owned(),
+                clean_description: "one duplicate".to_owned(),
+                counterparty: None,
+                category: None,
+                provider_txn_id: Some("txn-1".to_owned()),
+                balance_minor: None,
+                source_file: "test.csv".to_owned(),
+            },
+        ];
+
+        let (filtered, duplicates) =
+            filter_duplicate_transactions(transactions, &HashSet::new()).expect("filter");
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(duplicates, 1);
+    }
 }

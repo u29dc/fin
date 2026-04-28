@@ -388,8 +388,16 @@ pub fn tool_registry() -> Vec<ToolMeta> {
             "Import transactions from inbox",
             ToolTraits::mutation(),
             "fin import",
-            vec![flag("--inbox", "Override inbox directory", false)],
+            vec![
+                flag("--inbox", "Override inbox directory", false),
+                flag(
+                    "--full-export",
+                    "Treat processed files as full account exports and replace provider-backed rows for touched accounts",
+                    false,
+                ),
+            ],
             &[
+                "mode",
                 "processedFiles",
                 "archivedFiles",
                 "skippedFiles",
@@ -399,6 +407,8 @@ pub fn tool_registry() -> Vec<ToolMeta> {
                 "journalEntriesAttempted",
                 "journalEntriesCreated",
                 "transferPairsCreated",
+                "replacedProviderTransactions",
+                "replacedJournalEntries",
                 "entryErrors",
                 "accountsTouched",
                 "unmappedDescriptions",

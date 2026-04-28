@@ -106,6 +106,7 @@
         "interactiveOnly": false,
         "name": "import",
         "outputFields": [
+          "mode",
           "processedFiles",
           "archivedFiles",
           "skippedFiles",
@@ -115,6 +116,8 @@
           "journalEntriesAttempted",
           "journalEntriesCreated",
           "transferPairsCreated",
+          "replacedProviderTransactions",
+          "replacedJournalEntries",
           "entryErrors",
           "accountsTouched",
           "unmappedDescriptions"
@@ -123,6 +126,12 @@
           {
             "description": "Override inbox directory",
             "name": "--inbox",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Treat processed files as full account exports and replace provider-backed rows for touched accounts",
+            "name": "--full-export",
             "required": false,
             "type": "string"
           }

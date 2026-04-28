@@ -74,6 +74,9 @@ struct ImportArgs {
     /// Override inbox directory
     #[arg(long)]
     inbox: Option<String>,
+    /// Treat processed files as full account exports and replace provider-backed rows for touched accounts
+    #[arg(long)]
+    full_export: bool,
 }
 
 #[derive(Args, Debug)]
@@ -399,9 +402,11 @@ fn execute(
                 commands::rules::run_migrate_ts(args.source.as_deref(), args.target.as_deref())
             }
         },
-        Some(Command::Import(args)) => {
-            commands::import::run(args.inbox.as_deref(), options.db.as_deref())
-        }
+        Some(Command::Import(args)) => commands::import::run(
+            args.inbox.as_deref(),
+            options.db.as_deref(),
+            args.full_export,
+        ),
         Some(Command::Sanitize(sanitize)) => match sanitize.command {
             SanitizeCommand::Discover(args) => commands::sanitize::run_discover(
                 options.db.as_deref(),

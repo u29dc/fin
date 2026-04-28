@@ -54,7 +54,7 @@ pub use health::{
     CheckStatus, HealthCheck, HealthCheckOptions, HealthReport, HealthStatus, HealthSummary,
     Severity, run_health_checks,
 };
-pub use import::{ImportInboxOptions, ImportResult, SkippedFile, import_inbox};
+pub use import::{ImportInboxOptions, ImportMode, ImportResult, SkippedFile, import_inbox};
 pub use insights::{
     ExpenseHierarchyNode, ExpenseHierarchyNodeKind, FlowEdge, FlowGraph, FlowNode, FlowNodeKind,
     FlowQueryOptions, HierarchyQueryOptions, RollupMode, group_expense_hierarchy, group_flow_graph,
