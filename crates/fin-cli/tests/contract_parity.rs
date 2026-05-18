@@ -138,6 +138,38 @@ fn default_json_success_writes_envelope_to_stdout() {
 }
 
 #[test]
+fn default_json_parse_error_writes_envelope_to_stdout() {
+    let fixture = fixture_home();
+    let output = run_command(&fixture.home, &["report", "cashflow"]);
+
+    assert!(
+        !output.status.success(),
+        "parse failure should exit nonzero"
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "unexpected stderr for default JSON parse error"
+    );
+
+    let document: Value = serde_json::from_slice(&output.stdout).expect("parse error json");
+    assert_eq!(document["ok"], Value::Bool(false));
+    assert_eq!(
+        document["meta"]["tool"],
+        Value::String("cli.parse".to_owned())
+    );
+    assert_eq!(
+        document["error"]["code"],
+        Value::String("RUNTIME_ERROR".to_owned())
+    );
+    assert!(
+        document["error"]["message"]
+            .as_str()
+            .expect("error message")
+            .contains("required arguments")
+    );
+}
+
+#[test]
 fn text_success_writes_human_output_to_stdout() {
     let fixture = fixture_home();
     let output = run_command(&fixture.home, &["--text", "version"]);
@@ -155,6 +187,101 @@ fn text_success_writes_human_output_to_stdout() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("fin-sdk v"));
+}
+
+#[test]
+fn text_format_tsv_applies_to_transactions() {
+    let fixture = fixture_home();
+    let output = run_command(
+        &fixture.home,
+        &[
+            "--text",
+            "--format",
+            "tsv",
+            "view",
+            "transactions",
+            "--group",
+            "personal",
+            "--limit",
+            "5",
+        ],
+    );
+
+    assert!(
+        output.status.success(),
+        "transactions TSV failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "unexpected stderr for transactions TSV output"
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines = stdout.trim_end().lines().collect::<Vec<_>>();
+    assert_eq!(
+        lines.first(),
+        Some(&"date\taccount\tamount\tdescription\tid")
+    );
+    assert_eq!(lines.len(), 6);
+    assert_eq!(lines[1].split('\t').count(), 5);
+    assert!(
+        !stdout.trim_start().starts_with('{'),
+        "TSV output should not be a JSON envelope"
+    );
+}
+
+#[test]
+fn invalid_text_format_fails_during_parse() {
+    let fixture = fixture_home();
+    let output = run_command(
+        &fixture.home,
+        &[
+            "--text",
+            "--format",
+            "nope",
+            "view",
+            "transactions",
+            "--group",
+            "personal",
+            "--limit",
+            "5",
+        ],
+    );
+
+    assert!(
+        !output.status.success(),
+        "invalid format should exit nonzero"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "parse error should not write text-mode stdout"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("invalid value"));
+    assert!(stderr.contains("nope"));
+    assert!(stderr.contains("tsv"));
+}
+
+#[test]
+fn text_format_is_rejected_for_unsupported_commands() {
+    let fixture = fixture_home();
+    let output = run_command(&fixture.home, &["--text", "--format", "tsv", "version"]);
+
+    assert!(
+        !output.status.success(),
+        "unsupported format target should exit nonzero"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "unsupported format target should not write stdout"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--format"));
+    assert!(stderr.contains("view transactions"));
 }
 
 #[test]

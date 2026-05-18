@@ -1,11 +1,14 @@
 use serde_json::json;
 
 use fin_sdk::{
-    LedgerQueryOptions, TransactionQueryOptions, edit_transaction, get_balance_sheet,
-    ledger_entry_count, view_accounts, view_ledger, view_transactions, void_entry,
+    LedgerQueryOptions, TransactionQueryOptions, TransactionRow, edit_transaction,
+    get_balance_sheet, ledger_entry_count, view_accounts, view_ledger, view_transactions,
+    void_entry,
 };
 
-use crate::commands::{CommandFailure, CommandResult, map_fin_error, open_runtime};
+use crate::commands::{
+    CommandFailure, CommandResult, GlobalOptions, TextFormat, map_fin_error, open_runtime,
+};
 use crate::envelope::MetaExtras;
 use crate::error::ExitCode;
 
@@ -49,7 +52,7 @@ pub fn run_accounts(
 }
 
 pub fn run_transactions(
-    db: Option<&str>,
+    options: &GlobalOptions,
     account: Option<&str>,
     group: Option<&str>,
     from: Option<&str>,
@@ -57,7 +60,7 @@ pub fn run_transactions(
     search: Option<&str>,
     limit: usize,
 ) -> Result<CommandResult, CommandFailure> {
-    let runtime = open_runtime("view.transactions", db, true)?;
+    let runtime = open_runtime("view.transactions", options.db.as_deref(), true)?;
     let chart_account_ids = if let Some(group) = group {
         Some(fin_sdk::group_asset_account_ids(runtime.config(), group))
     } else if let Some(account) = account {
@@ -65,14 +68,14 @@ pub fn run_transactions(
     } else {
         None
     };
-    let options = TransactionQueryOptions {
+    let query_options = TransactionQueryOptions {
         chart_account_ids,
         from: from.map(std::string::ToString::to_string),
         to: to.map(std::string::ToString::to_string),
         search: search.map(std::string::ToString::to_string),
         limit,
     };
-    let transactions = view_transactions(runtime.connection(), &options)
+    let transactions = view_transactions(runtime.connection(), &query_options)
         .map_err(|error| map_fin_error("view.transactions", error))?;
     let rows = transactions
         .iter()
@@ -92,7 +95,7 @@ pub fn run_transactions(
             "transactions": rows,
             "count": rows.len(),
         }),
-        text: format!("{} transactions", rows.len()),
+        text: render_transactions_text(&transactions, options.format),
         meta: MetaExtras {
             count: Some(rows.len()),
             total: None,
@@ -100,6 +103,85 @@ pub fn run_transactions(
         },
         exit_code: ExitCode::Success,
     })
+}
+
+fn render_transactions_text(rows: &[TransactionRow], format: Option<TextFormat>) -> String {
+    match format {
+        Some(TextFormat::Table) => render_transactions_table(rows),
+        Some(TextFormat::Tsv) => render_transactions_tsv(rows),
+        None => format!("{} transactions", rows.len()),
+    }
+}
+
+fn transaction_cells(row: &TransactionRow) -> [String; 5] {
+    [
+        clean_cell(&row.posted_at),
+        clean_cell(&row.chart_account_id),
+        row.amount_minor.to_string(),
+        clean_cell(&row.clean_description),
+        clean_cell(&row.id),
+    ]
+}
+
+fn clean_cell(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if matches!(character, '\t' | '\n' | '\r') {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect()
+}
+
+fn render_transactions_tsv(rows: &[TransactionRow]) -> String {
+    let mut lines = vec!["date\taccount\tamount\tdescription\tid".to_owned()];
+    lines.extend(rows.iter().map(|row| transaction_cells(row).join("\t")));
+    lines.join("\n")
+}
+
+fn render_transactions_table(rows: &[TransactionRow]) -> String {
+    let headers = ["date", "account", "amount", "description", "id"];
+    let body = rows.iter().map(transaction_cells).collect::<Vec<_>>();
+    let mut widths = headers
+        .iter()
+        .map(|header| header.chars().count())
+        .collect::<Vec<_>>();
+
+    for cells in &body {
+        for (index, cell) in cells.iter().enumerate() {
+            widths[index] = widths[index].max(cell.chars().count());
+        }
+    }
+
+    let mut lines = vec![
+        render_table_row(&headers, &widths),
+        widths
+            .iter()
+            .map(|width| "-".repeat(*width))
+            .collect::<Vec<_>>()
+            .join("-+-"),
+    ];
+    lines.extend(
+        body.iter()
+            .map(|cells| render_table_row(cells.as_slice(), &widths)),
+    );
+    lines.join("\n")
+}
+
+fn render_table_row(cells: &[impl AsRef<str>], widths: &[usize]) -> String {
+    cells
+        .iter()
+        .enumerate()
+        .map(|(index, cell)| {
+            let cell = cell.as_ref();
+            let padding = widths[index].saturating_sub(cell.chars().count());
+            format!("{cell}{}", " ".repeat(padding))
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
 }
 
 pub fn run_ledger(

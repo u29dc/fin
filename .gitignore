@@ -30,3 +30,4 @@ imports/
 .claude/*
 !.claude/skills/
 .zvelte-check/
+.clawpatch/

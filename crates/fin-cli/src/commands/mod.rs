@@ -20,11 +20,16 @@ use fin_sdk::runtime::{RuntimeContext, RuntimeContextOptions};
 use crate::envelope::MetaExtras;
 use crate::error::{CliError, ErrorCode, ExitCode};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum TextFormat {
+    Table,
+    Tsv,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct GlobalOptions {
     pub db: Option<String>,
-    #[allow(dead_code)]
-    pub format: Option<String>,
+    pub format: Option<TextFormat>,
 }
 
 #[derive(Debug)]

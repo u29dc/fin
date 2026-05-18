@@ -7,11 +7,13 @@ mod registry;
 
 use std::time::Instant;
 
+use clap::error::ErrorKind;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use fin_sdk::SDK_VERSION;
 
-use crate::commands::{CommandFailure, CommandResult, GlobalOptions};
+use crate::commands::{CommandFailure, CommandResult, GlobalOptions, TextFormat};
 use crate::envelope::{emit_error, emit_success, print_text_error};
+use crate::error::{CliError, ErrorCode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OutputMode {
@@ -30,9 +32,10 @@ struct Cli {
         long,
         global = true,
         requires = "text",
+        value_enum,
         help = "Text output format (table|tsv)"
     )]
-    format: Option<String>,
+    format: Option<TextFormat>,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -426,7 +429,7 @@ fn execute(
                 commands::view::run_accounts(options.db.as_deref(), args.group.as_deref())
             }
             ViewCommand::Transactions(args) => commands::view::run_transactions(
-                options.db.as_deref(),
+                options,
                 args.account.as_deref(),
                 args.group.as_deref(),
                 args.from.as_deref(),
@@ -545,18 +548,68 @@ fn output_mode(command: Option<&Command>, text: bool) -> OutputMode {
     }
 }
 
+fn command_supports_text_format(command: Option<&Command>) -> bool {
+    matches!(
+        command,
+        Some(Command::View(ViewArgs {
+            command: ViewCommand::Transactions(_)
+        }))
+    )
+}
+
+fn parse_error_uses_text_mode() -> bool {
+    std::env::args_os().any(|argument| argument == "--text")
+}
+
 fn main() {
-    let cli = Cli::parse();
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => match error.kind() {
+            ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
+                error.print().expect("print clap help");
+                std::process::exit(error.exit_code());
+            }
+            _ if parse_error_uses_text_mode() => {
+                error.print().expect("print clap error");
+                std::process::exit(error.exit_code());
+            }
+            _ => {
+                let start = Instant::now();
+                let cli_error = CliError::new(
+                    ErrorCode::Runtime,
+                    error.to_string(),
+                    "Run `fin --help` for usage",
+                );
+                let exit_code = emit_error("cli.parse", &cli_error, start);
+                std::process::exit(exit_code.as_i32());
+            }
+        },
+    };
     if cli.command.is_none() {
         print_root_help();
         return;
     }
     let mode = output_mode(cli.command.as_ref(), cli.text);
+    let start = Instant::now();
+    if cli.format.is_some() && !command_supports_text_format(cli.command.as_ref()) {
+        let cli_error = CliError::new(
+            ErrorCode::Runtime,
+            "`--format` is only supported for `view transactions`",
+            "Drop `--format` or run `fin --text --format tsv view transactions ...`",
+        );
+        let exit_code = match mode {
+            OutputMode::Json => emit_error("cli.format", &cli_error, start),
+            OutputMode::Text => {
+                print_text_error(&cli_error);
+                cli_error.exit_code()
+            }
+        };
+        std::process::exit(exit_code.as_i32());
+    }
     let options = GlobalOptions {
         db: cli.db.clone(),
-        format: cli.format.clone(),
+        format: cli.format,
     };
-    let start = Instant::now();
 
     let result = execute(cli.command, &options);
     let exit_code = match mode {
